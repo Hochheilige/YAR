@@ -1,12 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
 <Project DefaultTargets="Build" ToolsVersion="15.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <PropertyGroup Label="Globals">
-    <ProjectGuid>{9ba0e77d-e891-4208-8946-ba1e58e28d7a}</ProjectGuid>
+    <ProjectGuid>{18A19EC8-E3FD-4035-8BB9-A02ACD5A32BA}</ProjectGuid>
   </PropertyGroup>
   <PropertyGroup Label="Configuration">
-    <ConfigurationType>Application</ConfigurationType>
+    <ConfigurationType>StaticLibrary</ConfigurationType>
   </PropertyGroup>
-
   <Import Project="props\ProjectConfigurations.props" />
   <Import Project="props\CommonProjectSetup.props" />
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
