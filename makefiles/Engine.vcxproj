@@ -8,5 +8,24 @@
   </PropertyGroup>
   <Import Project="props\ProjectConfigurations.props" />
   <Import Project="props\CommonProjectSetup.props" />
+  <ItemDefinitionGroup>
+    <ClCompile>
+      <AdditionalIncludeDirectories>
+        $(ExternalDir)glad\include\;$(ExternalDir)glfw\include\;%(AdditionalIncludeDirectories)
+      </AdditionalIncludeDirectories>
+      <RuntimeLibrary Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">MultiThreadedDebugDLL</RuntimeLibrary>
+    </ClCompile>
+    <Lib>
+      <AdditionalLibraryDirectories>$(ExternalLibOutDir);%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
+      <AdditionalDependencies>opengl32.lib;glfw3.lib;%(AdditionalDependencies)</AdditionalDependencies>
+    </Lib>
+  </ItemDefinitionGroup>
+  <ItemGroup>
+    <ClCompile Include="$(SrcDir)engine\test_window.cpp" />
+    <ClCompile Include="$(ExternalDir)glad\src\glad.c" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="$(SrcDir)engine\test_window.h" />
+  </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
 </Project>

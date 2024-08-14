@@ -44,6 +44,36 @@ def add_git_submodule(repo_url, submodule_path):
     run_command_with_progress(add_command, estimated_time=estimated_time_add, description="adding submodule")
     run_command_with_progress(update_command, estimated_time=estimated_time_update, description="updating submodule")
 
+def build_project(project_path, project_name):
+    configurations = ["Debug", "Release"]
+    tools_dir = os.path.dirname(os.path.abspath(__file__))
+    root_dir = os.path.dirname(tools_dir)
+    build_dir = os.path.join(project_path, "build")
+    cmake_command = [
+        "cmake",
+        "-S", project_path,
+        "-B", build_dir, 
+        f"-DCMAKE_ARCHIVE_OUTPUT_DIRECTORY_DEBUG={root_dir}/external/lib/Debug",
+        f"-DCMAKE_ARCHIVE_OUTPUT_DIRECTORY_RELEASE={root_dir}/external/lib/Release",
+        "-DBUILD_SHARED_LIBS=OFF",
+        "-DGLFW_LIBRARY_TYPE=STATIC",
+        "-DGLFW_BUILD_EXAMPLES=0",
+        "-DGLFW_BUILD_TESTS=0", 
+        "-DGLFW_BUILD_DOCS=0"
+    ]
+    run_command_with_progress(cmake_command, estimated_time=15, description=f"Configuring {project_name} project")
+
+    for config in configurations:
+        # Create the build command for each configuration
+        build_command = [
+            "cmake", "--build", build_dir, "--config", config
+        ]
+
+        # Set the description for progress visualization
+        description = f"Building {project_name} ({config} configuration)"
+
+        # Run the build command with progress
+        run_command_with_progress(build_command, estimated_time=15, description=description)
 
 output_path = 'external/glad'
 if os.path.isdir(output_path):
@@ -70,3 +100,5 @@ submodules_paths = [
 
 for url, path in zip(submodules_urls, submodules_paths):
     add_git_submodule(url, path)
+
+build_project(submodules_paths[0], "glfw")
