@@ -11,7 +11,7 @@
   <ItemDefinitionGroup>
     <ClCompile>
       <AdditionalIncludeDirectories>
-        $(ExternalDir)glad\include\;$(ExternalDir)glfw\include\;%(AdditionalIncludeDirectories)
+        $(ExternalDir)glad\include\;$(ExternalDir)glfw\include\;$(ExternalDir)imgui\;%(AdditionalIncludeDirectories)
       </AdditionalIncludeDirectories>
       <RuntimeLibrary Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">MultiThreadedDebugDLL</RuntimeLibrary>
     </ClCompile>
@@ -22,10 +22,19 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClCompile Include="$(SrcDir)engine\test_window.cpp" />
+    <ClCompile Include="$(SrcDir)engine\imgui_layer.cpp" />
     <ClCompile Include="$(ExternalDir)glad\src\glad.c" />
+    <ClCompile Include="$(ExternalDir)imgui\imgui.cpp" />
+    <ClCompile Include="$(ExternalDir)imgui\imgui_draw.cpp" />
+    <ClCompile Include="$(ExternalDir)imgui\imgui_demo.cpp" />
+    <ClCompile Include="$(ExternalDir)imgui\imgui_tables.cpp" />
+    <ClCompile Include="$(ExternalDir)imgui\imgui_widgets.cpp" />
+    <ClCompile Include="$(ExternalDir)imgui\backends\imgui_impl_glfw.cpp" />
+    <ClCompile Include="$(ExternalDir)imgui\backends\imgui_impl_opengl3.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="$(SrcDir)engine\test_window.h" />
+    <ClInclude Include="$(SrcDir)engine\imgui_layer.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
 </Project>
