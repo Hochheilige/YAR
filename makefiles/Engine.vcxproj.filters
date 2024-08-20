@@ -1,7 +1,7 @@
 ﻿<?xml version="1.0" encoding="utf-8"?>
 <Project ToolsVersion="Current" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <ItemGroup>
-    <ClCompile Include="$(SrcDir)engine\test_window.cpp" />
+    <ClCompile Include="$(SrcDir)engine\window.cpp" />
     <ClCompile Include="$(SrcDir)engine\imgui_layer.cpp" />
     <ClCompile Include="$(ExternalDir)imgui\imgui.cpp">
       <Filter>external\imgui</Filter>
@@ -29,7 +29,7 @@
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="$(SrcDir)engine\test_window.h" />
+    <ClInclude Include="$(SrcDir)engine\window.h" />
     <ClInclude Include="$(SrcDir)engine\imgui_layer.h" />
   </ItemGroup>
   <ItemGroup>

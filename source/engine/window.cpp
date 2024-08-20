@@ -1,0 +1,53 @@
+#include "window.h"
+#include "imgui_layer.h"
+
+#include <glad/glad.h>
+#include <GLFW/glfw3.h>
+
+GLFWwindow* window;
+
+bool init_window()
+{
+    if (!glfwInit())
+        return false;
+
+    window = glfwCreateWindow(640, 480, "Hello World", NULL, NULL);
+    if (!window)
+    {
+        glfwTerminate();
+        return false;
+    }
+
+    glfwMakeContextCurrent(window);
+
+    if (!gladLoadGLLoader((GLADloadproc)glfwGetProcAddress))
+        return false;
+
+    imgui_init(window);
+
+    return true;
+}
+
+bool update_window()
+{
+    return !glfwWindowShouldClose(window);    
+}
+
+void terminate_window()
+{
+    imgui_terminate();
+    glfwTerminate();
+}
+
+swap_buffers get_swap_buffers_func()
+{
+    auto glfw_swap_buffers = [](void* window){
+        glfwSwapBuffers(static_cast<GLFWwindow*>(window));
+    };
+    return (swap_buffers)glfw_swap_buffers;
+}
+
+void* get_window()
+{
+    return static_cast<void*>(window);
+}
