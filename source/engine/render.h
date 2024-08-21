@@ -1,5 +1,7 @@
 #pragma once
 
+#include <cstdint>
+
 // ======================================= //
 //            Render Structures            //
 // ======================================= //
@@ -31,6 +33,21 @@ struct SwapChain
     void(*swap_buffers)(void*);
 };
 
+struct BufferDesc
+{
+    uint32_t size;
+    // It is better to create enums for target and usage
+    // but leave as it right now
+    uint32_t target;
+    uint32_t memory_usage;
+};
+
+struct Buffer
+{
+    uint32_t id;
+    uint32_t target;
+};
+
 // ======================================= //
 //            Render Functions             //
 // ======================================= //
@@ -40,5 +57,9 @@ using name##_fn = ret(*)(__VA_ARGS__);          \
 extern name##_fn name;                          \
 
 DECLARE_YAR_RENDER_FUNC(void, add_swapchain, SwapChain* swapchain, bool vsync);
+DECLARE_YAR_RENDER_FUNC(void, add_buffer, Buffer* buffer, BufferDesc* desc);
+DECLARE_YAR_RENDER_FUNC(void, remove_buffer, Buffer* buffer);
+DECLARE_YAR_RENDER_FUNC(void, map_buffer, Buffer* buffer);
+DECLARE_YAR_RENDER_FUNC(void, unmap_buffer, Buffer* buffer);
 
 void init_render();
