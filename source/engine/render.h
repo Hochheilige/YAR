@@ -48,6 +48,37 @@ struct Buffer
     uint32_t target;
 };
 
+enum ShaderStage : uint8_t
+{
+    kShaderStageNone = 0,
+    kShaderStageVert = 0x00000001,
+    kShaderStageFrag = 0x00000002,
+    kShaderStageGeom = 0x00000004,
+    kShaderStageComp = 0x00000008,
+};
+
+struct ShaderStageDesc
+{
+    void* byte_code;
+    uint32_t byte_code_size;
+    const char* entry_point;
+};
+
+struct ShaderDesc
+{
+    ShaderStage stage;
+    ShaderStageDesc vert;
+    ShaderStageDesc frag;
+    ShaderStageDesc geom;
+    ShaderStageDesc comp;
+};
+
+struct Shader
+{
+    ShaderStage stages;
+    uint32_t program;
+};
+
 // ======================================= //
 //            Render Functions             //
 // ======================================= //
@@ -56,8 +87,9 @@ struct Buffer
 using name##_fn = ret(*)(__VA_ARGS__);          \
 extern name##_fn name;                          \
 
-DECLARE_YAR_RENDER_FUNC(void, add_swapchain, SwapChain* swapchain, bool vsync);
-DECLARE_YAR_RENDER_FUNC(void, add_buffer, Buffer* buffer, BufferDesc* desc);
+DECLARE_YAR_RENDER_FUNC(void, add_swapchain, bool vsync, SwapChain** swapchain);
+DECLARE_YAR_RENDER_FUNC(void, add_buffer,  BufferDesc* desc, Buffer** buffer);
+DECLARE_YAR_RENDER_FUNC(void, add_shader, ShaderDesc* desc, Shader**);
 DECLARE_YAR_RENDER_FUNC(void, remove_buffer, Buffer* buffer);
 DECLARE_YAR_RENDER_FUNC(void, map_buffer, Buffer* buffer);
 DECLARE_YAR_RENDER_FUNC(void, unmap_buffer, Buffer* buffer);

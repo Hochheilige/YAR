@@ -10,8 +10,8 @@ auto main() -> int {
 	
 	init_render();
 
-	SwapChain swapchain;
-	add_swapchain(&swapchain, true);
+	SwapChain* swapchain;
+	add_swapchain(true, &swapchain);
 
 	while(update_window())
 	{
@@ -23,7 +23,7 @@ auto main() -> int {
         imgui_render();
         imgui_end_frame();
 
-        swapchain.swap_buffers(swapchain.window);
+        swapchain->swap_buffers(swapchain->window);
         glfwPollEvents();
     
 	}

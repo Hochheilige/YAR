@@ -10,22 +10,35 @@
 //            Render Functions             //
 // ======================================= //
 
-void gl_addSwapChain(SwapChain* swapchain, bool vsync)
+void gl_addSwapChain(bool vsync, SwapChain** swapchain)
 {
-    swapchain->vsync = vsync;
-    swapchain->window = get_window();
-    swapchain->swap_buffers = get_swap_buffers_func();
+    SwapChain* new_swapchain = (SwapChain*)std::malloc(sizeof(SwapChain)); 
+    if (new_swapchain == nullptr) 
+        // Log error maybe add assert or something
+        return;
+
+    new_swapchain->vsync = vsync;
+    new_swapchain->window = get_window();
+    new_swapchain->swap_buffers = get_swap_buffers_func();
+
+    *swapchain = new_swapchain;
 }
 
-void gl_addBuffer(Buffer* buffer, BufferDesc* desc)
+void gl_addBuffer(BufferDesc* desc, Buffer** buffer)
 {
-    buffer = (Buffer*)std::malloc(sizeof(Buffer));
-    buffer->target = desc->target;
+    Buffer* new_buffer = (Buffer*)std::malloc(sizeof(Buffer));
+    if (new_buffer == nullptr)
+        // Log error
+        return;
+    
+    new_buffer->target = desc->target;
 
-    glGenBuffers(1, &buffer->id);
-    glBindBuffer(buffer->target, buffer->id);
-    glBufferData(buffer->target, desc->size, nullptr, desc->memory_usage);
-    glBindBuffer(buffer->target, GL_NONE);
+    glGenBuffers(1, &new_buffer->id);
+    glBindBuffer(new_buffer->target, new_buffer->id);
+    glBufferData(new_buffer->target, desc->size, nullptr, desc->memory_usage);
+    glBindBuffer(new_buffer->target, GL_NONE);
+
+    *buffer = new_buffer;
 }
 
 void gl_removeBuffer(Buffer* buffer)
@@ -33,7 +46,7 @@ void gl_removeBuffer(Buffer* buffer)
     if (buffer)
     {
         glDeleteBuffers(1, &buffer->id);
-        free(buffer);
+        std::free(buffer);
     }
 }
 
