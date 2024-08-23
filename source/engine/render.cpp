@@ -2,6 +2,16 @@
 
 extern bool gl_init_render();
 
+// ======================================= //
+//            Load Functions               //
+// ======================================= //
+
+load_shader_fn load_shader;
+
+// ======================================= //
+//            Render Functions             //
+// ======================================= //
+
 add_swapchain_fn add_swapchain;
 add_buffer_fn    add_buffer;
 add_shader_fn    add_shader;

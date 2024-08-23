@@ -27,10 +27,13 @@
     <ClCompile Include="$(ExternalDir)imgui\backends\imgui_impl_opengl3.cpp">
       <Filter>external\imgui</Filter>
     </ClCompile>
+    <ClCompile Include="$(SrcDir)engine\render.cpp" />
+    <ClCompile Include="$(SrcDir)engine\render_impl\render_ogl.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="$(SrcDir)engine\window.h" />
     <ClInclude Include="$(SrcDir)engine\imgui_layer.h" />
+    <ClInclude Include="$(SrcDir)engine\render.h" />
   </ItemGroup>
   <ItemGroup>
     <Filter Include="external">

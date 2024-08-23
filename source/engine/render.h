@@ -1,6 +1,8 @@
 #pragma once
 
 #include <cstdint>
+#include <string>
+#include <string_view>
 
 // ======================================= //
 //            Render Structures            //
@@ -48,6 +50,13 @@ struct Buffer
     uint32_t target;
 };
 
+// Interesting thing got it from The-Forge
+#define MAKE_ENUM_FLAG(TYPE, ENUM_TYPE)                                                                        \
+	static inline ENUM_TYPE operator|(ENUM_TYPE a, ENUM_TYPE b) { return (ENUM_TYPE)((TYPE)(a) | (TYPE)(b)); } \
+	static inline ENUM_TYPE operator&(ENUM_TYPE a, ENUM_TYPE b) { return (ENUM_TYPE)((TYPE)(a) & (TYPE)(b)); } \
+	static inline ENUM_TYPE operator|=(ENUM_TYPE& a, ENUM_TYPE b) { return a = (a | b); }                      \
+	static inline ENUM_TYPE operator&=(ENUM_TYPE& a, ENUM_TYPE b) { return a = (a & b); }
+
 enum ShaderStage : uint8_t
 {
     kShaderStageNone = 0,
@@ -55,18 +64,34 @@ enum ShaderStage : uint8_t
     kShaderStageFrag = 0x00000002,
     kShaderStageGeom = 0x00000004,
     kShaderStageComp = 0x00000008,
+    kShaderStageTese = 0x00000010,
+    kShaderStageMax = 5
+};
+MAKE_ENUM_FLAG(uint8_t, ShaderStage);
+
+struct ShaderStageLoadDesc
+{
+    const std::string_view file_name;
+    const std::string_view entry_point;
+    // maybe need to add some shader macros support here
+};
+
+struct ShaderLoadDesc
+{
+    ShaderStageLoadDesc stages[ShaderStage::kShaderStageMax];
 };
 
 struct ShaderStageDesc
 {
     void* byte_code;
     uint32_t byte_code_size;
-    const char* entry_point;
+    std::string_view entry_point;
+    uint32_t shader; // Only for gl
 };
 
 struct ShaderDesc
 {
-    ShaderStage stage;
+    ShaderStage stages;
     ShaderStageDesc vert;
     ShaderStageDesc frag;
     ShaderStageDesc geom;
@@ -77,19 +102,31 @@ struct Shader
 {
     ShaderStage stages;
     uint32_t program;
+    // Going to add spirv reflection but later
+    void* reflection; 
 };
+
+// ======================================= //
+//            Load Functions               //
+// ======================================= //
+
+#define DECLARE_YAR_LOAD_FUNC(ret, name, ...)  \
+using load_##name##_fn = ret(*)(__VA_ARGS__);  \
+extern load_##name##_fn load_##name;                  \
+
+DECLARE_YAR_LOAD_FUNC(void, shader, ShaderLoadDesc* desc, ShaderDesc** out);
 
 // ======================================= //
 //            Render Functions             //
 // ======================================= //
 
-#define DECLARE_YAR_RENDER_FUNC(ret, name, ...) \
+#define DECLARE_YAR_RENDER_FUNC(ret, name, ...)  \
 using name##_fn = ret(*)(__VA_ARGS__);          \
 extern name##_fn name;                          \
 
 DECLARE_YAR_RENDER_FUNC(void, add_swapchain, bool vsync, SwapChain** swapchain);
 DECLARE_YAR_RENDER_FUNC(void, add_buffer,  BufferDesc* desc, Buffer** buffer);
-DECLARE_YAR_RENDER_FUNC(void, add_shader, ShaderDesc* desc, Shader**);
+DECLARE_YAR_RENDER_FUNC(void, add_shader, ShaderDesc* desc, Shader** shader);
 DECLARE_YAR_RENDER_FUNC(void, remove_buffer, Buffer* buffer);
 DECLARE_YAR_RENDER_FUNC(void, map_buffer, Buffer* buffer);
 DECLARE_YAR_RENDER_FUNC(void, unmap_buffer, Buffer* buffer);

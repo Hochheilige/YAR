@@ -12,6 +12,7 @@
     <ClCompile>
       <AdditionalIncludeDirectories>$(SrcDir)engine\;$(ExternalDir)glad\include\;$(ExternalDir)glfw\include\;$(ExternalDir)imgui\;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <RuntimeLibrary Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">MultiThreadedDebugDLL</RuntimeLibrary>
+      <LanguageStandard>stdcpp20</LanguageStandard>
     </ClCompile>
     <Link>
       <AdditionalLibraryDirectories>$(LibraryOutputDir);%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
