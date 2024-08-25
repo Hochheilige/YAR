@@ -226,10 +226,10 @@ void gl_removeBuffer(Buffer* buffer)
     }
 }
 
-void gl_mapBuffer(Buffer* buffer)
+void* gl_mapBuffer(Buffer* buffer)
 {
     glBindBuffer(buffer->target, buffer->id);
-    glMapBuffer(buffer->id, GL_WRITE_ONLY);
+    return glMapBuffer(buffer->target, GL_WRITE_ONLY);
 }
 
 void gl_unmapBuffer(Buffer* buffer)

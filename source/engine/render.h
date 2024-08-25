@@ -30,6 +30,7 @@
 */
 struct SwapChain
 {
+    // this implementation is probably good only for OpenGL
     bool vsync;
     void* window;
     void(*swap_buffers)(void*);
@@ -128,7 +129,7 @@ DECLARE_YAR_RENDER_FUNC(void, add_swapchain, bool vsync, SwapChain** swapchain);
 DECLARE_YAR_RENDER_FUNC(void, add_buffer,  BufferDesc* desc, Buffer** buffer);
 DECLARE_YAR_RENDER_FUNC(void, add_shader, ShaderDesc* desc, Shader** shader);
 DECLARE_YAR_RENDER_FUNC(void, remove_buffer, Buffer* buffer);
-DECLARE_YAR_RENDER_FUNC(void, map_buffer, Buffer* buffer);
+DECLARE_YAR_RENDER_FUNC(void*, map_buffer, Buffer* buffer);
 DECLARE_YAR_RENDER_FUNC(void, unmap_buffer, Buffer* buffer);
 
 void init_render();
