@@ -10,6 +10,13 @@
 #include <iostream>
 #include <fstream>
 
+#include <Windows.h>
+#include <atlbase.h>
+#include <dxcapi.h>
+#include <vector>
+#include <string>
+#include <codecvt>
+
 // ======================================= //
 //            Utils Functions             //
 // ======================================= //
@@ -33,6 +40,25 @@ uint32_t util_shader_stage_to_gl_stage(ShaderStage stage)
     }
 }
 
+std::wstring util_stage_to_target_profile(ShaderStage stage)
+{
+    switch (stage)
+    {
+
+    case kShaderStageVert:
+        return L"vs_6_0";
+    case kShaderStageFrag:
+        return L"ps_6_0";
+    case kShaderStageGeom:
+    case kShaderStageComp:
+    case kShaderStageTese:
+    case kShaderStageNone:
+    case kShaderStageMax:
+    default:
+        return {};
+    }
+}
+
 std::string_view util_get_file_ext(std::string_view path)
 {
     size_t dot_pos = path.find_last_of('.');
@@ -42,18 +68,77 @@ std::string_view util_get_file_ext(std::string_view path)
     return path.substr(dot_pos + 1);
 }
 
-ShaderStage util_shader_ext_to_shader_stage(std::string_view ext)
+// Helper function to convert std::wstring to LPCWSTR
+LPCWSTR util_to_LPCWSTR(const std::wstring& s) 
 {
-    if (!ext.compare("vert"))
-        return kShaderStageVert;
-    else if (!ext.compare("frag"))
-        return kShaderStageFrag;
-    else if (!ext.compare("geom"))
-        return kShaderStageGeom;
-    else if (!ext.compare("comp"))
-        return kShaderStageComp;
+    return s.c_str();
+}
 
-    return kShaderStageNone;
+std::wstring util_convert_to_wstring(std::string_view str_view)
+ {
+    std::wstring_convert<std::codecvt_utf8<wchar_t>> converter;
+    std::string str(str_view);
+    return converter.from_bytes(str);
+}
+
+bool util_compile_hlsl_to_spirv(ShaderStageLoadDesc* load_desc, std::vector<uint8_t>& spirv) {
+    // Initialize the Dxc compiler and utils
+    CComPtr<IDxcCompiler> compiler;
+    CComPtr<IDxcLibrary> library;
+    CComPtr<IDxcBlobEncoding> sourceBlob;
+    CComPtr<IDxcOperationResult> result;
+
+    HRESULT hr;
+
+    // Initialize the DXC components
+    if (FAILED(hr = DxcCreateInstance(CLSID_DxcCompiler, IID_PPV_ARGS(&compiler))))
+        return false;
+
+    if (FAILED(hr = DxcCreateInstance(CLSID_DxcLibrary, IID_PPV_ARGS(&library))))
+        return false;
+
+    std::wstring shader_path = util_convert_to_wstring(load_desc->file_name.data());
+    std::wstring entry_point = util_convert_to_wstring(load_desc->entry_point.data());
+    std::wstring target_profile = util_stage_to_target_profile(load_desc->stage);
+    // Load the HLSL shader source code
+    
+    if (FAILED(hr = library->CreateBlobFromFile(shader_path.c_str(), nullptr, &sourceBlob)))
+        return false;
+
+    // Prepare the arguments for the compilation
+    LPCWSTR arguments[] = {
+        L"-spirv",                 // Output format to SPIR-V
+    };
+
+    // Compile the shader
+    compiler->Compile(
+        sourceBlob,            // Source blob
+        shader_path.c_str(), // Source file name (used for error reporting)
+        entry_point.c_str(),    // Entry point function
+        target_profile.c_str(), // Target profile
+        arguments, _countof(arguments), // Compilation arguments
+        nullptr, 0,            // No defines
+        nullptr,               // No include handler
+        &result                // Compilation result
+    );
+
+    // Check the result of the compilation
+    result->GetStatus(&hr);
+    if (FAILED(hr)) {
+        CComPtr<IDxcBlobEncoding> errors;
+        result->GetErrorBuffer(&errors);
+        std::cerr << "Compilation failed with errors:\n" << (const char*)errors->GetBufferPointer() << std::endl;
+        return false;
+    }
+
+    // Retrieve the compiled SPIR-V code
+    CComPtr<IDxcBlob> spirvBlob;
+    result->GetResult(&spirvBlob);
+
+    spirv.resize(spirvBlob->GetBufferSize());
+    memcpy(spirv.data(), spirvBlob->GetBufferPointer(), spirvBlob->GetBufferSize());
+
+    return true;
 }
 
 void util_load_shader_binary(ShaderStage stage, ShaderStageLoadDesc* load_desc, ShaderDesc* shader_desc)
@@ -81,32 +166,15 @@ void util_load_shader_binary(ShaderStage stage, ShaderStageLoadDesc* load_desc, 
         break;
     }
 
-    std::filesystem::path path(load_desc->file_name);
-    if (!std::filesystem::exists(path))
-        return;
-
-    std::ifstream file(path, std::ios::binary | std::ios::ate);
-    if (!file.is_open()) {
-        throw std::runtime_error("Failed to open shader file.");
-    }
-
-    void* buffer = nullptr;
-    uint32_t size = static_cast<uint32_t>(file.tellg());
-    file.seekg(0, std::ios::beg);
-
-    buffer = std::malloc(stage_desc->byte_code_size);
-    if (buffer == nullptr)
-        return;
-
-    file.read(reinterpret_cast<char*>(buffer), size);
-    file.close();
+    std::vector<uint8_t> buffer;
+    util_compile_hlsl_to_spirv(load_desc, buffer);
 
     uint32_t shader = glCreateShader(gl_stage);
-    glShaderBinary(1, &shader, GL_SHADER_BINARY_FORMAT_SPIR_V, buffer, size);
+    glShaderBinary(1, &shader, GL_SHADER_BINARY_FORMAT_SPIR_V, buffer.data(), buffer.size());
     glSpecializeShader(shader, load_desc->entry_point.data(), 0, NULL, NULL);
 
-    stage_desc->byte_code = buffer; 
-    stage_desc->byte_code_size = size;
+    stage_desc->byte_code = buffer.data(); 
+    stage_desc->byte_code_size = buffer.size();
     stage_desc->entry_point = load_desc->entry_point;
     stage_desc->shader = shader;
 }
@@ -126,13 +194,13 @@ void gl_LoadShader(ShaderLoadDesc* desc, ShaderDesc** out_shader_desc)
     {
         if (!desc->stages[i].file_name.empty())
         {
-            std::string_view ext = util_get_file_ext(desc->stages[i].file_name);
-            ShaderStage stage = util_shader_ext_to_shader_stage(ext);
+            ShaderStage stage = desc->stages[i].stage;
             util_load_shader_binary(stage, &desc->stages[i], shader_desc); 
             shader_desc->stages |= stage;
         }
     }
 
+    *out_shader_desc = shader_desc;
 }
 
 // ======================================= //
@@ -215,6 +283,8 @@ void gl_addShader(ShaderDesc* desc, Shader** out_shader)
 
     glLinkProgram(shader->program);
     // Create reflection here or maybe it have to be created somewhere earlier
+
+    *out_shader = shader;
 }
 
 void gl_removeBuffer(Buffer* buffer)

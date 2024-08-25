@@ -25,11 +25,27 @@ auto main() -> int {
 	buffer_desc.target = GL_ARRAY_BUFFER;
 	Buffer* vbo = nullptr;
 	add_buffer(&buffer_desc, &vbo);
+
+	ShaderLoadDesc shader_load_desc = {};
+	shader_load_desc.stages[0] = { "../source/shaders/base_vert.hlsl", "main", ShaderStage::kShaderStageVert };
+	shader_load_desc.stages[1] = { "../source/shaders/base_frag.hlsl", "main", ShaderStage::kShaderStageFrag };
+	ShaderDesc* shader_desc = nullptr;
+	load_shader(&shader_load_desc, &shader_desc);
+	Shader* shader;
+	add_shader(shader_desc, &shader);
+
+	unsigned int vao;
+	glGenVertexArrays(1, &vao);
+
 	{ // update buffer data
+		glBindVertexArray(vao);
 		void* buffer = map_buffer(vbo);
 		std::memcpy(buffer, vertices, sizeof(vertices));
 		unmap_buffer(vbo);
 	}
+	
+	glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(float), (void*)0);
+	glEnableVertexAttribArray(0);
 
 	while(update_window())
 	{
@@ -37,6 +53,10 @@ auto main() -> int {
 
         glClearColor(gBackGroundColor[0], gBackGroundColor[1], gBackGroundColor[2], 1.0f);
         glClear(GL_COLOR_BUFFER_BIT);
+
+		glUseProgram(shader->program);
+		glBindVertexArray(vao);
+		glDrawArrays(GL_TRIANGLES, 0, 3);
 
         imgui_render();
         imgui_end_frame();

@@ -3,6 +3,7 @@
 #include <cstdint>
 #include <string>
 #include <string_view>
+#include <array>
 
 // ======================================= //
 //            Render Structures            //
@@ -72,14 +73,15 @@ MAKE_ENUM_FLAG(uint8_t, ShaderStage);
 
 struct ShaderStageLoadDesc
 {
-    const std::string_view file_name;
-    const std::string_view entry_point;
+    std::string file_name;
+    std::string entry_point;
+    ShaderStage stage;
     // maybe need to add some shader macros support here
 };
 
 struct ShaderLoadDesc
 {
-    ShaderStageLoadDesc stages[ShaderStage::kShaderStageMax];
+    std::array<ShaderStageLoadDesc, ShaderStage::kShaderStageMax> stages;
 };
 
 struct ShaderStageDesc
