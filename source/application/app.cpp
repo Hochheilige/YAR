@@ -22,7 +22,6 @@ auto main() -> int {
 	BufferDesc buffer_desc;
 	buffer_desc.size = sizeof(vertices);
 	buffer_desc.memory_usage = GL_STATIC_DRAW;
-	buffer_desc.target = GL_ARRAY_BUFFER;
 	Buffer* vbo = nullptr;
 	add_buffer(&buffer_desc, &vbo);
 
@@ -34,18 +33,20 @@ auto main() -> int {
 	Shader* shader;
 	add_shader(shader_desc, &shader);
 
-	unsigned int vao;
-	glGenVertexArrays(1, &vao);
-
 	{ // update buffer data
-		glBindVertexArray(vao);
 		void* buffer = map_buffer(vbo);
+		size_t err = glGetError();
 		std::memcpy(buffer, vertices, sizeof(vertices));
 		unmap_buffer(vbo);
 	}
-	
-	glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(float), (void*)0);
-	glEnableVertexAttribArray(0);
+
+
+	unsigned int vao;
+	glCreateVertexArrays(1, &vao);
+	glVertexArrayVertexBuffer(vao, 0, vbo->id, 0, sizeof(float) * 3);
+	glVertexArrayAttribFormat(vao, 0, 3, GL_FLOAT, GL_FALSE, 0);
+	glVertexArrayAttribBinding(vao, 0, 0);
+	glEnableVertexArrayAttrib(vao, 0);
 
 	while(update_window())
 	{

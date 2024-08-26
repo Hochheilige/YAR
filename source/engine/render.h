@@ -40,16 +40,12 @@ struct SwapChain
 struct BufferDesc
 {
     uint32_t size;
-    // It is better to create enums for target and usage
-    // but leave as it right now
-    uint32_t target;
     uint32_t memory_usage;
 };
 
 struct Buffer
 {
     uint32_t id;
-    uint32_t target;
 };
 
 // Interesting thing got it from The-Forge
