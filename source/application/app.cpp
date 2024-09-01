@@ -43,15 +43,15 @@ auto main() -> int {
 	VertexLayout layout = {0};
 	layout.attrib_count = 1;
 	layout.attribs[0].size = 3;
+	layout.attribs[0].format = GL_FLOAT;
 	layout.attribs[0].offset = 0;
 
+	PipelineDesc pipeline_desc = { 0 };
+	pipeline_desc.shader = shader;
+	pipeline_desc.vertex_layout = &layout;
 
-
-	unsigned int vao;
-	glCreateVertexArrays(1, &vao);
-	glVertexArrayAttribFormat(vao, 0, 3, GL_FLOAT, GL_FALSE, 0);
-	glVertexArrayAttribBinding(vao, 0, 0);
-	
+	Pipeline* graphics_pipeline;
+	add_pipeline(&pipeline_desc, &graphics_pipeline);
 
 	while(update_window())
 	{
@@ -61,9 +61,8 @@ auto main() -> int {
         glClear(GL_COLOR_BUFFER_BIT);
 
 		glUseProgram(shader->program);
-		glVertexArrayVertexBuffer(vao, 0, vbo->id, 0, sizeof(float) * 3);
-		glEnableVertexArrayAttrib(vao, 0);
-		glBindVertexArray(vao);
+		cmd_bind_pipeline(graphics_pipeline);
+		cmd_bind_vertex_buffer(vbo, 0, sizeof(float) * 3);
 		glDrawArrays(GL_TRIANGLES, 0, 3);
 
         imgui_render();

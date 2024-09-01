@@ -128,34 +128,44 @@ struct Shader
 struct VertexAttrib
 {
     uint32_t size;
+    uint32_t format;
     uint32_t binding;
     uint32_t offset;    
 };
 
 struct VertexLayout
 {
-    uint32_t vao; // only for ogl
     uint32_t attrib_count;
     VertexAttrib attribs[kMaxVertexAttribCount];
 };
 
+struct PipelineDesc
+{
+    Shader* shader;
+    VertexLayout* vertex_layout;
+    /*
+    has to contain:
+        * Shaders (probably shader reflection as well)
+            if Vulkan is a reference to this we have to store shader
+            stages count and stages as well
+        * Root Signature (?)
+        * Topology - Input Assembly
+        * Vertex Attributes
+        * Viewport state
+        * Rasterization state
+        * Multisampling state
+        * DepthStencil state
+        * Color Blend state
+        * Layout - to work with resources
+*/
+};
+
 struct Pipeline
 {
-    /*
-        has to contain:
-            * Shaders (probably shader reflection as well)
-                if Vulkan is a reference to this we have to store shader 
-                stages count and stages as well
-            * Root Signature (?)  
-            * Topology - Input Assembly
-            * Vertex Attributes
-            * Viewport state
-            * Rasterization state
-            * Multisampling state
-            * DepthStencil state
-            * Color Blend state
-            * Layout - to work with resources
-    */
+    // it probably should be something graphics API specific
+    // but for now it will be OpenGL specific
+    Shader* shader;
+    uint32_t vao;
 };
 
 // ======================================= //
@@ -179,8 +189,11 @@ extern name##_fn name;                          \
 DECLARE_YAR_RENDER_FUNC(void, add_swapchain, bool vsync, SwapChain** swapchain);
 DECLARE_YAR_RENDER_FUNC(void, add_buffer,  BufferDesc* desc, Buffer** buffer);
 DECLARE_YAR_RENDER_FUNC(void, add_shader, ShaderDesc* desc, Shader** shader);
+DECLARE_YAR_RENDER_FUNC(void, add_pipeline, PipelineDesc* desc, Pipeline** pipeline);
 DECLARE_YAR_RENDER_FUNC(void, remove_buffer, Buffer* buffer);
 DECLARE_YAR_RENDER_FUNC(void*, map_buffer, Buffer* buffer);
 DECLARE_YAR_RENDER_FUNC(void, unmap_buffer, Buffer* buffer);
+DECLARE_YAR_RENDER_FUNC(void, cmd_bind_pipeline, Pipeline* pipeline);
+DECLARE_YAR_RENDER_FUNC(void, cmd_bind_vertex_buffer, Buffer* buffer, uint32_t offset, uint32_t stride);
 
 void init_render();

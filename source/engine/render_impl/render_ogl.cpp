@@ -18,7 +18,12 @@
 #include <codecvt>
 
 // ======================================= //
-//            Utils Functions             //
+//            Utils Variables              //
+// ======================================= //
+static GLuint current_vao = 0u;
+
+// ======================================= //
+//            Utils Functions              //
 // ======================================= //
 uint32_t util_shader_stage_to_gl_stage(ShaderStage stage)
 {
@@ -319,6 +324,29 @@ void gl_addShader(ShaderDesc* desc, Shader** out_shader)
     *out_shader = shader;
 }
 
+void gl_addPipeline(PipelineDesc* desc, Pipeline** pipeline)
+{
+    Pipeline* new_pipeline = (Pipeline*)std::malloc(sizeof(Pipeline));
+    if (new_pipeline == nullptr)
+        return;
+
+    new_pipeline->shader = desc->shader;
+    GLuint& vao = new_pipeline->vao;
+
+    glCreateVertexArrays(1, &vao);
+    for (int i = 0; i < desc->vertex_layout->attrib_count; ++i)
+    {
+        GLint size     = desc->vertex_layout->attribs[i].size;
+        GLenum format  = desc->vertex_layout->attribs[i].format;
+        GLuint offset  = desc->vertex_layout->attribs[i].offset;
+        GLuint binding = desc->vertex_layout->attribs[i].binding;
+        glVertexArrayAttribFormat(vao, i, size, format, GL_FALSE, offset);
+        glVertexArrayAttribBinding(vao, i, binding);
+    }
+    
+    *pipeline = new_pipeline;
+}
+
 void gl_removeBuffer(Buffer* buffer)
 {
     if (buffer)
@@ -339,16 +367,31 @@ void gl_unmapBuffer(Buffer* buffer)
     glUnmapNamedBuffer(buffer->id);
 }
 
+void gl_bindPipeline(Pipeline* pipeline)
+{
+    current_vao = pipeline->vao;
+}
+
+void gl_bindVertexBuffer(Buffer* buffer, uint32_t offset, uint32_t stride)
+{
+    GLuint& vao = current_vao;
+    glVertexArrayVertexBuffer(vao, 0, buffer->id, offset, stride); // maybe need to store binding?
+    glEnableVertexArrayAttrib(vao, 0); // probably need to store somewhere
+    glBindVertexArray(vao);
+}
+
 // Maybe need to add some params to this function in future
 bool gl_init_render()
 {
-    load_shader   = gl_LoadShader;
-    // probably need to add functions here
-    add_swapchain = gl_addSwapChain;
-    add_buffer    = gl_addBuffer;
-    add_shader    = gl_addShader;
-    map_buffer    = gl_mapBuffer;
-    unmap_buffer  = gl_unmapBuffer;
+    load_shader            = gl_LoadShader;
+    add_swapchain          = gl_addSwapChain;
+    add_buffer             = gl_addBuffer;
+    add_shader             = gl_addShader;
+    add_pipeline           = gl_addPipeline;
+    map_buffer             = gl_mapBuffer;
+    unmap_buffer           = gl_unmapBuffer;
+    cmd_bind_pipeline      = gl_bindPipeline;
+    cmd_bind_vertex_buffer = gl_bindVertexBuffer;
 
     if (!gladLoadGLLoader((GLADloadproc)glfwGetProcAddress))
         return false;
