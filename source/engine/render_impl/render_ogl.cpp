@@ -179,6 +179,39 @@ void util_load_shader_binary(ShaderStage stage, ShaderStageLoadDesc* load_desc, 
     stage_desc->shader = shader;
 }
 
+GLbitfield util_buffer_flags_to_gl_storage_flag(BufferFlag flags)
+{
+    bool is_map_flag = flags & kBufferFlagMapRead
+        || flags & kBufferFlagMapWrite
+        || flags & kBufferFlagMapReadWrite;
+    if (flags & kBufferFlagMapPersistent && !is_map_flag)
+        // TODO: add assert
+        return GL_NONE;
+
+    GLbitfield gl_flags = GL_NONE;
+    if (flags & kBufferFlagDynamic)       gl_flags |= GL_DYNAMIC_STORAGE_BIT;
+    if (flags & kBufferFlagMapRead)       gl_flags |= GL_MAP_READ_BIT;
+    if (flags & kBufferFlagMapWrite)      gl_flags |= GL_MAP_WRITE_BIT;
+    if (flags & kBufferFlagMapReadWrite)  gl_flags |= (GL_MAP_WRITE_BIT | GL_MAP_READ_BIT);
+    if (flags & kBufferFlagMapPersistent) gl_flags |= GL_MAP_PERSISTENT_BIT;
+    if (flags & kBufferFlagMapCoherent)   gl_flags |= GL_MAP_COHERENT_BIT;
+
+    return gl_flags;
+}
+
+GLenum util_buffer_flags_to_map_access(BufferFlag flags)
+{
+    if (flags & kBufferFlagMapRead)
+        return GL_READ_ONLY;
+    if (flags & kBufferFlagMapWrite)
+        return GL_WRITE_ONLY;
+    if (flags & kBufferFlagMapReadWrite)
+        return GL_READ_WRITE;
+
+    // TODO: add assert
+    return GL_NONE;
+}
+
 // ======================================= //
 //            Load Functions               //
 // ======================================= //
@@ -227,9 +260,12 @@ void gl_addBuffer(BufferDesc* desc, Buffer** buffer)
     if (new_buffer == nullptr)
         // Log error
         return;
-    
+
+    GLbitfield flags = util_buffer_flags_to_gl_storage_flag(desc->flags);
+    new_buffer->flags = desc->flags;
+
     glCreateBuffers(1, &new_buffer->id);
-    glNamedBufferData(new_buffer->id, desc->size, nullptr, desc->memory_usage);
+    glNamedBufferStorage(new_buffer->id, desc->size, nullptr, flags);
 
     *buffer = new_buffer;
 }
@@ -294,7 +330,8 @@ void gl_removeBuffer(Buffer* buffer)
 
 void* gl_mapBuffer(Buffer* buffer)
 {
-    return glMapNamedBuffer(buffer->id, GL_WRITE_ONLY);
+    GLenum map_access = util_buffer_flags_to_map_access(buffer->flags);
+    return glMapNamedBuffer(buffer->id, map_access);
 }
 
 void gl_unmapBuffer(Buffer* buffer)

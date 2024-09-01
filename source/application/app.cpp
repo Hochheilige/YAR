@@ -21,7 +21,7 @@ auto main() -> int {
 	}; 
 	BufferDesc buffer_desc;
 	buffer_desc.size = sizeof(vertices);
-	buffer_desc.memory_usage = GL_STATIC_DRAW;
+	buffer_desc.flags = BufferFlag::kBufferFlagMapWrite;
 	Buffer* vbo = nullptr;
 	add_buffer(&buffer_desc, &vbo);
 
@@ -40,13 +40,18 @@ auto main() -> int {
 		unmap_buffer(vbo);
 	}
 
+	VertexLayout layout = {0};
+	layout.attrib_count = 1;
+	layout.attribs[0].size = 3;
+	layout.attribs[0].offset = 0;
+
+
 
 	unsigned int vao;
 	glCreateVertexArrays(1, &vao);
-	glVertexArrayVertexBuffer(vao, 0, vbo->id, 0, sizeof(float) * 3);
 	glVertexArrayAttribFormat(vao, 0, 3, GL_FLOAT, GL_FALSE, 0);
 	glVertexArrayAttribBinding(vao, 0, 0);
-	glEnableVertexArrayAttrib(vao, 0);
+	
 
 	while(update_window())
 	{
@@ -56,6 +61,8 @@ auto main() -> int {
         glClear(GL_COLOR_BUFFER_BIT);
 
 		glUseProgram(shader->program);
+		glVertexArrayVertexBuffer(vao, 0, vbo->id, 0, sizeof(float) * 3);
+		glEnableVertexArrayAttrib(vao, 0);
 		glBindVertexArray(vao);
 		glDrawArrays(GL_TRIANGLES, 0, 3);
 

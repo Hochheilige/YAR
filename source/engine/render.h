@@ -10,6 +10,9 @@
 // ======================================= //
 
 /*
+    Need to make all this things more abstract in case of using different 
+    render api, or just add defines to separate parts of this structs
+
     Plans to add:
         - Render Pipeline that should include:
             - Blend state
@@ -29,6 +32,16 @@
         - Command Queue 
             - as far as OpenGL render immediately 
 */
+
+// Interesting thing got it from The-Forge
+#define MAKE_ENUM_FLAG(TYPE, ENUM_TYPE)                                                                        \
+	static inline ENUM_TYPE operator|(ENUM_TYPE a, ENUM_TYPE b) { return (ENUM_TYPE)((TYPE)(a) | (TYPE)(b)); } \
+	static inline ENUM_TYPE operator&(ENUM_TYPE a, ENUM_TYPE b) { return (ENUM_TYPE)((TYPE)(a) & (TYPE)(b)); } \
+	static inline ENUM_TYPE operator|=(ENUM_TYPE& a, ENUM_TYPE b) { return a = (a | b); }                      \
+	static inline ENUM_TYPE operator&=(ENUM_TYPE& a, ENUM_TYPE b) { return a = (a & b); }
+
+constexpr uint8_t kMaxVertexAttribCount = 16;
+
 struct SwapChain
 {
     // this implementation is probably good only for OpenGL
@@ -37,23 +50,30 @@ struct SwapChain
     void(*swap_buffers)(void*);
 };
 
+enum BufferFlag : uint8_t
+{
+    kBufferFlagNone          = 0, 
+    kBufferFlagDynamic       = 0x00000001,
+    kBufferFlagMapRead       = 0x00000002,
+    kBufferFlagMapWrite      = 0x00000004,
+    kBufferFlagMapReadWrite  = 0x00000008,
+    kBufferFlagMapPersistent = 0x00000010,
+    kBufferFlagMapCoherent   = 0x00000020,
+    kBufferFlagMax           = 6
+};
+MAKE_ENUM_FLAG(uint8_t, BufferFlag);
+
 struct BufferDesc
 {
     uint32_t size;
-    uint32_t memory_usage;
+    BufferFlag flags;
 };
 
 struct Buffer
 {
     uint32_t id;
+    BufferFlag flags;
 };
-
-// Interesting thing got it from The-Forge
-#define MAKE_ENUM_FLAG(TYPE, ENUM_TYPE)                                                                        \
-	static inline ENUM_TYPE operator|(ENUM_TYPE a, ENUM_TYPE b) { return (ENUM_TYPE)((TYPE)(a) | (TYPE)(b)); } \
-	static inline ENUM_TYPE operator&(ENUM_TYPE a, ENUM_TYPE b) { return (ENUM_TYPE)((TYPE)(a) & (TYPE)(b)); } \
-	static inline ENUM_TYPE operator|=(ENUM_TYPE& a, ENUM_TYPE b) { return a = (a | b); }                      \
-	static inline ENUM_TYPE operator&=(ENUM_TYPE& a, ENUM_TYPE b) { return a = (a & b); }
 
 enum ShaderStage : uint8_t
 {
@@ -103,6 +123,39 @@ struct Shader
     uint32_t program;
     // Going to add spirv reflection but later
     void* reflection; 
+};
+
+struct VertexAttrib
+{
+    uint32_t size;
+    uint32_t binding;
+    uint32_t offset;    
+};
+
+struct VertexLayout
+{
+    uint32_t vao; // only for ogl
+    uint32_t attrib_count;
+    VertexAttrib attribs[kMaxVertexAttribCount];
+};
+
+struct Pipeline
+{
+    /*
+        has to contain:
+            * Shaders (probably shader reflection as well)
+                if Vulkan is a reference to this we have to store shader 
+                stages count and stages as well
+            * Root Signature (?)  
+            * Topology - Input Assembly
+            * Vertex Attributes
+            * Viewport state
+            * Rasterization state
+            * Multisampling state
+            * DepthStencil state
+            * Color Blend state
+            * Layout - to work with resources
+    */
 };
 
 // ======================================= //
