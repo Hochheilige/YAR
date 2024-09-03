@@ -89,13 +89,15 @@ else:
 submodules_urls = [
     "https://github.com/glfw/glfw.git",
     "https://github.com/nothings/stb.git",
-    "https://github.com/ocornut/imgui.git"
+    "https://github.com/ocornut/imgui.git",
+    "https://github.com/KhronosGroup/SPIRV-Reflect.git",
 ]
 
 submodules_paths = [
     "external/glfw" ,
     "external/stb",
-    "external/imgui"
+    "external/imgui",
+    "external/spirv-reflect",
 ]
 
 for url, path in zip(submodules_urls, submodules_paths):
