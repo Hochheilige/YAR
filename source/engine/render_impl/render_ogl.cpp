@@ -221,7 +221,7 @@ GLenum util_buffer_flags_to_map_access(BufferFlag flags)
 //            Load Functions               //
 // ======================================= //
 
-void gl_LoadShader(ShaderLoadDesc* desc, ShaderDesc** out_shader_desc)
+void gl_loadShader(ShaderLoadDesc* desc, ShaderDesc** out_shader_desc)
 {
     ShaderDesc* shader_desc = (ShaderDesc*)std::malloc(sizeof(ShaderDesc));
     if (shader_desc == nullptr)
@@ -347,6 +347,24 @@ void gl_addPipeline(PipelineDesc* desc, Pipeline** pipeline)
     *pipeline = new_pipeline;
 }
 
+void gl_addQueue([[maybe_unused]] CmdQueueDesc* desc, CmdQueue** queue)
+{
+    CmdQueue* new_queue = (CmdQueue*)std::malloc(sizeof(CmdQueue));
+    new (&new_queue->queue) std::vector<CmdBuffer*>();
+    new_queue->queue.reserve(8); // just random 
+    *queue = new_queue;
+}
+
+void gl_addCmd(CmdBufferDesc* desc, CmdBuffer** cmd)
+{
+    using Command = std::function<void()>;
+
+    CmdBuffer* new_cmd = (CmdBuffer*)std::malloc(sizeof(CmdBuffer));
+    new (&new_cmd->commands) std::vector<Command>();
+    desc->current_queue->queue.push_back(new_cmd);
+    *cmd = new_cmd;
+}
+
 void gl_removeBuffer(Buffer* buffer)
 {
     if (buffer)
@@ -367,31 +385,83 @@ void gl_unmapBuffer(Buffer* buffer)
     glUnmapNamedBuffer(buffer->id);
 }
 
-void gl_bindPipeline(Pipeline* pipeline)
+void gl_cmdBindPipeline(CmdBuffer* cmd, Pipeline* pipeline)
 {
     current_vao = pipeline->vao;
+    cmd->commands.push_back([=]() {
+        glUseProgram(pipeline->shader->program); 
+    });
 }
 
-void gl_bindVertexBuffer(Buffer* buffer, uint32_t offset, uint32_t stride)
+void gl_cmdBindVertexBuffer(CmdBuffer* cmd, Buffer* buffer, uint32_t offset, uint32_t stride)
 {
     GLuint& vao = current_vao;
-    glVertexArrayVertexBuffer(vao, 0, buffer->id, offset, stride); // maybe need to store binding?
-    glEnableVertexArrayAttrib(vao, 0); // probably need to store somewhere
-    glBindVertexArray(vao);
+    cmd->commands.push_back([=]() {
+        glVertexArrayVertexBuffer(vao, 0, buffer->id, offset, stride); // maybe need to store binding?
+        glEnableVertexArrayAttrib(vao, 0); // probably need to store somewhere
+    });
+}
+
+void gl_cmdBindIndexBuffer(CmdBuffer* cmd, Buffer* buffer)
+{
+    GLuint& vao = current_vao;
+    cmd->commands.push_back([=]() {
+        glVertexArrayElementBuffer(vao, buffer->id);
+    });
+}
+
+void gl_cmdDraw(CmdBuffer* cmd, uint32_t first_vertex, uint32_t count)
+{
+    GLuint& vao = current_vao;
+    cmd->commands.push_back([=]() {
+        glBindVertexArray(vao);
+        // need to add topology somewhere
+        glDrawArrays(GL_TRIANGLES, first_vertex, count);
+    });
+}
+
+void gl_cmdDrawIndexed(CmdBuffer* cmd, uint32_t index_count, 
+    [[maybe_unused]] uint32_t first_index, [[maybe_unused]] uint32_t first_vertex)
+{
+    GLuint& vao = current_vao;
+    // probably need to change function signature
+    cmd->commands.push_back([=]() {
+        glBindVertexArray(vao);
+        // need to add topology somewhere
+        glDrawElements(GL_TRIANGLES, index_count, GL_UNSIGNED_INT, 0);
+    });
+}
+
+void gl_queueSubmit(CmdQueue* queue)
+{
+    for (auto& cmd : queue->queue)
+    {
+        for (auto& command : cmd->commands)
+        {
+            command();
+        }
+        cmd->commands.clear();
+    }
 }
 
 // Maybe need to add some params to this function in future
 bool gl_init_render()
 {
-    load_shader            = gl_LoadShader;
+    load_shader            = gl_loadShader;
     add_swapchain          = gl_addSwapChain;
     add_buffer             = gl_addBuffer;
     add_shader             = gl_addShader;
     add_pipeline           = gl_addPipeline;
+    add_queue              = gl_addQueue;
+    add_cmd                = gl_addCmd;
     map_buffer             = gl_mapBuffer;
     unmap_buffer           = gl_unmapBuffer;
-    cmd_bind_pipeline      = gl_bindPipeline;
-    cmd_bind_vertex_buffer = gl_bindVertexBuffer;
+    cmd_bind_pipeline      = gl_cmdBindPipeline;
+    cmd_bind_vertex_buffer = gl_cmdBindVertexBuffer;
+    cmd_bind_index_buffer  = gl_cmdBindIndexBuffer;
+    cmd_draw               = gl_cmdDraw;
+    cmd_draw_indexed       = gl_cmdDrawIndexed;
+    queue_submit           = gl_queueSubmit;
 
     if (!gladLoadGLLoader((GLADloadproc)glfwGetProcAddress))
         return false;

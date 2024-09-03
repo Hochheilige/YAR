@@ -4,6 +4,9 @@
 #include <string>
 #include <string_view>
 #include <array>
+#include <vector>
+#include <queue>
+#include <functional>
 
 // ======================================= //
 //            Render Structures            //
@@ -168,6 +171,29 @@ struct Pipeline
     uint32_t vao;
 };
 
+struct CmdQueueDesc
+{
+    uint8_t dummy;
+};
+
+struct CmdBuffer;
+
+struct CmdQueue
+{
+    std::vector<CmdBuffer*> queue;
+};
+
+struct CmdBufferDesc
+{
+    CmdQueue* current_queue;
+};
+
+struct CmdBuffer
+{
+    using Command = std::function<void()>;
+    std::vector<Command> commands;
+};
+
 // ======================================= //
 //            Load Functions               //
 // ======================================= //
@@ -190,10 +216,16 @@ DECLARE_YAR_RENDER_FUNC(void, add_swapchain, bool vsync, SwapChain** swapchain);
 DECLARE_YAR_RENDER_FUNC(void, add_buffer,  BufferDesc* desc, Buffer** buffer);
 DECLARE_YAR_RENDER_FUNC(void, add_shader, ShaderDesc* desc, Shader** shader);
 DECLARE_YAR_RENDER_FUNC(void, add_pipeline, PipelineDesc* desc, Pipeline** pipeline);
+DECLARE_YAR_RENDER_FUNC(void, add_queue, CmdQueueDesc* desc, CmdQueue** queue);
+DECLARE_YAR_RENDER_FUNC(void, add_cmd, CmdBufferDesc* desc, CmdBuffer** cmd);
 DECLARE_YAR_RENDER_FUNC(void, remove_buffer, Buffer* buffer);
 DECLARE_YAR_RENDER_FUNC(void*, map_buffer, Buffer* buffer);
 DECLARE_YAR_RENDER_FUNC(void, unmap_buffer, Buffer* buffer);
-DECLARE_YAR_RENDER_FUNC(void, cmd_bind_pipeline, Pipeline* pipeline);
-DECLARE_YAR_RENDER_FUNC(void, cmd_bind_vertex_buffer, Buffer* buffer, uint32_t offset, uint32_t stride);
+DECLARE_YAR_RENDER_FUNC(void, cmd_bind_pipeline, CmdBuffer* cmd, Pipeline* pipeline);
+DECLARE_YAR_RENDER_FUNC(void, cmd_bind_vertex_buffer, CmdBuffer* cmd, Buffer* buffer, uint32_t offset, uint32_t stride);
+DECLARE_YAR_RENDER_FUNC(void, cmd_bind_index_buffer, CmdBuffer* cmd, Buffer* buffer); // maybe for other render api there should be more params
+DECLARE_YAR_RENDER_FUNC(void, cmd_draw, CmdBuffer* cmd, uint32_t first_vertex, uint32_t count);
+DECLARE_YAR_RENDER_FUNC(void, cmd_draw_indexed, CmdBuffer* cmd, uint32_t index_count, uint32_t first_index, uint32_t first_vertex);
+DECLARE_YAR_RENDER_FUNC(void, queue_submit, CmdQueue* queue);
 
 void init_render();
