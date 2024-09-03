@@ -105,8 +105,7 @@ struct ShaderLoadDesc
 
 struct ShaderStageDesc
 {
-    void* byte_code;
-    uint32_t byte_code_size;
+    std::vector<uint8_t> byte_code;
     std::string_view entry_point;
     uint32_t shader; // Only for gl
 };

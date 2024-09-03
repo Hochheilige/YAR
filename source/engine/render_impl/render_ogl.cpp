@@ -16,6 +16,7 @@
 #include <vector>
 #include <string>
 #include <codecvt>
+#include <spirv_reflect.h>
 
 // ======================================= //
 //            Utils Variables              //
@@ -86,6 +87,14 @@ std::wstring util_convert_to_wstring(std::string_view str_view)
     return converter.from_bytes(str);
 }
 
+struct SpirvHeader {
+    uint32_t magicNumber;
+    uint32_t version;
+    uint32_t generatorMagicNumber;
+    uint32_t bound;
+    uint32_t instructionOffset;
+};
+
 bool util_compile_hlsl_to_spirv(ShaderStageLoadDesc* load_desc, std::vector<uint8_t>& spirv) {
     // Initialize the Dxc compiler and utils
     CComPtr<IDxcCompiler> compiler;
@@ -112,7 +121,7 @@ bool util_compile_hlsl_to_spirv(ShaderStageLoadDesc* load_desc, std::vector<uint
 
     // Prepare the arguments for the compilation
     LPCWSTR arguments[] = {
-        L"-spirv",                 // Output format to SPIR-V
+        L"-spirv", L"-fspv-reflect"                 // Output format to SPIR-V
     };
 
     // Compile the shader
@@ -178,8 +187,7 @@ void util_load_shader_binary(ShaderStage stage, ShaderStageLoadDesc* load_desc, 
     glShaderBinary(1, &shader, GL_SHADER_BINARY_FORMAT_SPIR_V, buffer.data(), buffer.size());
     glSpecializeShader(shader, load_desc->entry_point.data(), 0, NULL, NULL);
 
-    stage_desc->byte_code = buffer.data(); 
-    stage_desc->byte_code_size = buffer.size();
+    new(&stage_desc->byte_code) std::vector<uint8_t>(std::move(buffer));
     stage_desc->entry_point = load_desc->entry_point;
     stage_desc->shader = shader;
 }
@@ -215,6 +223,35 @@ GLenum util_buffer_flags_to_map_access(BufferFlag flags)
 
     // TODO: add assert
     return GL_NONE;
+}
+
+void util_create_shader_reflection(std::vector<uint8_t>& spirv)
+{
+    
+ /*   const SpirvHeader* header = reinterpret_cast<const SpirvHeader*>(desc->byte_code);
+    uint32_t version = header->version;
+    uint32_t majorVersion = version / 100;
+    uint32_t minorVersion = version % 100;*/
+
+  // Generate reflection data for a shader
+    SpvReflectShaderModule module;
+    SpvReflectResult result = spvReflectCreateShaderModule(spirv.size(), spirv.data(), &module);
+    //assert(result == SPV_REFLECT_RESULT_SUCCESS);
+
+    // Enumerate and extract shader's input variables
+    uint32_t var_count = 0;
+    result = spvReflectEnumerateInputVariables(&module, &var_count, NULL);
+    //assert(result == SPV_REFLECT_RESULT_SUCCESS);
+    SpvReflectInterfaceVariable** input_vars =
+        (SpvReflectInterfaceVariable**)malloc(var_count * sizeof(SpvReflectInterfaceVariable*));
+    result = spvReflectEnumerateInputVariables(&module, &var_count, input_vars);
+    //assert(result == SPV_REFLECT_RESULT_SUCCESS);
+
+    // Output variables, descriptor bindings, descriptor sets, and push constants
+    // can be enumerated and extracted using a similar mechanism.
+
+    // Destroy the reflection data when no longer required.
+    spvReflectDestroyShaderModule(&module);
 }
 
 // ======================================= //
@@ -316,10 +353,14 @@ void gl_addShader(ShaderDesc* desc, Shader** out_shader)
         // Shader created on Compile shader stage
         glAttachShader(shader->program, stage->shader);
         glDeleteShader(stage->shader);
+
+        util_create_shader_reflection(stage->byte_code);
     }
 
     glLinkProgram(shader->program);
-    // Create reflection here or maybe it have to be created somewhere earlier
+    
+
+
 
     *out_shader = shader;
 }

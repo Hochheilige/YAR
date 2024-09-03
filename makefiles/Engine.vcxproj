@@ -11,7 +11,7 @@
   <ItemDefinitionGroup>
     <ClCompile>
       <AdditionalIncludeDirectories>
-        $(ExternalDir)glad\include\;$(ExternalDir)glfw\include\;$(ExternalDir)imgui\;%(AdditionalIncludeDirectories)
+        $(ExternalDir)glad\include\;$(ExternalDir)glfw\include\;$(ExternalDir)imgui\;$(ExternalDir)spirv-reflect\;%(AdditionalIncludeDirectories)
       </AdditionalIncludeDirectories>
       <RuntimeLibrary Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">MultiThreadedDebugDLL</RuntimeLibrary>
       <LanguageStandard>stdcpp20</LanguageStandard>
@@ -34,6 +34,7 @@
     <ClCompile Include="$(ExternalDir)imgui\imgui_widgets.cpp" />
     <ClCompile Include="$(ExternalDir)imgui\backends\imgui_impl_glfw.cpp" />
     <ClCompile Include="$(ExternalDir)imgui\backends\imgui_impl_opengl3.cpp" />
+    <ClCompile Include="$(ExternalDir)spirv-reflect\spirv_reflect.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="$(SrcDir)engine\window.h" />
