@@ -121,7 +121,7 @@ bool util_compile_hlsl_to_spirv(ShaderStageLoadDesc* load_desc, std::vector<uint
 
     // Prepare the arguments for the compilation
     LPCWSTR arguments[] = {
-        L"-spirv", L"-fspv-reflect"                 // Output format to SPIR-V
+        L"-spirv"                // Output format to SPIR-V
     };
 
     // Compile the shader
@@ -225,32 +225,48 @@ GLenum util_buffer_flags_to_map_access(BufferFlag flags)
     return GL_NONE;
 }
 
-void util_create_shader_reflection(std::vector<uint8_t>& spirv)
+ResourceType util_convert_spv_resource_type(SpvReflectResourceType type)
 {
-    
- /*   const SpirvHeader* header = reinterpret_cast<const SpirvHeader*>(desc->byte_code);
-    uint32_t version = header->version;
-    uint32_t majorVersion = version / 100;
-    uint32_t minorVersion = version % 100;*/
+    switch (type)
+    {
+    case SPV_REFLECT_RESOURCE_FLAG_UNDEFINED:
+        return kResourceTypeUndefined;
+    case SPV_REFLECT_RESOURCE_FLAG_SAMPLER:
+        return kResourceTypeSampler;
+    case SPV_REFLECT_RESOURCE_FLAG_CBV:
+        return kResourceTypeCBV;
+    case SPV_REFLECT_RESOURCE_FLAG_SRV:
+        return kResourceTypeSRV;
+    case SPV_REFLECT_RESOURCE_FLAG_UAV:
+        return kResourceTypeUAV;
+    default:
+        return kResourceTypeUndefined;
+    }
+}
 
-  // Generate reflection data for a shader
+void util_create_shader_reflection(std::vector<uint8_t>& spirv, std::vector<ShaderResource>& resources)
+{
     SpvReflectShaderModule module;
     SpvReflectResult result = spvReflectCreateShaderModule(spirv.size(), spirv.data(), &module);
-    //assert(result == SPV_REFLECT_RESULT_SUCCESS);
 
-    // Enumerate and extract shader's input variables
-    uint32_t var_count = 0;
-    result = spvReflectEnumerateInputVariables(&module, &var_count, NULL);
-    //assert(result == SPV_REFLECT_RESULT_SUCCESS);
-    SpvReflectInterfaceVariable** input_vars =
-        (SpvReflectInterfaceVariable**)malloc(var_count * sizeof(SpvReflectInterfaceVariable*));
-    result = spvReflectEnumerateInputVariables(&module, &var_count, input_vars);
-    //assert(result == SPV_REFLECT_RESULT_SUCCESS);
+    uint32_t desc_size;
+    result = spvReflectEnumerateDescriptorBindings(&module, &desc_size, nullptr);
 
-    // Output variables, descriptor bindings, descriptor sets, and push constants
-    // can be enumerated and extracted using a similar mechanism.
+    std::vector<SpvReflectDescriptorBinding*> descriptors(desc_size);
+    result = spvReflectEnumerateDescriptorBindings(&module, &desc_size, descriptors.data());
 
-    // Destroy the reflection data when no longer required.
+    resources.resize(desc_size);
+    uint32_t i = 0;
+    for (auto& descriptor : descriptors)
+    {
+        auto& resource = resources[i];
+        resource.name = descriptor->name;
+        resource.binding = descriptor->binding;
+        resource.set = descriptor->set;
+        resource.type = util_convert_spv_resource_type(descriptor->resource_type);
+        ++i;
+    }
+
     spvReflectDestroyShaderModule(&module);
 }
 
@@ -320,6 +336,7 @@ void gl_addShader(ShaderDesc* desc, Shader** out_shader)
     
     shader->program = glCreateProgram();
     shader->stages = desc->stages;
+    new (&shader->resources) std::vector<ShaderResource>();
 
     for (size_t i = 0; i < kShaderStageMax; ++i)
     {
@@ -354,7 +371,7 @@ void gl_addShader(ShaderDesc* desc, Shader** out_shader)
         glAttachShader(shader->program, stage->shader);
         glDeleteShader(stage->shader);
 
-        util_create_shader_reflection(stage->byte_code);
+        util_create_shader_reflection(stage->byte_code, shader->resources);
     }
 
     glLinkProgram(shader->program);
@@ -373,6 +390,7 @@ void gl_addPipeline(PipelineDesc* desc, Pipeline** pipeline)
 
     new_pipeline->shader = desc->shader;
     GLuint& vao = new_pipeline->vao;
+    new_pipeline->ubo = desc->ubo;
 
     glCreateVertexArrays(1, &vao);
     for (int i = 0; i < desc->vertex_layout->attrib_count; ++i)
@@ -431,6 +449,14 @@ void gl_cmdBindPipeline(CmdBuffer* cmd, Pipeline* pipeline)
     current_vao = pipeline->vao;
     cmd->commands.push_back([=]() {
         glUseProgram(pipeline->shader->program); 
+
+        // Fore some reason instead of c_color uniform block name in opengl is type_c_color.c_color
+        
+        // All uniforms blocks stored in shader in right order, so it is possible to
+        // use just their array index as uniform block index
+
+        glUniformBlockBinding(pipeline->shader->program, 0, pipeline->shader->resources[0].binding);
+        glBindBufferBase(GL_UNIFORM_BUFFER, 0, pipeline->ubo);
     });
 }
 

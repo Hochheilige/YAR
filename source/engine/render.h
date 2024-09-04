@@ -90,6 +90,25 @@ enum ShaderStage : uint8_t
 };
 MAKE_ENUM_FLAG(uint8_t, ShaderStage);
 
+enum ResourceType : uint8_t
+{
+    kResourceTypeUndefined = 0x00000000,
+    kResourceTypeSampler = 0x00000001,
+    kResourceTypeCBV = 0x00000002,
+    kResourceTypeSRV = 0x00000004,
+    kResourceTypeUAV = 0x00000008,
+};
+MAKE_ENUM_FLAG(uint8_t, ResourceType);
+
+struct ShaderResource
+{
+    std::string name;
+    ResourceType type;
+    uint32_t binding;
+    uint32_t set;
+    // maybe also need to add texture specific things
+};
+
 struct ShaderStageLoadDesc
 {
     std::string file_name;
@@ -123,8 +142,7 @@ struct Shader
 {
     ShaderStage stages;
     uint32_t program;
-    // Going to add spirv reflection but later
-    void* reflection; 
+    std::vector<ShaderResource> resources;
 };
 
 struct VertexAttrib
@@ -145,6 +163,7 @@ struct PipelineDesc
 {
     Shader* shader;
     VertexLayout* vertex_layout;
+    uint32_t ubo;
     /*
     has to contain:
         * Shaders (probably shader reflection as well)
@@ -168,6 +187,7 @@ struct Pipeline
     // but for now it will be OpenGL specific
     Shader* shader;
     uint32_t vao;
+    uint32_t ubo;
 };
 
 struct CmdQueueDesc
