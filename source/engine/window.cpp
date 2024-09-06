@@ -8,6 +8,9 @@ GLFWwindow* window;
 
 bool init_window()
 {
+#if _DEBUG
+    glfwInitHint(GLFW_OPENGL_DEBUG_CONTEXT, GL_TRUE);
+#endif
     if (!glfwInit())
         return false;
 
@@ -19,9 +22,6 @@ bool init_window()
     }
 
     glfwMakeContextCurrent(window);
-
-    if (!gladLoadGLLoader((GLADloadproc)glfwGetProcAddress))
-        return false;
 
     imgui_init(window);
 

@@ -35,6 +35,58 @@ static Buffer* staging_buffer = nullptr;
 // ======================================= //
 //            Utils Functions              //
 // ======================================= //
+
+void APIENTRY util_debug_message_callback(GLenum source, GLenum type,
+    GLuint id, GLenum severity, GLsizei length,
+    const GLchar* message, const void* userParam)
+{
+    std::string sourceStr;
+    switch (source) 
+    {
+    case GL_DEBUG_SOURCE_API:             sourceStr = "API"; break;
+    case GL_DEBUG_SOURCE_WINDOW_SYSTEM:   sourceStr = "Window System"; break;
+    case GL_DEBUG_SOURCE_SHADER_COMPILER: sourceStr = "Shader Compiler"; break;
+    case GL_DEBUG_SOURCE_THIRD_PARTY:     sourceStr = "Third Party"; break;
+    case GL_DEBUG_SOURCE_APPLICATION:     sourceStr = "Application"; break;
+    case GL_DEBUG_SOURCE_OTHER:           sourceStr = "Other"; break;
+    default:                              sourceStr = "Unknown"; break;
+    }
+
+    std::string typeStr;
+    switch (type) 
+    {
+    case GL_DEBUG_TYPE_ERROR:               typeStr = "Error"; break;
+    case GL_DEBUG_TYPE_DEPRECATED_BEHAVIOR: typeStr = "Deprecated Behavior"; break;
+    case GL_DEBUG_TYPE_UNDEFINED_BEHAVIOR:  typeStr = "Undefined Behavior"; break;
+    case GL_DEBUG_TYPE_PORTABILITY:         typeStr = "Portability"; break;
+    case GL_DEBUG_TYPE_PERFORMANCE:         typeStr = "Performance"; break;
+    case GL_DEBUG_TYPE_MARKER:              typeStr = "Marker"; break;
+    case GL_DEBUG_TYPE_PUSH_GROUP:          typeStr = "Push Group"; break;
+    case GL_DEBUG_TYPE_POP_GROUP:           typeStr = "Pop Group"; break;
+    case GL_DEBUG_TYPE_OTHER:               typeStr = "Other"; break;
+    default:                                typeStr = "Unknown"; break;
+    }
+
+    std::string severityStr;
+    switch (severity) 
+    {
+    case GL_DEBUG_SEVERITY_HIGH:         severityStr = "High"; break;
+    case GL_DEBUG_SEVERITY_MEDIUM:       severityStr = "Medium"; break;
+    case GL_DEBUG_SEVERITY_LOW:          severityStr = "Low"; break;
+    case GL_DEBUG_SEVERITY_NOTIFICATION: severityStr = "Notification"; break;
+    default:                             severityStr = "Unknown"; break;
+    }
+
+    std::stringstream log;
+    log << "OpenGL Debug Message (" << id << "):\n"
+        << "Source: " << sourceStr << "\n"
+        << "Type: " << typeStr << "\n"
+        << "Severity: " << severityStr << "\n"
+        << "Message: " << message << "\n";
+
+    std::cout << log.str() << std::endl;
+}
+
 uint32_t util_shader_stage_to_gl_stage(ShaderStage stage)
 {
     switch (stage)
@@ -616,6 +668,12 @@ bool gl_init_render()
 
     if (!gladLoadGLLoader((GLADloadproc)glfwGetProcAddress))
         return false;
+
+#if _DEBUG
+    glEnable(GL_DEBUG_OUTPUT);
+    glEnable(GL_DEBUG_OUTPUT_SYNCHRONOUS);
+    glDebugMessageCallback(util_debug_message_callback, nullptr);
+#endif
 
     return true;
 }
