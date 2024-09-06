@@ -6,7 +6,9 @@ extern bool gl_init_render();
 //            Load Functions               //
 // ======================================= //
 
-load_shader_fn load_shader;
+load_shader_fn           load_shader;
+begin_update_resource_fn begin_update_resource;
+end_update_resource_fn   end_update_resource;
 
 // ======================================= //
 //            Render Functions             //

@@ -42,7 +42,7 @@ auto main() -> int {
 
 	BufferDesc buffer_desc;
 	buffer_desc.size = sizeof(vertices);
-	buffer_desc.flags = BufferFlag::kBufferFlagMapWrite;
+	buffer_desc.flags = kBufferFlagGPUOnly;
 	Buffer* vbo = nullptr;
 	add_buffer(&buffer_desc, &vbo);
 
@@ -51,7 +51,7 @@ auto main() -> int {
 	add_buffer(&buffer_desc, &ebo);
 
 	buffer_desc.size = sizeof(rgb);
-	buffer_desc.flags |= kBufferFlagDynamic;
+	buffer_desc.flags = kBufferFlagMapWrite;
 	Buffer* ubo = nullptr;
 	add_buffer(&buffer_desc, &ubo);
 
@@ -63,18 +63,25 @@ auto main() -> int {
 	Shader* shader;
 	add_shader(shader_desc, &shader);
 
-	{ // update buffer data
-		void* buffer = map_buffer(vbo);
-		std::memcpy(buffer, vertices, sizeof(vertices));
-		unmap_buffer(vbo);
+	{ // update buffers data
+		BufferUpdateDesc update_desc{};
+		update_desc.buffer = vbo;
+		update_desc.size = sizeof(vertices);
+		begin_update_resource(&update_desc);
+		std::memcpy(update_desc.mapped_data, vertices, sizeof(vertices));
+		end_update_resource(&update_desc);
 
-		buffer = map_buffer(ebo);
-		std::memcpy(buffer, indexes, sizeof(indexes));
-		unmap_buffer(ebo);
+		update_desc.buffer = ebo;
+		update_desc.size = sizeof(indexes);
+		begin_update_resource(&update_desc);
+		std::memcpy(update_desc.mapped_data, indexes, sizeof(indexes));
+		end_update_resource(&update_desc);
 
-		buffer = map_buffer(ubo);
-		std::memcpy(buffer, rgb, sizeof(rgb));
-		unmap_buffer(ubo);
+		update_desc.buffer = ubo;
+		update_desc.size = sizeof(rgb);
+		begin_update_resource(&update_desc);
+		std::memcpy(update_desc.mapped_data, rgb, sizeof(rgb));
+		end_update_resource(&update_desc);
 	}
 
 	VertexLayout layout = {0};

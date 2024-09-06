@@ -9,6 +9,21 @@
 #include <functional>
 
 // ======================================= //
+//            Load Structures              //
+// ======================================= //
+
+struct Buffer;
+
+struct BufferUpdateDesc
+{
+    Buffer* buffer;
+    uint64_t size;
+    // also can add offset if need to update part of a buffer
+    // or buffer from some point
+    void* mapped_data;
+};
+
+// ======================================= //
 //            Render Structures            //
 // ======================================= //
 
@@ -53,22 +68,38 @@ struct SwapChain
     void(*swap_buffers)(void*);
 };
 
+enum BufferUsage : uint8_t
+{
+    kBufferUsageNone          = 0,
+    kBufferUsageTransferSrc   = 0x00000001,
+    kBufferUsageTransferDst   = 0x00000002,
+    kBufferUsageUniformBuffer = 0x00000004,
+    kBufferUsageStorageBuffer = 0x00000008,
+    kBufferUsageIndexBuffer   = 0x00000010,
+    kBufferUsageVertexBuffer  = 0x00000020,
+    // there are more types but I use only this now
+    kBufferUsageMax           = 6
+};
+
 enum BufferFlag : uint8_t
 {
     kBufferFlagNone          = 0, 
-    kBufferFlagDynamic       = 0x00000001,
-    kBufferFlagMapRead       = 0x00000002,
-    kBufferFlagMapWrite      = 0x00000004,
-    kBufferFlagMapReadWrite  = 0x00000008,
-    kBufferFlagMapPersistent = 0x00000010,
-    kBufferFlagMapCoherent   = 0x00000020,
-    kBufferFlagMax           = 6
+    kBufferFlagGPUOnly       = 0x00000001,
+    kBufferFlagDynamic       = 0x00000002,
+    kBufferFlagMapRead       = 0x00000004,
+    kBufferFlagMapWrite      = 0x00000008,
+    kBufferFlagMapReadWrite  = 0x00000010,
+    kBufferFlagMapPersistent = 0x00000020,
+    kBufferFlagMapCoherent   = 0x00000040,
+    kBufferFlagClientStorage = 0x00000080,
+    kBufferFlagMax           = 7
 };
 MAKE_ENUM_FLAG(uint8_t, BufferFlag);
 
 struct BufferDesc
 {
     uint32_t size;
+    BufferUsage usage;
     BufferFlag flags;
 };
 
@@ -217,17 +248,19 @@ struct CmdBuffer
 //            Load Functions               //
 // ======================================= //
 
-#define DECLARE_YAR_LOAD_FUNC(ret, name, ...)  \
-using load_##name##_fn = ret(*)(__VA_ARGS__);  \
-extern load_##name##_fn load_##name;                  \
+#define DECLARE_YAR_LOAD_FUNC(ret, name, ...) \
+using name##_fn = ret(*)(__VA_ARGS__);        \
+extern name##_fn name;                        \
 
-DECLARE_YAR_LOAD_FUNC(void, shader, ShaderLoadDesc* desc, ShaderDesc** out);
+DECLARE_YAR_LOAD_FUNC(void, load_shader, ShaderLoadDesc* desc, ShaderDesc** out);
+DECLARE_YAR_LOAD_FUNC(void, begin_update_resource, BufferUpdateDesc* desc);
+DECLARE_YAR_LOAD_FUNC(void, end_update_resource, BufferUpdateDesc* desc);
 
 // ======================================= //
 //            Render Functions             //
 // ======================================= //
 
-#define DECLARE_YAR_RENDER_FUNC(ret, name, ...)  \
+#define DECLARE_YAR_RENDER_FUNC(ret, name, ...) \
 using name##_fn = ret(*)(__VA_ARGS__);          \
 extern name##_fn name;                          \
 

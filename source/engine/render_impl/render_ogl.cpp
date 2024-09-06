@@ -24,6 +24,15 @@
 static GLuint current_vao = 0u;
 
 // ======================================= //
+//            Load Variables               //
+// ======================================= //
+
+// Need to make something to check that current staging buffer
+// doesn't use right now and can be used to map and update resource
+static Buffer* staging_buffer = nullptr;
+
+
+// ======================================= //
 //            Utils Functions              //
 // ======================================= //
 uint32_t util_shader_stage_to_gl_stage(ShaderStage stage)
@@ -201,13 +210,32 @@ GLbitfield util_buffer_flags_to_gl_storage_flag(BufferFlag flags)
         // TODO: add assert
         return GL_NONE;
 
-    GLbitfield gl_flags = GL_NONE;
+    GLbitfield gl_flags = GL_NONE; 
+
+    // Using GL_NONE as a flag in OpenGL creates GPU only buffer
+    if (flags & kBufferFlagGPUOnly)       gl_flags = GL_NONE;
+
+    // Allows to update buffer with glNamedBufferSubData
     if (flags & kBufferFlagDynamic)       gl_flags |= GL_DYNAMIC_STORAGE_BIT;
+
+    // Allow to map for read and/or write
     if (flags & kBufferFlagMapRead)       gl_flags |= GL_MAP_READ_BIT;
     if (flags & kBufferFlagMapWrite)      gl_flags |= GL_MAP_WRITE_BIT;
     if (flags & kBufferFlagMapReadWrite)  gl_flags |= (GL_MAP_WRITE_BIT | GL_MAP_READ_BIT);
+
+    // Allows buffer to be mapped almost infinitely but 
+    // all synchronization have to be perfomed by user
     if (flags & kBufferFlagMapPersistent) gl_flags |= GL_MAP_PERSISTENT_BIT;
+
+    // Allows perfom read and write to Persistent buffer
+    // without thinking about synchronization
+    // But still need to use Fence 
     if (flags & kBufferFlagMapCoherent)   gl_flags |= GL_MAP_COHERENT_BIT;
+
+    // It is CPU only buffer that can be used as a Staging buffer
+    // and it is possible to copy from it to GPU only buffer
+    // through glCopyBufferSubData 
+    if (flags & kBufferFlagClientStorage) gl_flags |= GL_CLIENT_STORAGE_BIT;
 
     return gl_flags;
 }
@@ -292,6 +320,58 @@ void gl_loadShader(ShaderLoadDesc* desc, ShaderDesc** out_shader_desc)
     }
 
     *out_shader_desc = shader_desc;
+}
+
+void gl_beginUpdateResource(BufferUpdateDesc* desc)
+{
+    if (desc->buffer->flags & kBufferFlagGPUOnly)
+    {
+        // This is GPU only buffer that has to be updated 
+        // throug the Staging CPU only buffer and
+        // glCopyBufferSubData function call 
+        BufferDesc staging_buffer_desc;
+        staging_buffer_desc.flags = kBufferFlagClientStorage | kBufferFlagMapWrite;
+        staging_buffer_desc.usage = kBufferUsageTransferSrc;
+        staging_buffer_desc.size = desc->size;
+        add_buffer(&staging_buffer_desc, &staging_buffer);
+        desc->mapped_data = map_buffer(staging_buffer);
+    }
+    else
+    {
+        // Just regular CPU/GPU buffer that can be mapped
+        desc->mapped_data = map_buffer(desc->buffer);
+    }
+    
+}
+
+void gl_endUpdateResource(BufferUpdateDesc* desc)
+{
+    if (desc->buffer->flags & kBufferFlagGPUOnly)
+    {
+        unmap_buffer(staging_buffer);
+        uint32_t read_buffer = staging_buffer->id;
+        uint32_t write_buffer = desc->buffer->id;
+
+        // Probably need to add some kind of cmdCopyBuffer function
+        // but I don't see for now how to use command buffer here
+        glCopyNamedBufferSubData(read_buffer, write_buffer, 0, 0, desc->size);
+
+        // if we remove buffer here it is probably better to wait
+        // copy command to complete
+        GLsync sync = glFenceSync(GL_SYNC_GPU_COMMANDS_COMPLETE, 0);
+        glClientWaitSync(sync, GL_SYNC_FLUSH_COMMANDS_BIT, GL_TIMEOUT_IGNORED);
+
+        // maybe it is better to remove buffer later
+        // or have more than one staging buffer and remove it only
+        // when new one is needed
+        remove_buffer(staging_buffer);
+    }
+    else
+    {
+        unmap_buffer(desc->buffer);
+    }
+    desc->size = 0;
+    desc->mapped_data = nullptr;
 }
 
 // ======================================= //
@@ -515,12 +595,16 @@ void gl_queueSubmit(CmdQueue* queue)
 bool gl_init_render()
 {
     load_shader            = gl_loadShader;
+    begin_update_resource  = gl_beginUpdateResource;
+    end_update_resource    = gl_endUpdateResource;
+
     add_swapchain          = gl_addSwapChain;
     add_buffer             = gl_addBuffer;
     add_shader             = gl_addShader;
     add_pipeline           = gl_addPipeline;
     add_queue              = gl_addQueue;
     add_cmd                = gl_addCmd;
+    remove_buffer          = gl_removeBuffer;
     map_buffer             = gl_mapBuffer;
     unmap_buffer           = gl_unmapBuffer;
     cmd_bind_pipeline      = gl_cmdBindPipeline;
