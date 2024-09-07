@@ -522,7 +522,8 @@ void gl_addPipeline(PipelineDesc* desc, Pipeline** pipeline)
 
     new_pipeline->shader = desc->shader;
     GLuint& vao = new_pipeline->vao;
-    new_pipeline->ubo = desc->ubo;
+    new_pipeline->ubos[0] = desc->ubos[0];
+    new_pipeline->ubos[1] = desc->ubos[1];
 
     glCreateVertexArrays(1, &vao);
     for (int i = 0; i < desc->vertex_layout->attrib_count; ++i)
@@ -578,6 +579,9 @@ void gl_unmapBuffer(Buffer* buffer)
 
 void gl_cmdBindPipeline(CmdBuffer* cmd, Pipeline* pipeline)
 {
+    static uint32_t current_frame = 0;
+    static constexpr uint32_t image_count = 2;
+
     current_vao = pipeline->vao;
     cmd->commands.push_back([=]() {
         glUseProgram(pipeline->shader->program); 
@@ -588,8 +592,10 @@ void gl_cmdBindPipeline(CmdBuffer* cmd, Pipeline* pipeline)
         // use just their array index as uniform block index
 
         glUniformBlockBinding(pipeline->shader->program, 0, pipeline->shader->resources[0].binding);
-        glBindBufferBase(GL_UNIFORM_BUFFER, 0, pipeline->ubo);
+        glBindBufferBase(GL_UNIFORM_BUFFER, 0, pipeline->ubos[current_frame]);
     });
+
+    current_frame = (current_frame + 1) % image_count;
 }
 
 void gl_cmdBindVertexBuffer(CmdBuffer* cmd, Buffer* buffer, uint32_t offset, uint32_t stride)

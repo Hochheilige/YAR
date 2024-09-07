@@ -194,7 +194,7 @@ struct PipelineDesc
 {
     Shader* shader;
     VertexLayout* vertex_layout;
-    uint32_t ubo;
+    uint32_t ubos[2];
     /*
     has to contain:
         * Shaders (probably shader reflection as well)
@@ -218,7 +218,7 @@ struct Pipeline
     // but for now it will be OpenGL specific
     Shader* shader;
     uint32_t vao;
-    uint32_t ubo;
+    uint32_t ubos[2];
 };
 
 struct CmdQueueDesc

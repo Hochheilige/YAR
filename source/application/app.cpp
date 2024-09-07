@@ -41,10 +41,13 @@ auto main() -> int {
 	Buffer* ebo = nullptr;
 	add_buffer(&buffer_desc, &ebo);
 
+	constexpr uint32_t image_count = 2;
+	uint32_t frame_index = 0;
 	buffer_desc.size = sizeof(rgb);
 	buffer_desc.flags = kBufferFlagMapWrite;
-	Buffer* ubo = nullptr;
-	add_buffer(&buffer_desc, &ubo);
+	Buffer* ubos[image_count] = { nullptr, nullptr };
+	for (auto& ubo : ubos)
+		add_buffer(&buffer_desc, &ubo);
 
 	ShaderLoadDesc shader_load_desc = {};
 	shader_load_desc.stages[0] = { "../source/shaders/base_vert.hlsl", "main", ShaderStage::kShaderStageVert };
@@ -68,7 +71,7 @@ auto main() -> int {
 		std::memcpy(update_desc.mapped_data, indexes, sizeof(indexes));
 		end_update_resource(&update_desc);
 
-		update_desc.buffer = ubo;
+		update_desc.buffer = ubos[frame_index];
 		update_desc.size = sizeof(rgb);
 		begin_update_resource(&update_desc);
 		std::memcpy(update_desc.mapped_data, rgb, sizeof(rgb));
@@ -84,7 +87,8 @@ auto main() -> int {
 	PipelineDesc pipeline_desc = { 0 };
 	pipeline_desc.shader = shader;
 	pipeline_desc.vertex_layout = &layout;
-	pipeline_desc.ubo = ubo->id;
+	pipeline_desc.ubos[0] = ubos[0]->id;
+	pipeline_desc.ubos[1] = ubos[1]->id;
 
 	Pipeline* graphics_pipeline;
 	add_pipeline(&pipeline_desc, &graphics_pipeline);
@@ -102,9 +106,12 @@ auto main() -> int {
 	{
 		rgb[0] = sin(glfwGetTime()) *0.5 + 0.5;
 		{ // update buffer data
-			void* buffer = buffer = map_buffer(ubo);
-			std::memcpy(buffer, rgb, sizeof(rgb));
-			unmap_buffer(ubo);
+			BufferUpdateDesc update;
+			update.buffer = ubos[frame_index];
+			update.size = sizeof(rgb);
+			begin_update_resource(&update);
+			std::memcpy(update.mapped_data, rgb, sizeof(rgb));
+			end_update_resource(&update);
 		}
 
 
@@ -125,7 +132,8 @@ auto main() -> int {
 
         swapchain->swap_buffers(swapchain->window);
         glfwPollEvents();
-    
+		
+		frame_index = (frame_index + 1) % image_count;
 	}
 
 	terminate_window();
