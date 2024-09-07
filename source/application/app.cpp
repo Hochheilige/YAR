@@ -49,6 +49,7 @@ auto main() -> int {
 	for (auto& ubo : ubos)
 		add_buffer(&buffer_desc, &ubo);
 
+	// Need to make something with shaders path 
 	ShaderLoadDesc shader_load_desc = {};
 	shader_load_desc.stages[0] = { "../source/shaders/base_vert.hlsl", "main", ShaderStage::kShaderStageVert };
 	shader_load_desc.stages[1] = { "../source/shaders/base_frag.hlsl", "main", ShaderStage::kShaderStageFrag };
@@ -84,11 +85,21 @@ auto main() -> int {
 	layout.attribs[0].format = GL_FLOAT;
 	layout.attribs[0].offset = 0;
 
+	DescriptorSetDesc set_desc;
+	set_desc.max_sets = image_count;
+	set_desc.update_freq = kUpdateFreqPerFrame;
+	set_desc.shader = shader;
+	DescriptorSet* set;
+	add_descriptor_set(&set_desc, &set);
+
+	UpdateDescriptorSetDesc update_set_desc;
+	// looks cringe
+	update_set_desc.buffers = { {ubos[0], ubos[1]} };
+	update_descriptor_set(&update_set_desc, set);
+
 	PipelineDesc pipeline_desc = { 0 };
 	pipeline_desc.shader = shader;
 	pipeline_desc.vertex_layout = &layout;
-	pipeline_desc.ubos[0] = ubos[0]->id;
-	pipeline_desc.ubos[1] = ubos[1]->id;
 
 	Pipeline* graphics_pipeline;
 	add_pipeline(&pipeline_desc, &graphics_pipeline);
@@ -104,7 +115,7 @@ auto main() -> int {
 
 	while(update_window())
 	{
-		rgb[0] = sin(glfwGetTime()) *0.5 + 0.5;
+		rgb[0] = sin(glfwGetTime()) * 0.5 + 0.5;
 		{ // update buffer data
 			BufferUpdateDesc update;
 			update.buffer = ubos[frame_index];
@@ -123,6 +134,7 @@ auto main() -> int {
 		cmd_bind_pipeline(cmd, graphics_pipeline);
 		cmd_bind_vertex_buffer(cmd, vbo, 0, sizeof(float) * 3);
 		cmd_bind_index_buffer(cmd, ebo);
+		cmd_bind_descriptor_set(cmd, set, frame_index);
 		cmd_draw_indexed(cmd, 6, 0, 0);
 		//cmd_draw(cmd, 0, 3);
 		queue_submit(queue);

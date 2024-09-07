@@ -2,7 +2,7 @@ struct PSInput {
     float4 position : SV_POSITION;
 };
 
-cbuffer c_color : register(b0)
+cbuffer c_color : register(b0, space1)
 {
     float3 rgb;
     float padding;

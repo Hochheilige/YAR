@@ -51,6 +51,9 @@ struct BufferUpdateDesc
             - as far as OpenGL render immediately 
 */
 
+using Command = std::function<void()>;
+using DescriptorIndexMap = std::unordered_map<std::string, uint32_t>;
+
 // Interesting thing got it from The-Forge
 #define MAKE_ENUM_FLAG(TYPE, ENUM_TYPE)                                                                        \
 	static inline ENUM_TYPE operator|(ENUM_TYPE a, ENUM_TYPE b) { return (ENUM_TYPE)((TYPE)(a) | (TYPE)(b)); } \
@@ -137,7 +140,12 @@ struct ShaderResource
     ResourceType type;
     uint32_t binding;
     uint32_t set;
+    uint32_t index;
     // maybe also need to add texture specific things
+
+    // LOOKS IMPORTANT: need to add shader stage and resource index
+    // for this stage in case index is one of glUniformBlockBinding 
+    // parameters that should be set correctly
 };
 
 struct ShaderStageLoadDesc
@@ -190,11 +198,61 @@ struct VertexLayout
     VertexAttrib attribs[kMaxVertexAttribCount];
 };
 
+// Tried to add RootSignature abstraction 
+// but don't see the point of it here right now
+
+//struct RootSignatureDesc
+//{
+//    std::vector<Shader*> shaders;
+//};
+//
+//struct RootSignature
+//{
+//    std::vector<ShaderResource> descriptors;
+//    DescriptorIndexMap name_to_index;
+//};
+
+enum DescriptorSetUpdateFrequency : uint8_t
+{
+    kUpdateFreqNone     = 0,
+    kUpdateFreqPerFrame = 1,
+    kUpdateFreqPerDraw  = 2,
+    kUpdateFreqMax      = 3
+};
+
+struct DescriptorSetDesc
+{
+    DescriptorSetUpdateFrequency update_freq;
+    uint32_t max_sets;
+    Shader* shader;
+};
+
+struct UpdateDescriptorSetDesc
+{
+    std::vector<std::vector<Buffer*>> buffers;
+    // there should be a texture vector as well
+};
+
+// Idea of Descriptor Set doesn't look really useful in OpenGL
+// but I want to make this abstraction in case of using
+// modern Graphics API like Vulkan in future
+struct DescriptorSet
+{
+    // I don't want to have uniform buffer directly in pipeline object
+    // so it is better to use Descriptor Set that is linked with current
+    // buffer to bind buffer with current context
+    DescriptorSetUpdateFrequency update_freq;
+    uint32_t max_set;
+    uint32_t program; // only for gl
+    std::vector<ShaderResource> descriptors;
+
+    std::vector<std::vector<uint32_t>> buffers; // only for gl
+};
+
 struct PipelineDesc
 {
     Shader* shader;
     VertexLayout* vertex_layout;
-    uint32_t ubos[2];
     /*
     has to contain:
         * Shaders (probably shader reflection as well)
@@ -240,7 +298,6 @@ struct CmdBufferDesc
 
 struct CmdBuffer
 {
-    using Command = std::function<void()>;
     std::vector<Command> commands;
 };
 
@@ -267,13 +324,17 @@ extern name##_fn name;                          \
 DECLARE_YAR_RENDER_FUNC(void, add_swapchain, bool vsync, SwapChain** swapchain);
 DECLARE_YAR_RENDER_FUNC(void, add_buffer,  BufferDesc* desc, Buffer** buffer);
 DECLARE_YAR_RENDER_FUNC(void, add_shader, ShaderDesc* desc, Shader** shader);
+DECLARE_YAR_RENDER_FUNC(void, add_descriptor_set, DescriptorSetDesc* desc, DescriptorSet** shader);
+//DECLARE_YAR_RENDER_FUNC(void, add_root_signature, RootSignatureDesc* desc, RootSignature** root_signature);
 DECLARE_YAR_RENDER_FUNC(void, add_pipeline, PipelineDesc* desc, Pipeline** pipeline);
 DECLARE_YAR_RENDER_FUNC(void, add_queue, CmdQueueDesc* desc, CmdQueue** queue);
 DECLARE_YAR_RENDER_FUNC(void, add_cmd, CmdBufferDesc* desc, CmdBuffer** cmd);
 DECLARE_YAR_RENDER_FUNC(void, remove_buffer, Buffer* buffer);
 DECLARE_YAR_RENDER_FUNC(void*, map_buffer, Buffer* buffer);
 DECLARE_YAR_RENDER_FUNC(void, unmap_buffer, Buffer* buffer);
+DECLARE_YAR_RENDER_FUNC(void, update_descriptor_set, UpdateDescriptorSetDesc* desc, DescriptorSet* set);
 DECLARE_YAR_RENDER_FUNC(void, cmd_bind_pipeline, CmdBuffer* cmd, Pipeline* pipeline);
+DECLARE_YAR_RENDER_FUNC(void, cmd_bind_descriptor_set, CmdBuffer* cmd, DescriptorSet* set, uint32_t index);
 DECLARE_YAR_RENDER_FUNC(void, cmd_bind_vertex_buffer, CmdBuffer* cmd, Buffer* buffer, uint32_t offset, uint32_t stride);
 DECLARE_YAR_RENDER_FUNC(void, cmd_bind_index_buffer, CmdBuffer* cmd, Buffer* buffer); // maybe for other render api there should be more params
 DECLARE_YAR_RENDER_FUNC(void, cmd_draw, CmdBuffer* cmd, uint32_t first_vertex, uint32_t count);

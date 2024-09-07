@@ -24,10 +24,9 @@ bool init_window()
     }
 
     glfwMakeContextCurrent(window);
+    glfwSwapInterval(0);
 
     imgui_init(window);
-
-    glfwSwapInterval(0);
 
     return true;
 }

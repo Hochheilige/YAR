@@ -344,6 +344,7 @@ void util_create_shader_reflection(std::vector<uint8_t>& spirv, std::vector<Shad
         resource.binding = descriptor->binding;
         resource.set = descriptor->set;
         resource.type = util_convert_spv_resource_type(descriptor->resource_type);
+        resource.index = i;
         ++i;
     }
 
@@ -508,10 +509,29 @@ void gl_addShader(ShaderDesc* desc, Shader** out_shader)
 
     glLinkProgram(shader->program);
     
-
-
-
     *out_shader = shader;
+}
+
+void gl_addDescriptorSet(DescriptorSetDesc* desc, DescriptorSet** set)
+{
+    DescriptorSet* new_set = (DescriptorSet*)std::malloc(sizeof(DescriptorSet));
+    if (new_set == nullptr)
+        return;
+
+    new_set->update_freq = desc->update_freq;
+    new_set->max_set = desc->max_sets;
+    new_set->program = desc->shader->program;
+
+    new (&new_set->descriptors) std::vector<ShaderResource>();
+    std::copy_if(desc->shader->resources.begin(), desc->shader->resources.end(),
+        std::back_inserter(new_set->descriptors),
+        [=](ShaderResource& resource) {
+            return resource.set == new_set->update_freq;
+        });
+
+    new (&new_set->buffers) std::vector<std::vector<uint32_t>>();
+
+    *set = new_set;
 }
 
 void gl_addPipeline(PipelineDesc* desc, Pipeline** pipeline)
@@ -522,8 +542,6 @@ void gl_addPipeline(PipelineDesc* desc, Pipeline** pipeline)
 
     new_pipeline->shader = desc->shader;
     GLuint& vao = new_pipeline->vao;
-    new_pipeline->ubos[0] = desc->ubos[0];
-    new_pipeline->ubos[1] = desc->ubos[1];
 
     glCreateVertexArrays(1, &vao);
     for (int i = 0; i < desc->vertex_layout->attrib_count; ++i)
@@ -577,25 +595,59 @@ void gl_unmapBuffer(Buffer* buffer)
     glUnmapNamedBuffer(buffer->id);
 }
 
+void gl_updateDescriptorSet(UpdateDescriptorSetDesc* desc, DescriptorSet* set)
+{
+    uint32_t index = 0;
+    for (const auto& buffers : desc->buffers)
+    {
+        if (buffers.size() > set->max_set)
+            return;
+
+        set->buffers.push_back(std::vector<uint32_t>());
+        for (const auto buffer : buffers)
+        {
+            set->buffers[index].push_back(buffer->id);
+        }
+            
+        ++index;
+    }
+   
+    for (const auto& descriptor : set->descriptors)
+    {
+        const uint32_t index = descriptor.index;
+        const uint32_t binding = descriptor.binding;
+        if (descriptor.type & kResourceTypeCBV)
+        {
+            glUniformBlockBinding(set->program, index, binding);
+        }
+
+        // add for SRV, UAV and Samplers
+    }
+}
+
 void gl_cmdBindPipeline(CmdBuffer* cmd, Pipeline* pipeline)
 {
-    static uint32_t current_frame = 0;
-    static constexpr uint32_t image_count = 2;
-
     current_vao = pipeline->vao;
     cmd->commands.push_back([=]() {
         glUseProgram(pipeline->shader->program); 
-
-        // Fore some reason instead of c_color uniform block name in opengl is type_c_color.c_color
-        
-        // All uniforms blocks stored in shader in right order, so it is possible to
-        // use just their array index as uniform block index
-
-        glUniformBlockBinding(pipeline->shader->program, 0, pipeline->shader->resources[0].binding);
-        glBindBufferBase(GL_UNIFORM_BUFFER, 0, pipeline->ubos[current_frame]);
     });
+}
 
-    current_frame = (current_frame + 1) % image_count;
+void gl_cmdBindDescriptorSet(CmdBuffer* cmd, DescriptorSet* set, uint32_t index)
+{
+    if (index > set->max_set)
+        return;
+
+    cmd->commands.push_back([=]() {
+        uint32_t buf_index = 0;
+        for (const auto& descriptor : set->descriptors)
+        {
+            if (descriptor.type & kResourceTypeCBV)
+            {
+                glBindBufferBase(GL_UNIFORM_BUFFER, descriptor.binding, set->buffers[buf_index][index]);
+            }
+        }
+    });
 }
 
 void gl_cmdBindVertexBuffer(CmdBuffer* cmd, Buffer* buffer, uint32_t offset, uint32_t stride)
@@ -652,25 +704,28 @@ void gl_queueSubmit(CmdQueue* queue)
 // Maybe need to add some params to this function in future
 bool gl_init_render()
 {
-    load_shader            = gl_loadShader;
-    begin_update_resource  = gl_beginUpdateResource;
-    end_update_resource    = gl_endUpdateResource;
+    load_shader             = gl_loadShader;
+    begin_update_resource   = gl_beginUpdateResource;
+    end_update_resource     = gl_endUpdateResource;
 
-    add_swapchain          = gl_addSwapChain;
-    add_buffer             = gl_addBuffer;
-    add_shader             = gl_addShader;
-    add_pipeline           = gl_addPipeline;
-    add_queue              = gl_addQueue;
-    add_cmd                = gl_addCmd;
-    remove_buffer          = gl_removeBuffer;
-    map_buffer             = gl_mapBuffer;
-    unmap_buffer           = gl_unmapBuffer;
-    cmd_bind_pipeline      = gl_cmdBindPipeline;
-    cmd_bind_vertex_buffer = gl_cmdBindVertexBuffer;
-    cmd_bind_index_buffer  = gl_cmdBindIndexBuffer;
-    cmd_draw               = gl_cmdDraw;
-    cmd_draw_indexed       = gl_cmdDrawIndexed;
-    queue_submit           = gl_queueSubmit;
+    add_swapchain           = gl_addSwapChain;
+    add_buffer              = gl_addBuffer;
+    add_shader              = gl_addShader;
+    add_descriptor_set      = gl_addDescriptorSet;
+    add_pipeline            = gl_addPipeline;
+    add_queue               = gl_addQueue;
+    add_cmd                 = gl_addCmd;
+    remove_buffer           = gl_removeBuffer;
+    map_buffer              = gl_mapBuffer;
+    unmap_buffer            = gl_unmapBuffer;
+    update_descriptor_set   = gl_updateDescriptorSet;
+    cmd_bind_pipeline       = gl_cmdBindPipeline;
+    cmd_bind_descriptor_set = gl_cmdBindDescriptorSet;
+    cmd_bind_vertex_buffer  = gl_cmdBindVertexBuffer;
+    cmd_bind_index_buffer   = gl_cmdBindIndexBuffer;
+    cmd_draw                = gl_cmdDraw;
+    cmd_draw_indexed        = gl_cmdDrawIndexed;
+    queue_submit            = gl_queueSubmit;
 
     if (!gladLoadGLLoader((GLADloadproc)glfwGetProcAddress))
         return false;
