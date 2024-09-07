@@ -14,6 +14,8 @@ bool init_window()
     if (!glfwInit())
         return false;
 
+    glfwWindowHint(GLFW_DOUBLEBUFFER, GLFW_TRUE);
+
     window = glfwCreateWindow(640, 480, "Hello World", NULL, NULL);
     if (!window)
     {
@@ -24,6 +26,8 @@ bool init_window()
     glfwMakeContextCurrent(window);
 
     imgui_init(window);
+
+    glfwSwapInterval(0);
 
     return true;
 }
