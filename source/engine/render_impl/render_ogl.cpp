@@ -375,7 +375,7 @@ void gl_loadShader(ShaderLoadDesc* desc, ShaderDesc** out_shader_desc)
     *out_shader_desc = shader_desc;
 }
 
-void gl_beginUpdateResource(BufferUpdateDesc* desc)
+void gl_beginUpdateBuffer(BufferUpdateDesc* desc)
 {
     if (desc->buffer->flags & kBufferFlagGPUOnly)
     {
@@ -394,10 +394,9 @@ void gl_beginUpdateResource(BufferUpdateDesc* desc)
         // Just regular CPU/GPU buffer that can be mapped
         desc->mapped_data = map_buffer(desc->buffer);
     }
-    
 }
 
-void gl_endUpdateResource(BufferUpdateDesc* desc)
+void gl_endUpdateBuffer(BufferUpdateDesc* desc)
 {
     if (desc->buffer->flags & kBufferFlagGPUOnly)
     {
@@ -426,6 +425,47 @@ void gl_endUpdateResource(BufferUpdateDesc* desc)
     desc->size = 0;
     desc->mapped_data = nullptr;
 }
+
+void gl_beginUpdateResource(ResourceUpdateDesc& desc)
+{
+    std::visit([](auto* resource) {
+        using T = std::decay_t<decltype(*resource)>;
+
+        if constexpr (std::is_same_v<T, TextureUpdateDesc>) 
+        {
+            return;
+        }
+        else if constexpr (std::is_same_v<T, BufferUpdateDesc>) 
+        {
+            gl_beginUpdateBuffer(resource);
+        }
+        else 
+        {
+            return;
+        }
+        }, desc); 
+}
+
+void gl_endUpdateResource(ResourceUpdateDesc& desc)
+{
+    std::visit([](auto* resource) {
+        using T = std::decay_t<decltype(*resource)>;
+
+        if constexpr (std::is_same_v<T, TextureUpdateDesc>)
+        {
+            return;
+        }
+        else if constexpr (std::is_same_v<T, BufferUpdateDesc>)
+        {
+            gl_endUpdateBuffer(resource);
+        }
+        else
+        {
+            return;
+        }
+        }, desc);
+}
+
 
 // ======================================= //
 //            Render Functions             //

@@ -7,12 +7,14 @@
 #include <vector>
 #include <queue>
 #include <functional>
+#include <variant>
 
 // ======================================= //
 //            Load Structures              //
 // ======================================= //
 
 struct Buffer;
+struct Texture;
 
 struct BufferUpdateDesc
 {
@@ -22,6 +24,13 @@ struct BufferUpdateDesc
     // or buffer from some point
     void* mapped_data;
 };
+
+struct TextureUpdateDesc
+{
+    int dummy;
+};
+
+using ResourceUpdateDesc = std::variant<BufferUpdateDesc*, TextureUpdateDesc*>;
 
 // ======================================= //
 //            Render Structures            //
@@ -112,6 +121,16 @@ struct Buffer
     BufferFlag flags;
 };
 
+struct TextureDesc
+{
+
+};
+
+struct Texture
+{
+
+};
+
 enum ShaderStage : uint8_t
 {
     kShaderStageNone = 0,
@@ -142,10 +161,6 @@ struct ShaderResource
     uint32_t set;
     uint32_t index;
     // maybe also need to add texture specific things
-
-    // LOOKS IMPORTANT: need to add shader stage and resource index
-    // for this stage in case index is one of glUniformBlockBinding 
-    // parameters that should be set correctly
 };
 
 struct ShaderStageLoadDesc
@@ -310,8 +325,11 @@ using name##_fn = ret(*)(__VA_ARGS__);        \
 extern name##_fn name;                        \
 
 DECLARE_YAR_LOAD_FUNC(void, load_shader, ShaderLoadDesc* desc, ShaderDesc** out);
-DECLARE_YAR_LOAD_FUNC(void, begin_update_resource, BufferUpdateDesc* desc);
-DECLARE_YAR_LOAD_FUNC(void, end_update_resource, BufferUpdateDesc* desc);
+DECLARE_YAR_LOAD_FUNC(void, begin_update_resource, ResourceUpdateDesc& desc);
+DECLARE_YAR_LOAD_FUNC(void, end_update_resource, ResourceUpdateDesc& desc);
+DECLARE_YAR_LOAD_FUNC(void, update_texture, TextureUpdateDesc* desc);
+DECLARE_YAR_LOAD_FUNC(void*, map_buffer, Buffer* buffer);
+DECLARE_YAR_LOAD_FUNC(void, unmap_buffer, Buffer* buffer);
 
 // ======================================= //
 //            Render Functions             //
@@ -322,7 +340,8 @@ using name##_fn = ret(*)(__VA_ARGS__);          \
 extern name##_fn name;                          \
 
 DECLARE_YAR_RENDER_FUNC(void, add_swapchain, bool vsync, SwapChain** swapchain);
-DECLARE_YAR_RENDER_FUNC(void, add_buffer,  BufferDesc* desc, Buffer** buffer);
+DECLARE_YAR_RENDER_FUNC(void, add_buffer, BufferDesc* desc, Buffer** buffer);
+DECLARE_YAR_RENDER_FUNC(void, add_texture, TextureDesc* desc, Texture** buffer);
 DECLARE_YAR_RENDER_FUNC(void, add_shader, ShaderDesc* desc, Shader** shader);
 DECLARE_YAR_RENDER_FUNC(void, add_descriptor_set, DescriptorSetDesc* desc, DescriptorSet** shader);
 //DECLARE_YAR_RENDER_FUNC(void, add_root_signature, RootSignatureDesc* desc, RootSignature** root_signature);
@@ -330,8 +349,6 @@ DECLARE_YAR_RENDER_FUNC(void, add_pipeline, PipelineDesc* desc, Pipeline** pipel
 DECLARE_YAR_RENDER_FUNC(void, add_queue, CmdQueueDesc* desc, CmdQueue** queue);
 DECLARE_YAR_RENDER_FUNC(void, add_cmd, CmdBufferDesc* desc, CmdBuffer** cmd);
 DECLARE_YAR_RENDER_FUNC(void, remove_buffer, Buffer* buffer);
-DECLARE_YAR_RENDER_FUNC(void*, map_buffer, Buffer* buffer);
-DECLARE_YAR_RENDER_FUNC(void, unmap_buffer, Buffer* buffer);
 DECLARE_YAR_RENDER_FUNC(void, update_descriptor_set, UpdateDescriptorSetDesc* desc, DescriptorSet* set);
 DECLARE_YAR_RENDER_FUNC(void, cmd_bind_pipeline, CmdBuffer* cmd, Pipeline* pipeline);
 DECLARE_YAR_RENDER_FUNC(void, cmd_bind_descriptor_set, CmdBuffer* cmd, DescriptorSet* set, uint32_t index);

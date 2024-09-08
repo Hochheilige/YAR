@@ -58,25 +58,27 @@ auto main() -> int {
 	Shader* shader;
 	add_shader(shader_desc, &shader);
 
+	ResourceUpdateDesc resource_update_desc;
 	{ // update buffers data
 		BufferUpdateDesc update_desc{};
+		resource_update_desc = &update_desc;
 		update_desc.buffer = vbo;
 		update_desc.size = sizeof(vertices);
-		begin_update_resource(&update_desc);
+		begin_update_resource(resource_update_desc);
 		std::memcpy(update_desc.mapped_data, vertices, sizeof(vertices));
-		end_update_resource(&update_desc);
+		end_update_resource(resource_update_desc);
 
 		update_desc.buffer = ebo;
 		update_desc.size = sizeof(indexes);
-		begin_update_resource(&update_desc);
+		begin_update_resource(resource_update_desc);
 		std::memcpy(update_desc.mapped_data, indexes, sizeof(indexes));
-		end_update_resource(&update_desc);
+		end_update_resource(resource_update_desc);
 
 		update_desc.buffer = ubos[frame_index];
 		update_desc.size = sizeof(rgb);
-		begin_update_resource(&update_desc);
+		begin_update_resource(resource_update_desc);
 		std::memcpy(update_desc.mapped_data, rgb, sizeof(rgb));
-		end_update_resource(&update_desc);
+		end_update_resource(resource_update_desc);
 	}
 
 	VertexLayout layout = {0};
@@ -118,11 +120,12 @@ auto main() -> int {
 		rgb[0] = sin(glfwGetTime()) * 0.5 + 0.5;
 		{ // update buffer data
 			BufferUpdateDesc update;
+			resource_update_desc = &update;
 			update.buffer = ubos[frame_index];
 			update.size = sizeof(rgb);
-			begin_update_resource(&update);
+			begin_update_resource(resource_update_desc);
 			std::memcpy(update.mapped_data, rgb, sizeof(rgb));
-			end_update_resource(&update);
+			end_update_resource(resource_update_desc);
 		}
 
 
