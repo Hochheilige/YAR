@@ -7,8 +7,13 @@ extern bool gl_init_render();
 // ======================================= //
 
 load_shader_fn           load_shader;
+
+// this 2 functions should be the same for all 
+// graphics API
 begin_update_resource_fn begin_update_resource;
 end_update_resource_fn   end_update_resource;
+
+
 map_buffer_fn              map_buffer;
 unmap_buffer_fn            unmap_buffer;
 

@@ -17,6 +17,8 @@
 #include <string>
 #include <codecvt>
 #include <spirv_reflect.h>
+#include <spirv_glsl.hpp>
+#include <spirv_parser.hpp>
 
 // ======================================= //
 //            Utils Variables              //
@@ -30,6 +32,7 @@ static GLuint current_vao = 0u;
 // Need to make something to check that current staging buffer
 // doesn't use right now and can be used to map and update resource
 static Buffer* staging_buffer = nullptr;
+static Buffer* pixel_buffer   = nullptr;
 
 
 // ======================================= //
@@ -182,7 +185,7 @@ bool util_compile_hlsl_to_spirv(ShaderStageLoadDesc* load_desc, std::vector<uint
 
     // Prepare the arguments for the compilation
     LPCWSTR arguments[] = {
-        L"-spirv"                // Output format to SPIR-V
+        L"-spirv", L"-fspv-target-env=vulkan1.2"              // Output format to SPIR-V
     };
 
     // Compile the shader
@@ -244,9 +247,55 @@ void util_load_shader_binary(ShaderStage stage, ShaderStageLoadDesc* load_desc, 
     std::vector<uint8_t> buffer;
     util_compile_hlsl_to_spirv(load_desc, buffer);
 
+    if (buffer.size() % 4 != 0) {
+        throw std::runtime_error("Размер байт-кода некорректен: он должен быть кратен 4.");
+    }
+
+    std::vector<uint32_t> spirv(buffer.size() / 4);
+    std::memcpy(spirv.data(), buffer.data(), buffer.size());
+
+    spirv_cross::CompilerGLSL glsl_compiler(spirv);
+
+    // Опциональные настройки для GLSL
+    spirv_cross::CompilerGLSL::Options options;
+    options.version = 450; // Версия GLSL
+    options.es = false;    // Это не GLSL ES
+    options.separate_shader_objects = true; // Включить раздельные шейдерные объекты (SOs)
+    glsl_compiler.set_common_options(options);
+
+    glsl_compiler.build_combined_image_samplers();
+    std::string glsl_code;
+    try {
+        // Компиляция SPIR-V в GLSL
+        glsl_code = glsl_compiler.compile();
+
+        // Вывод GLSL-кода
+        std::cout << "GLSL-код: \n" << glsl_code << std::endl;
+    }
+    catch (const std::exception& e) {
+        std::cerr << "Ошибка: " << e.what() << std::endl;
+        //return -1;
+    }
+
     uint32_t shader = glCreateShader(gl_stage);
-    glShaderBinary(1, &shader, GL_SHADER_BINARY_FORMAT_SPIR_V, buffer.data(), buffer.size());
-    glSpecializeShader(shader, load_desc->entry_point.data(), 0, NULL, NULL);
+    const char* src = glsl_code.c_str();
+    glShaderSource(shader, 1, &src, nullptr);
+    glCompileShader(shader);
+
+    GLint status;
+    glGetShaderiv(shader, GL_COMPILE_STATUS, &status);
+    if (status == GL_FALSE) {
+        GLint logLength;
+        glGetShaderiv(shader, GL_INFO_LOG_LENGTH, &logLength);
+        std::string log(logLength, ' ');
+        glGetShaderInfoLog(shader, logLength, &logLength, &log[0]);
+        std::cerr << "Ошибка компиляции шейдера: " << log << std::endl;
+        glDeleteShader(shader);
+        //return 0;
+    }
+
+    //glShaderBinary(1, &shader, GL_SHADER_BINARY_FORMAT_SPIR_V, buffer.data(), buffer.size());
+    //glSpecializeShader(shader, load_desc->entry_point.data(), 0, NULL, NULL);
 
     new(&stage_desc->byte_code) std::vector<uint8_t>(std::move(buffer));
     stage_desc->entry_point = load_desc->entry_point;
@@ -351,6 +400,135 @@ void util_create_shader_reflection(std::vector<uint8_t>& spirv, std::vector<Shad
     spvReflectDestroyShaderModule(&module);
 }
 
+GLenum util_get_gl_internal_format(TextureFormat format)
+{
+    switch (format)
+    {
+    case kTextureFormatR8:
+        return GL_R8;
+    case kTextureFormatRGB8:
+        return GL_RGB8;
+    case kTextureFormatRGBA8:
+        return GL_RGBA8;
+    case kTextureFormatRGB16F:
+        return GL_RGB16F;
+    case kTextureFormatRGBA16F:
+        return GL_RGBA16F;
+    case kTextureFormatRGBA32F:
+        return GL_RGBA32F;
+    case kTextureFormatDepth16:
+        return GL_DEPTH_COMPONENT16;
+    case kTextureFormatDepth24:
+        return GL_DEPTH_COMPONENT24;
+    case kTextureFormatDepth32F:
+        return GL_DEPTH_COMPONENT32F;
+    case kTextureFormatDepth24Stencil8:
+        return GL_DEPTH24_STENCIL8;
+    default:
+        return GL_NONE; // Неизвестный формат
+    }
+}
+
+GLenum util_get_gl_format(TextureFormat format)
+{
+    switch (format)
+    {
+    case kTextureFormatR8:
+        return GL_RED;
+    case kTextureFormatRGB8:
+    case kTextureFormatRGB16F:
+        return GL_RGB;
+    case kTextureFormatRGBA8:
+    case kTextureFormatRGBA16F:
+    case kTextureFormatRGBA32F:
+        return GL_RGBA;
+    case kTextureFormatDepth16:
+    case kTextureFormatDepth24:
+    case kTextureFormatDepth32F:
+        return GL_DEPTH_COMPONENT;
+    case kTextureFormatDepth24Stencil8:
+        return GL_DEPTH_STENCIL;
+    default:
+        return GL_NONE;
+    }
+}
+
+GLenum GetGLInternalFormat(TextureFormat format)
+{
+    switch (format)
+    {
+    case kTextureFormatR8:
+        return GL_R8;
+    case kTextureFormatRGB8:
+        return GL_RGB8;
+    case kTextureFormatRGBA8:
+        return GL_RGBA8;
+    case kTextureFormatRGB16F:
+        return GL_RGB16F;
+    case kTextureFormatRGBA16F:
+        return GL_RGBA16F;
+    case kTextureFormatRGBA32F:
+        return GL_RGBA32F;
+    case kTextureFormatDepth16:
+        return GL_DEPTH_COMPONENT16;
+    case kTextureFormatDepth24:
+        return GL_DEPTH_COMPONENT24;
+    case kTextureFormatDepth32F:
+        return GL_DEPTH_COMPONENT32F;
+    case kTextureFormatDepth24Stencil8:
+        return GL_DEPTH24_STENCIL8;
+    default:
+        return GL_NONE; // Неизвестный формат
+    }
+}
+
+GLenum util_get_gl_tetxure_data_type(TextureFormat format)
+{
+    switch (format)
+    {
+    case kTextureFormatR8:
+    case kTextureFormatRGB8:
+    case kTextureFormatRGBA8:
+        return GL_UNSIGNED_BYTE;
+    case kTextureFormatRGB16F:
+    case kTextureFormatRGBA16F:
+        return GL_HALF_FLOAT;
+    case kTextureFormatRGBA32F:
+        return GL_FLOAT;
+    case kTextureFormatDepth16:
+        return GL_UNSIGNED_SHORT;
+    case kTextureFormatDepth24:
+        return GL_UNSIGNED_INT;
+    case kTextureFormatDepth32F:
+        return GL_FLOAT;
+    case kTextureFormatDepth24Stencil8:
+        return GL_UNSIGNED_INT_24_8;
+    default:
+        return GL_NONE;
+    }
+}
+
+GLenum util_get_gl_texture_target(TextureType type)
+{
+    switch (type)
+    {
+    case kTextureType1D:
+        return GL_TEXTURE_1D;
+    case kTextureType2D:
+        return GL_TEXTURE_2D;
+    case kTextureType3D:
+        return GL_TEXTURE_3D;
+    case kTextureType1DArray:
+        return GL_TEXTURE_1D_ARRAY;
+    case kTextureType2DArray:
+        return GL_TEXTURE_2D_ARRAY;
+    case kTextureTypeCubeMap:
+        return GL_TEXTURE_CUBE_MAP;
+    default:
+        return GL_NONE; // Неизвестный тип
+    }
+}
+
 // ======================================= //
 //            Load Functions               //
 // ======================================= //
@@ -426,6 +604,36 @@ void gl_endUpdateBuffer(BufferUpdateDesc* desc)
     desc->mapped_data = nullptr;
 }
 
+void gl_beginUpdateTexture(TextureUpdateDesc* desc)
+{
+    BufferDesc pbo_desc;
+    pbo_desc.flags = kBufferFlagMapWrite | kBufferFlagDynamic;
+    pbo_desc.usage = kBufferUsageTransferSrc;
+    pbo_desc.size = desc->size;
+    add_buffer(&pbo_desc, &pixel_buffer);
+    desc->mapped_data = map_buffer(pixel_buffer);
+}
+
+void gl_endUpdateTexture(TextureUpdateDesc* desc)
+{
+    unmap_buffer(pixel_buffer);
+
+    GLenum target = desc->texture->target;
+    GLsizei width = desc->texture->width;
+    GLsizei height = desc->texture->height;
+    GLenum format = desc->texture->gl_format;
+    GLenum type = desc->texture->gl_type;
+
+    /*glTextureSubImage2D(desc->texture->id, 0, 0, 0, width, height, format, type, desc->data);*/
+    
+    glBindBuffer(GL_PIXEL_UNPACK_BUFFER, pixel_buffer->id); 
+    glBindTexture(GL_TEXTURE_2D, desc->texture->id);
+    glTextureSubImage2D(desc->texture->id, 0, 0, 0, width, height, format, type, nullptr);
+    glBindBuffer(GL_PIXEL_UNPACK_BUFFER, 0);
+
+    //remove_buffer(pixel_buffer);
+}
+
 void gl_beginUpdateResource(ResourceUpdateDesc& desc)
 {
     std::visit([](auto* resource) {
@@ -433,7 +641,7 @@ void gl_beginUpdateResource(ResourceUpdateDesc& desc)
 
         if constexpr (std::is_same_v<T, TextureUpdateDesc>) 
         {
-            return;
+            gl_beginUpdateTexture(resource);
         }
         else if constexpr (std::is_same_v<T, BufferUpdateDesc>) 
         {
@@ -453,7 +661,7 @@ void gl_endUpdateResource(ResourceUpdateDesc& desc)
 
         if constexpr (std::is_same_v<T, TextureUpdateDesc>)
         {
-            return;
+            gl_endUpdateTexture(resource);
         }
         else if constexpr (std::is_same_v<T, BufferUpdateDesc>)
         {
@@ -499,6 +707,61 @@ void gl_addBuffer(BufferDesc* desc, Buffer** buffer)
     glNamedBufferStorage(new_buffer->id, desc->size, nullptr, flags);
 
     *buffer = new_buffer;
+}
+
+void gl_addTexture(TextureDesc* desc, Texture** texture)
+{
+    Texture* new_texture = (Texture*)std::malloc(sizeof(Texture));
+    if (!new_texture)
+        return;
+
+    GLuint gl_target = util_get_gl_texture_target(desc->type);
+    GLenum gl_internal_format = util_get_gl_internal_format(desc->format);
+    GLsizei width = desc->width;
+    GLsizei height = desc->height;
+    GLsizei depth = desc->depth;
+    GLsizei array_size = desc->array_size;
+    GLsizei mip_levels = desc->mip_levels;
+    GLuint& id = new_texture->id;
+
+    glCreateTextures(gl_target, 1, &id);
+
+    switch (desc->type)
+    {
+    case kTextureType1D:
+        glTextureStorage1D(id, mip_levels, gl_internal_format, 
+            width);
+        break;
+    case kTextureType2D:
+    case kTextureTypeCubeMap:
+        glTextureStorage2D(id, mip_levels, gl_internal_format, 
+            width, height);
+        break;
+    case kTextureType3D:
+        glTextureStorage3D(id, mip_levels, gl_internal_format,
+            width, height, depth);
+    case kTextureType2DArray:
+    case kTextureType1DArray:
+        glTextureStorage3D(id, mip_levels, gl_internal_format, 
+            width, height, array_size);
+        break;
+    default:
+        break;
+    }
+
+    new_texture->target = gl_target;
+    new_texture->internal_format = gl_internal_format;
+    new_texture->gl_format = util_get_gl_format(desc->format);
+    new_texture->gl_type = util_get_gl_tetxure_data_type(desc->format);
+    new_texture->type = desc->type;
+    new_texture->format = desc->format;
+    new_texture->width = width;
+    new_texture->height = height;
+    new_texture->depth = depth;
+    new_texture->array_size = array_size;
+    new_texture->mip_levels = mip_levels;
+
+    *texture = new_texture;
 }
 
 void gl_addShader(ShaderDesc* desc, Shader** out_shader)
@@ -695,7 +958,8 @@ void gl_cmdBindVertexBuffer(CmdBuffer* cmd, Buffer* buffer, uint32_t offset, uin
     GLuint& vao = current_vao;
     cmd->commands.push_back([=]() {
         glVertexArrayVertexBuffer(vao, 0, buffer->id, offset, stride); // maybe need to store binding?
-        glEnableVertexArrayAttrib(vao, 0); // probably need to store somewhere
+        for (int i = 0; i < 3; ++i)
+            glEnableVertexArrayAttrib(vao, i); // probably need to store somewhere
     });
 }
 
@@ -725,6 +989,7 @@ void gl_cmdDrawIndexed(CmdBuffer* cmd, uint32_t index_count,
     cmd->commands.push_back([=]() {
         glBindVertexArray(vao);
         // need to add topology somewhere
+
         glDrawElements(GL_TRIANGLES, index_count, GL_UNSIGNED_INT, 0);
     });
 }
@@ -750,6 +1015,7 @@ bool gl_init_render()
 
     add_swapchain           = gl_addSwapChain;
     add_buffer              = gl_addBuffer;
+    add_texture             = gl_addTexture;
     add_shader              = gl_addShader;
     add_descriptor_set      = gl_addDescriptorSet;
     add_pipeline            = gl_addPipeline;

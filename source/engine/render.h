@@ -27,7 +27,11 @@ struct BufferUpdateDesc
 
 struct TextureUpdateDesc
 {
-    int dummy;
+    Texture* texture;
+    uint64_t size;
+    uint8_t* data;
+    // It is not working now
+    void* mapped_data;
 };
 
 using ResourceUpdateDesc = std::variant<BufferUpdateDesc*, TextureUpdateDesc*>;
@@ -121,14 +125,58 @@ struct Buffer
     BufferFlag flags;
 };
 
+enum TextureType
+{
+    kTextureTypeNone = 0,
+    kTextureType1D,
+    kTextureType2D,
+    kTextureType3D,
+    kTextureType1DArray,
+    kTextureType2DArray,
+    kTextureTypeCubeMap
+};
+
+enum TextureFormat : uint8_t
+{
+    kTextureFormatNone = 0,
+    kTextureFormatR8,
+    kTextureFormatRGB8,
+    kTextureFormatRGBA8,
+    kTextureFormatRGB16F,
+    kTextureFormatRGBA16F,
+    kTextureFormatRGBA32F,
+    kTextureFormatDepth16,
+    kTextureFormatDepth24,
+    kTextureFormatDepth32F,
+    kTextureFormatDepth24Stencil8,
+};
+
 struct TextureDesc
 {
-
+    TextureType type;
+    TextureFormat format;
+    uint32_t width;
+    uint32_t height;
+    uint32_t depth;
+    uint32_t array_size;
+    uint32_t mip_levels;
 };
 
 struct Texture
 {
+    uint32_t id;
+    uint32_t target;
+    uint32_t internal_format;
+    uint32_t gl_format;
+    uint32_t gl_type;
 
+    TextureType type;
+    TextureFormat format;
+    uint32_t width;
+    uint32_t height;
+    uint32_t depth;
+    uint32_t array_size;
+    uint32_t mip_levels;
 };
 
 enum ShaderStage : uint8_t

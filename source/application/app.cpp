@@ -5,6 +5,9 @@
 #include <glad/glad.h>
 #include <GLFW/glfw3.h>
 
+#define STB_IMAGE_IMPLEMENTATION
+#include <stb_image.h>
+
 #include <iostream>
 
 auto main() -> int {
@@ -15,13 +18,13 @@ auto main() -> int {
 	SwapChain* swapchain;
 	add_swapchain(true, &swapchain);
 
-	// add just vertices for Triangle
 	float vertices[] = {
-    	-0.5f, -0.5f, 0.0f,
-    	 0.5f, -0.5f, 0.0f,
-    	 0.5f,  0.5f, 0.0f,
-		-0.5f,  0.5f, 0.0f,
-	}; 
+		// positions          // colors           // texture coords
+		 0.5f,  0.5f, 0.0f,   1.0f, 0.0f, 0.0f,   1.0f, 1.0f,   // top right
+		 0.5f, -0.5f, 0.0f,   0.0f, 1.0f, 0.0f,   1.0f, 0.0f,   // bottom right
+		-0.5f, -0.5f, 0.0f,   0.0f, 0.0f, 1.0f,   0.0f, 0.0f,   // bottom left
+		-0.5f,  0.5f, 0.0f,   1.0f, 1.0f, 0.0f,   0.0f, 1.0f    // top left 
+	};
 
 	uint32_t indexes[] =
 	{
@@ -29,7 +32,27 @@ auto main() -> int {
 		2, 3, 0
 	};
 
-	float rgb[4] = { 0.5f, 1.0f, 0.0f, 0.0f };
+	float rgb[4] = { 0.0f, 0.0f, 0.0f, 0.0f };
+
+	int32_t width, height, channels;
+	std::string name = "assets/container.jpg";
+	uint8_t* image_data = stbi_load(name.c_str(), &width, &height, &channels, 0);
+	Texture* texture;
+	if (image_data)
+	{
+		TextureDesc texture_desc{};
+		texture_desc.width = width;
+		texture_desc.height = height;
+		texture_desc.mip_levels = 1;
+		texture_desc.type = kTextureType2D;
+		texture_desc.format = kTextureFormatRGB8;
+		add_texture(&texture_desc, &texture);
+	}
+	else
+	{
+		std::cerr << "Failed to load texture: " << name << std::endl;
+	}
+	//stbi_image_free(image_data);
 
 	BufferDesc buffer_desc;
 	buffer_desc.size = sizeof(vertices);
@@ -51,8 +74,8 @@ auto main() -> int {
 
 	// Need to make something with shaders path 
 	ShaderLoadDesc shader_load_desc = {};
-	shader_load_desc.stages[0] = { "../source/shaders/base_vert.hlsl", "main", ShaderStage::kShaderStageVert };
-	shader_load_desc.stages[1] = { "../source/shaders/base_frag.hlsl", "main", ShaderStage::kShaderStageFrag };
+	shader_load_desc.stages[0] = { "shaders/base_vert.hlsl", "main", ShaderStage::kShaderStageVert };
+	shader_load_desc.stages[1] = { "shaders/base_frag.hlsl", "main", ShaderStage::kShaderStageFrag };
 	ShaderDesc* shader_desc = nullptr;
 	load_shader(&shader_load_desc, &shader_desc);
 	Shader* shader;
@@ -79,13 +102,28 @@ auto main() -> int {
 		begin_update_resource(resource_update_desc);
 		std::memcpy(update_desc.mapped_data, rgb, sizeof(rgb));
 		end_update_resource(resource_update_desc);
+
+		TextureUpdateDesc tex_update_desc{};
+		resource_update_desc = &tex_update_desc;
+		tex_update_desc.size = width * height * channels;
+		tex_update_desc.texture = texture;
+		tex_update_desc.data = image_data;
+		begin_update_resource(resource_update_desc);
+		std::memcpy(tex_update_desc.mapped_data, image_data, tex_update_desc.size);
+		end_update_resource(resource_update_desc);
 	}
 
 	VertexLayout layout = {0};
-	layout.attrib_count = 1;
+	layout.attrib_count = 3;
 	layout.attribs[0].size = 3;
 	layout.attribs[0].format = GL_FLOAT;
 	layout.attribs[0].offset = 0;
+	layout.attribs[1].size = 3;
+	layout.attribs[1].format = GL_FLOAT;
+	layout.attribs[1].offset = 3 * sizeof(float);
+	layout.attribs[2].size = 2;
+	layout.attribs[2].format = GL_FLOAT;
+	layout.attribs[2].offset = 6 * sizeof(float);
 
 	DescriptorSetDesc set_desc;
 	set_desc.max_sets = image_count;
@@ -115,14 +153,25 @@ auto main() -> int {
 	CmdBuffer* cmd;
 	add_cmd(&cmd_desc, &cmd);
 
+
+	GLuint sampler;
+	glCreateSamplers(1, &sampler);
+	glSamplerParameteri(sampler, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+	glSamplerParameteri(sampler, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+	glSamplerParameteri(sampler, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+	glSamplerParameteri(sampler, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+
+
+	uint32_t rgb_index = 0;
+
 	while(update_window())
 	{
-		rgb[0] = sin(glfwGetTime()) * 0.5 + 0.5;
+		rgb[rgb_index] = sin(glfwGetTime()) * 0.5f + 0.5f;
 		{ // update buffer data
 			BufferUpdateDesc update;
-			resource_update_desc = &update;
 			update.buffer = ubos[frame_index];
 			update.size = sizeof(rgb);
+			resource_update_desc = &update;
 			begin_update_resource(resource_update_desc);
 			std::memcpy(update.mapped_data, rgb, sizeof(rgb));
 			end_update_resource(resource_update_desc);
@@ -134,8 +183,10 @@ auto main() -> int {
         glClearColor(gBackGroundColor[0], gBackGroundColor[1], gBackGroundColor[2], 1.0f);
         glClear(GL_COLOR_BUFFER_BIT);
 
+		glBindTextureUnit(0, texture->id);
+		glBindSampler(0, sampler);
 		cmd_bind_pipeline(cmd, graphics_pipeline);
-		cmd_bind_vertex_buffer(cmd, vbo, 0, sizeof(float) * 3);
+		cmd_bind_vertex_buffer(cmd, vbo, 0, sizeof(float) * 8);
 		cmd_bind_index_buffer(cmd, ebo);
 		cmd_bind_descriptor_set(cmd, set, frame_index);
 		cmd_draw_indexed(cmd, 6, 0, 0);
@@ -149,6 +200,7 @@ auto main() -> int {
         glfwPollEvents();
 		
 		frame_index = (frame_index + 1) % image_count;
+		rgb_index = (rgb_index + 1) % 3;
 	}
 
 	terminate_window();
