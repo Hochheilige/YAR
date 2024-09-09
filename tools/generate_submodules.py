@@ -91,6 +91,7 @@ submodules_urls = [
     "https://github.com/nothings/stb.git",
     "https://github.com/ocornut/imgui.git",
     "https://github.com/KhronosGroup/SPIRV-Reflect.git",
+    "https://github.com/KhronosGroup/SPIRV-Cross.git",
 ]
 
 submodules_paths = [
@@ -98,6 +99,7 @@ submodules_paths = [
     "external/stb",
     "external/imgui",
     "external/spirv-reflect",
+    "external/spirv-cross",
 ]
 
 for url, path in zip(submodules_urls, submodules_paths):

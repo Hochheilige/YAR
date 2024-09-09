@@ -11,7 +11,7 @@
   <ItemDefinitionGroup>
     <ClCompile>
       <AdditionalIncludeDirectories>
-        $(ExternalDir)glad\include\;$(ExternalDir)glfw\include\;$(ExternalDir)imgui\;$(ExternalDir)spirv-reflect\;%(AdditionalIncludeDirectories)
+        $(ExternalDir)glad\include\;$(ExternalDir)glfw\include\;$(ExternalDir)imgui\;$(ExternalDir)spirv-reflect\;$(ExternalDir)spirv-cross\;%(AdditionalIncludeDirectories)
       </AdditionalIncludeDirectories>
       <RuntimeLibrary Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">MultiThreadedDebugDLL</RuntimeLibrary>
       <LanguageStandard>stdcpp20</LanguageStandard>
@@ -35,11 +35,19 @@
     <ClCompile Include="$(ExternalDir)imgui\backends\imgui_impl_glfw.cpp" />
     <ClCompile Include="$(ExternalDir)imgui\backends\imgui_impl_opengl3.cpp" />
     <ClCompile Include="$(ExternalDir)spirv-reflect\spirv_reflect.cpp" />
+    <ClCompile Include="$(ExternalDir)spirv-cross\spirv_parser.cpp" />
+    <ClCompile Include="$(ExternalDir)spirv-cross\spirv_glsl.cpp" />
+    <ClCompile Include="$(ExternalDir)spirv-cross\spirv_cross.cpp" />
+    <ClCompile Include="$(ExternalDir)spirv-cross\spirv_cross_util.cpp" />
+    <ClCompile Include="$(ExternalDir)spirv-cross\spirv_cross_parsed_ir.cpp" />
+    <ClCompile Include="$(ExternalDir)spirv-cross\spirv_cfg.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="$(SrcDir)engine\window.h" />
     <ClInclude Include="$(SrcDir)engine\imgui_layer.h" />
     <ClInclude Include="$(SrcDir)engine\render.h" />
+    <!-- <ClCompile Include="$(ExternalDir)spirv-cross\spirv_parser.hpp" />
+    <ClCompile Include="$(ExternalDir)spirv-cross\spirv_glsl.hpp" /> -->
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
 </Project>

@@ -10,3 +10,6 @@
 [submodule "external/spirv-reflect"]
 	path = external/spirv-reflect
 	url = https://github.com/KhronosGroup/SPIRV-Reflect.git
+[submodule "external/spirv-cross"]
+	path = external/spirv-cross
+	url = https://github.com/KhronosGroup/SPIRV-Cross.git
