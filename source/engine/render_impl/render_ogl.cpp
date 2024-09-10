@@ -375,6 +375,9 @@ ResourceType util_convert_spv_resource_type(SpvReflectResourceType type)
 
 void util_create_shader_reflection(std::vector<uint8_t>& spirv, std::vector<ShaderResource>& resources)
 {
+    // In case I use spirv_cross to convert sprir-v to glsl
+    // maybe there is no needs in spirv_reflect and it is possible to get reflection from spirv cross
+
     SpvReflectShaderModule module;
     SpvReflectResult result = spvReflectCreateShaderModule(spirv.size(), spirv.data(), &module);
 
@@ -529,6 +532,36 @@ GLenum util_get_gl_texture_target(TextureType type)
     }
 }
 
+GLint util_get_gl_min_filter(FilterType min, FilterType mipmap)
+{
+    if (mipmap == kFilterTypeNone)
+    {
+        return (min == kFilterTypeNearest) ? GL_NEAREST : GL_LINEAR;
+    }
+
+    bool isNearestMipmap = (mipmap == kFilterTypeNearest);
+    if (min == kFilterTypeNearest)
+    {
+        return isNearestMipmap ? GL_NEAREST_MIPMAP_NEAREST : GL_NEAREST_MIPMAP_LINEAR;
+    }
+    else
+    {
+        return isNearestMipmap ? GL_LINEAR_MIPMAP_NEAREST : GL_LINEAR_MIPMAP_LINEAR;
+    }
+}
+
+static GLint util_get_gl_wrap_mode(WrapMode mode)
+{
+    switch (mode)
+    {
+    case kWrapModeMirrored: return GL_MIRRORED_REPEAT;
+    case kWrapModeRepeat: return GL_REPEAT;
+    case kWrapModeClampToEdge: return GL_CLAMP_TO_EDGE;
+    case KWrapModeClampToBorder: return GL_CLAMP_TO_BORDER;
+    default: return GL_REPEAT;
+    }
+}
+
 // ======================================= //
 //            Load Functions               //
 // ======================================= //
@@ -557,6 +590,12 @@ void gl_beginUpdateBuffer(BufferUpdateDesc* desc)
 {
     if (desc->buffer->flags & kBufferFlagGPUOnly)
     {
+        // maybe it is better to remove buffer later
+        // or have more than one staging buffer and remove it only
+        // when new one is needed
+        if (staging_buffer != nullptr)
+            remove_buffer(staging_buffer);
+
         // This is GPU only buffer that has to be updated 
         // throug the Staging CPU only buffer and
         // glCopyBufferSubData function call 
@@ -590,11 +629,6 @@ void gl_endUpdateBuffer(BufferUpdateDesc* desc)
         // copy command to complete
         GLsync sync = glFenceSync(GL_SYNC_GPU_COMMANDS_COMPLETE, 0);
         glClientWaitSync(sync, GL_SYNC_FLUSH_COMMANDS_BIT, GL_TIMEOUT_IGNORED);
-
-        // maybe it is better to remove buffer later
-        // or have more than one staging buffer and remove it only
-        // when new one is needed
-        remove_buffer(staging_buffer);
     }
     else
     {
@@ -606,6 +640,9 @@ void gl_endUpdateBuffer(BufferUpdateDesc* desc)
 
 void gl_beginUpdateTexture(TextureUpdateDesc* desc)
 {
+    if (pixel_buffer != nullptr)
+        remove_buffer(pixel_buffer);
+
     BufferDesc pbo_desc;
     pbo_desc.flags = kBufferFlagMapWrite | kBufferFlagDynamic;
     pbo_desc.usage = kBufferUsageTransferSrc;
@@ -624,14 +661,10 @@ void gl_endUpdateTexture(TextureUpdateDesc* desc)
     GLenum format = desc->texture->gl_format;
     GLenum type = desc->texture->gl_type;
 
-    /*glTextureSubImage2D(desc->texture->id, 0, 0, 0, width, height, format, type, desc->data);*/
-    
     glBindBuffer(GL_PIXEL_UNPACK_BUFFER, pixel_buffer->id); 
     glBindTexture(GL_TEXTURE_2D, desc->texture->id);
     glTextureSubImage2D(desc->texture->id, 0, 0, 0, width, height, format, type, nullptr);
-    glBindBuffer(GL_PIXEL_UNPACK_BUFFER, 0);
-
-    //remove_buffer(pixel_buffer);
+    glBindBuffer(GL_PIXEL_UNPACK_BUFFER, 0); 
 }
 
 void gl_beginUpdateResource(ResourceUpdateDesc& desc)
@@ -651,7 +684,8 @@ void gl_beginUpdateResource(ResourceUpdateDesc& desc)
         {
             return;
         }
-        }, desc); 
+        }, desc
+    ); 
 }
 
 void gl_endUpdateResource(ResourceUpdateDesc& desc)
@@ -671,7 +705,8 @@ void gl_endUpdateResource(ResourceUpdateDesc& desc)
         {
             return;
         }
-        }, desc);
+        }, desc
+    );
 }
 
 
@@ -740,8 +775,8 @@ void gl_addTexture(TextureDesc* desc, Texture** texture)
     case kTextureType3D:
         glTextureStorage3D(id, mip_levels, gl_internal_format,
             width, height, depth);
-    case kTextureType2DArray:
     case kTextureType1DArray:
+    case kTextureType2DArray:
         glTextureStorage3D(id, mip_levels, gl_internal_format, 
             width, height, array_size);
         break;
@@ -762,6 +797,29 @@ void gl_addTexture(TextureDesc* desc, Texture** texture)
     new_texture->mip_levels = mip_levels;
 
     *texture = new_texture;
+}
+
+void gl_addSampler(SamplerDesc* desc, Sampler** sampler)
+{
+    Sampler* new_sampler = (Sampler*)std::malloc(sizeof(Sampler));
+    if (new_sampler == nullptr)
+        return;
+
+    GLuint id;
+    glCreateSamplers(1, &id);
+    
+    GLint min_filter = util_get_gl_min_filter(desc->min_filter, desc->mip_map_filter);
+    GLint mag_filter = (desc->mag_filter == kFilterTypeNearest) ? GL_NEAREST : GL_LINEAR;
+    glSamplerParameteri(id, GL_TEXTURE_MIN_FILTER, min_filter);
+    glSamplerParameteri(id, GL_TEXTURE_MAG_FILTER, mag_filter);
+
+    GLint wrap_u = util_get_gl_wrap_mode(desc->wrap_u);
+    GLint wrap_v = util_get_gl_wrap_mode(desc->wrap_v);
+    glSamplerParameteri(id, GL_TEXTURE_WRAP_S, wrap_u);
+    glSamplerParameteri(id, GL_TEXTURE_WRAP_T, wrap_v);
+
+    new_sampler->id = id;
+    *sampler = new_sampler;
 }
 
 void gl_addShader(ShaderDesc* desc, Shader** out_shader)
@@ -833,6 +891,8 @@ void gl_addDescriptorSet(DescriptorSetDesc* desc, DescriptorSet** set)
         });
 
     new (&new_set->buffers) std::vector<std::vector<uint32_t>>();
+    new (&new_set->textures) std::vector<std::vector<uint32_t>>();
+    new (&new_set->samplers) std::vector<std::vector<uint32_t>>();
 
     *set = new_set;
 }
@@ -863,6 +923,9 @@ void gl_addPipeline(PipelineDesc* desc, Pipeline** pipeline)
 void gl_addQueue([[maybe_unused]] CmdQueueDesc* desc, CmdQueue** queue)
 {
     CmdQueue* new_queue = (CmdQueue*)std::malloc(sizeof(CmdQueue));
+    if (new_queue == nullptr)
+        return;
+
     new (&new_queue->queue) std::vector<CmdBuffer*>();
     new_queue->queue.reserve(8); // just random 
     *queue = new_queue;
@@ -873,6 +936,9 @@ void gl_addCmd(CmdBufferDesc* desc, CmdBuffer** cmd)
     using Command = std::function<void()>;
 
     CmdBuffer* new_cmd = (CmdBuffer*)std::malloc(sizeof(CmdBuffer));
+    if (new_cmd == nullptr)
+        return;
+
     new (&new_cmd->commands) std::vector<Command>();
     desc->current_queue->queue.push_back(new_cmd);
     *cmd = new_cmd;
@@ -884,6 +950,7 @@ void gl_removeBuffer(Buffer* buffer)
     {
         glDeleteBuffers(1, &buffer->id);
         std::free(buffer);
+        buffer = nullptr;
     }
 }
 
@@ -900,31 +967,29 @@ void gl_unmapBuffer(Buffer* buffer)
 
 void gl_updateDescriptorSet(UpdateDescriptorSetDesc* desc, DescriptorSet* set)
 {
-    uint32_t index = 0;
-    for (const auto& buffers : desc->buffers)
-    {
-        if (buffers.size() > set->max_set)
-            return;
+    // In case in opengl we don't need to actually
+    // update descriptor set with data
+    // we just going to save descriptor ids in vectors
 
-        set->buffers.push_back(std::vector<uint32_t>());
-        for (const auto buffer : buffers)
-        {
-            set->buffers[index].push_back(buffer->id);
-        }
-            
-        ++index;
+    // Probably need to add assert here
+    if (desc->buffers.size() > set->max_set)
+        return;
+    if (desc->textures.size() > set->max_set)
+        return;
+
+    for (const auto& buffer : desc->buffers)
+    {
+        set->buffers.push_back(buffer->id);
     }
-   
-    for (const auto& descriptor : set->descriptors)
-    {
-        const uint32_t index = descriptor.index;
-        const uint32_t binding = descriptor.binding;
-        if (descriptor.type & kResourceTypeCBV)
-        {
-            glUniformBlockBinding(set->program, index, binding);
-        }
 
-        // add for SRV, UAV and Samplers
+    for (const auto& sampler : desc->samplers)
+    {
+        set->samplers.push_back(sampler->id);
+    }
+
+    for (const auto& texture : desc->textures)
+    {
+        set->textures.push_back(texture->id);
     }
 }
 
@@ -942,12 +1007,25 @@ void gl_cmdBindDescriptorSet(CmdBuffer* cmd, DescriptorSet* set, uint32_t index)
         return;
 
     cmd->commands.push_back([=]() {
-        uint32_t buf_index = 0;
         for (const auto& descriptor : set->descriptors)
         {
-            if (descriptor.type & kResourceTypeCBV)
+            if (descriptor.type & kResourceTypeCBV && !set->buffers.empty())
             {
-                glBindBufferBase(GL_UNIFORM_BUFFER, descriptor.binding, set->buffers[buf_index][index]);
+                glUniformBlockBinding(set->program, descriptor.index, descriptor.binding);
+                glBindBufferBase(GL_UNIFORM_BUFFER, descriptor.binding, set->buffers[index]);
+                continue;
+            }
+
+            if (descriptor.type & kResourceTypeSampler && !set->samplers.empty())
+            {
+                glBindSampler(descriptor.binding, set->samplers[index]);
+                continue;
+            }
+
+            if (descriptor.type & kResourceTypeSRV && !set->textures.empty())
+            {
+                glBindTextureUnit(descriptor.binding, set->textures[index]);
+                continue;
             }
         }
     });
@@ -1016,6 +1094,7 @@ bool gl_init_render()
     add_swapchain           = gl_addSwapChain;
     add_buffer              = gl_addBuffer;
     add_texture             = gl_addTexture;
+    add_sampler             = gl_addSampler;
     add_shader              = gl_addShader;
     add_descriptor_set      = gl_addDescriptorSet;
     add_pipeline            = gl_addPipeline;

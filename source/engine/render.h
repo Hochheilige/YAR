@@ -179,6 +179,36 @@ struct Texture
     uint32_t mip_levels;
 };
 
+enum FilterType
+{
+    kFilterTypeNone = 0,
+    kFilterTypeNearest,
+    kFilterTypeLinear,
+};
+
+enum WrapMode
+{
+    kWrapModeRepeat,
+    kWrapModeMirrored,
+    kWrapModeClampToEdge,
+    KWrapModeClampToBorder
+};
+
+struct SamplerDesc
+{
+    FilterType min_filter;
+    FilterType mag_filter;
+    FilterType mip_map_filter;
+    WrapMode wrap_u;
+    WrapMode wrap_v;
+    WrapMode wrap_w;
+};
+
+struct Sampler
+{
+    uint32_t id;
+};
+
 enum ShaderStage : uint8_t
 {
     kShaderStageNone = 0,
@@ -292,7 +322,9 @@ struct DescriptorSetDesc
 
 struct UpdateDescriptorSetDesc
 {
-    std::vector<std::vector<Buffer*>> buffers;
+    std::vector<Buffer*> buffers;
+    std::vector<Texture*> textures;
+    std::vector<Sampler*> samplers;
     // there should be a texture vector as well
 };
 
@@ -309,7 +341,9 @@ struct DescriptorSet
     uint32_t program; // only for gl
     std::vector<ShaderResource> descriptors;
 
-    std::vector<std::vector<uint32_t>> buffers; // only for gl
+    std::vector<uint32_t> buffers; // only for gl
+    std::vector<uint32_t> samplers;
+    std::vector<uint32_t> textures;
 };
 
 struct PipelineDesc
@@ -339,7 +373,6 @@ struct Pipeline
     // but for now it will be OpenGL specific
     Shader* shader;
     uint32_t vao;
-    uint32_t ubos[2];
 };
 
 struct CmdQueueDesc
@@ -389,7 +422,8 @@ extern name##_fn name;                          \
 
 DECLARE_YAR_RENDER_FUNC(void, add_swapchain, bool vsync, SwapChain** swapchain);
 DECLARE_YAR_RENDER_FUNC(void, add_buffer, BufferDesc* desc, Buffer** buffer);
-DECLARE_YAR_RENDER_FUNC(void, add_texture, TextureDesc* desc, Texture** buffer);
+DECLARE_YAR_RENDER_FUNC(void, add_texture, TextureDesc* desc, Texture** texture);
+DECLARE_YAR_RENDER_FUNC(void, add_sampler, SamplerDesc* desc, Sampler** sampler);
 DECLARE_YAR_RENDER_FUNC(void, add_shader, ShaderDesc* desc, Shader** shader);
 DECLARE_YAR_RENDER_FUNC(void, add_descriptor_set, DescriptorSetDesc* desc, DescriptorSet** shader);
 //DECLARE_YAR_RENDER_FUNC(void, add_root_signature, RootSignatureDesc* desc, RootSignature** root_signature);

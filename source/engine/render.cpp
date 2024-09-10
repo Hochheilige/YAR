@@ -24,6 +24,7 @@ unmap_buffer_fn            unmap_buffer;
 add_swapchain_fn           add_swapchain;
 add_buffer_fn              add_buffer;
 add_texture_fn             add_texture;
+add_sampler_fn             add_sampler;
 add_shader_fn              add_shader;
 add_descriptor_set_fn      add_descriptor_set;
 //add_root_signature_fn     add_root_signature;
