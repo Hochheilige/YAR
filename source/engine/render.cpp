@@ -39,6 +39,7 @@ cmd_bind_vertex_buffer_fn  cmd_bind_vertex_buffer;
 cmd_bind_index_buffer_fn   cmd_bind_index_buffer;
 cmd_draw_fn                cmd_draw;
 cmd_draw_indexed_fn        cmd_draw_indexed;
+cmd_update_buffer_fn       cmd_update_buffer;
 queue_submit_fn            queue_submit;
 
 void init_render()

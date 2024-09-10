@@ -8,7 +8,18 @@
 #define STB_IMAGE_IMPLEMENTATION
 #include <stb_image.h>
 
+#include <glm/glm.hpp>
+#include <glm/gtc/matrix_transform.hpp>
+#include <glm/gtc/type_ptr.hpp>
+
 #include <iostream>
+
+struct CameraUniform
+{
+	glm::mat4 model;
+	glm::mat4 view;
+	glm::mat4 proj;
+}camera;
 
 auto main() -> int {
 	init_window();
@@ -19,18 +30,72 @@ auto main() -> int {
 	add_swapchain(true, &swapchain);
 
 	float vertices[] = {
-		// positions          // colors           // texture coords
-		 0.5f,  0.5f, 0.0f,   1.0f, 0.0f, 0.0f,   1.0f, 1.0f,   // top right
-		 0.5f, -0.5f, 0.0f,   0.0f, 1.0f, 0.0f,   1.0f, 0.0f,   // bottom right
-		-0.5f, -0.5f, 0.0f,   0.0f, 0.0f, 1.0f,   0.0f, 0.0f,   // bottom left
-		-0.5f,  0.5f, 0.0f,   1.0f, 1.0f, 0.0f,   0.0f, 1.0f    // top left 
+		// positions          // tex coords
+		-0.5f, -0.5f,  0.5f,  0.0f, 0.0f, 
+		 0.5f, -0.5f,  0.5f,  1.0f, 0.0f, 
+		 0.5f,  0.5f,  0.5f,  1.0f, 1.0f, 
+		-0.5f,  0.5f,  0.5f,  0.0f, 1.0f, 
+
+		-0.5f, -0.5f, -0.5f,  0.0f, 0.0f, 
+		 0.5f, -0.5f, -0.5f,  1.0f, 0.0f, 
+		 0.5f,  0.5f, -0.5f,  1.0f, 1.0f, 
+		-0.5f,  0.5f, -0.5f,  0.0f, 1.0f, 
+
+		-0.5f, -0.5f, -0.5f,  1.0f, 0.0f, 
+		-0.5f, -0.5f,  0.5f,  0.0f, 0.0f, 
+		-0.5f,  0.5f,  0.5f,  0.0f, 1.0f, 
+		-0.5f,  0.5f, -0.5f,  1.0f, 1.0f, 
+
+		 0.5f, -0.5f, -0.5f,  0.0f, 0.0f, 
+		 0.5f, -0.5f,  0.5f,  1.0f, 0.0f, 
+		 0.5f,  0.5f,  0.5f,  1.0f, 1.0f, 
+		 0.5f,  0.5f, -0.5f,  0.0f, 1.0f, 
+
+		 -0.5f, -0.5f, -0.5f,  0.0f, 1.0f,
+		  0.5f, -0.5f, -0.5f,  1.0f, 1.0f,
+		  0.5f, -0.5f,  0.5f,  1.0f, 0.0f,
+		 -0.5f, -0.5f,  0.5f,  0.0f, 0.0f,
+
+		 -0.5f,  0.5f, -0.5f,  0.0f, 0.0f,
+		  0.5f,  0.5f, -0.5f,  1.0f, 0.0f,
+		  0.5f,  0.5f,  0.5f,  1.0f, 1.0f,
+		 -0.5f,  0.5f,  0.5f,  0.0f, 1.0f 
 	};
 
-	uint32_t indexes[] =
-	{
+
+	uint32_t indexes[] = {
 		0, 1, 2,
-		2, 3, 0
+		2, 3, 0,
+
+		4, 5, 6,
+		6, 7, 4,
+
+		8, 9, 10,
+		10, 11, 8,
+
+		12, 13, 14,
+		14, 15, 12,
+
+		16, 17, 18,
+		18, 19, 16,
+
+		20, 21, 22,
+		22, 23, 20
 	};
+
+	glm::vec3 cube_positions[] = {
+		glm::vec3(0.0f,  0.0f,  0.0f),
+		glm::vec3(2.0f,  5.0f, -15.0f),
+		glm::vec3(-1.5f, -2.2f, -2.5f),
+		glm::vec3(-3.8f, -2.0f, -12.3f),
+		glm::vec3(2.4f, -0.4f, -3.5f),
+		glm::vec3(-1.7f,  3.0f, -7.5f),
+		glm::vec3(1.3f, -2.0f, -2.5f),
+		glm::vec3(1.5f,  2.0f, -2.5f),
+		glm::vec3(1.5f,  0.2f, -1.5f),
+		glm::vec3(-1.3f,  1.0f, -1.5f)
+	};
+
 
 	float rgb[4] = { 0.0f, 0.0f, 0.0f, 0.0f };
 
@@ -81,6 +146,12 @@ auto main() -> int {
 	for (auto& ubo : ubos)
 		add_buffer(&buffer_desc, &ubo);
 
+	buffer_desc.size = sizeof(camera);
+	buffer_desc.flags |= kBufferFlagDynamic;
+	Buffer* camera_buf[image_count] = { nullptr, nullptr };
+	for (auto& cam : camera_buf)
+		add_buffer(&buffer_desc, &cam);
+
 	// Need to make something with shaders path 
 	ShaderLoadDesc shader_load_desc = {};
 	shader_load_desc.stages[0] = { "shaders/base_vert.hlsl", "main", ShaderStage::kShaderStageVert };
@@ -112,6 +183,12 @@ auto main() -> int {
 		std::memcpy(update_desc.mapped_data, rgb, sizeof(rgb));
 		end_update_resource(resource_update_desc);
 
+		update_desc.buffer = camera_buf[frame_index];
+		update_desc.size = sizeof(camera);
+		begin_update_resource(resource_update_desc);
+		std::memcpy(update_desc.mapped_data, &camera, sizeof(camera));
+		end_update_resource(resource_update_desc);
+
 		TextureUpdateDesc tex_update_desc{};
 		resource_update_desc = &tex_update_desc;
 		tex_update_desc.size = width * height * channels;
@@ -123,16 +200,13 @@ auto main() -> int {
 	}
 
 	VertexLayout layout = {0};
-	layout.attrib_count = 3;
+	layout.attrib_count = 2;
 	layout.attribs[0].size = 3;
 	layout.attribs[0].format = GL_FLOAT;
 	layout.attribs[0].offset = 0;
-	layout.attribs[1].size = 3;
+	layout.attribs[1].size = 2;
 	layout.attribs[1].format = GL_FLOAT;
 	layout.attribs[1].offset = 3 * sizeof(float);
-	layout.attribs[2].size = 2;
-	layout.attribs[2].format = GL_FLOAT;
-	layout.attribs[2].offset = 6 * sizeof(float);
 
 	DescriptorSetDesc set_desc;
 	set_desc.max_sets = image_count;
@@ -141,10 +215,17 @@ auto main() -> int {
 	DescriptorSet* set;
 	add_descriptor_set(&set_desc, &set);
 
+	DescriptorSet* cam;
+	add_descriptor_set(&set_desc, &cam);
+
 	UpdateDescriptorSetDesc update_set_desc;
 	// Maybe it can be done using loop for all buffers
 	update_set_desc.buffers = { ubos[0], ubos[1] };
 	update_descriptor_set(&update_set_desc, set);
+
+	update_set_desc = {};
+	update_set_desc.buffers = { camera_buf[0], camera_buf[1] };
+	update_descriptor_set(&update_set_desc, cam);
 
 	set_desc.max_sets = 1;
 	set_desc.update_freq = kUpdateFreqNone;
@@ -173,6 +254,8 @@ auto main() -> int {
 
 	uint32_t rgb_index = 0;
 
+	glEnable(GL_DEPTH_TEST);
+
 	while(update_window())
 	{
 		rgb[rgb_index] = sin(glfwGetTime()) * 0.5f + 0.5f;
@@ -186,19 +269,44 @@ auto main() -> int {
 			end_update_resource(resource_update_desc);
 		}
 
+		imgui_begin_frame();
 
-        imgui_begin_frame();
+		glClearColor(gBackGroundColor[0], gBackGroundColor[1], gBackGroundColor[2], 1.0f);
+		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-        glClearColor(gBackGroundColor[0], gBackGroundColor[1], gBackGroundColor[2], 1.0f);
-        glClear(GL_COLOR_BUFFER_BIT);
 
-		cmd_bind_pipeline(cmd, graphics_pipeline);
-		cmd_bind_vertex_buffer(cmd, vbo, 0, sizeof(float) * 8);
-		cmd_bind_index_buffer(cmd, ebo);
-		cmd_bind_descriptor_set(cmd, set, frame_index);
-		cmd_bind_descriptor_set(cmd, texture_set, 0);
-		cmd_draw_indexed(cmd, 6, 0, 0);
-		//cmd_draw(cmd, 0, 3);
+		camera.view = glm::mat4(1.0f);
+		camera.view = glm::translate(camera.view, glm::vec3(0.0f, 0.0f, -3.0f));
+		camera.proj = glm::perspective(glm::radians(45.0f), 800.0f / 600.0f, 0.1f, 100.0f);
+		for (int i = 0; i < 10; ++i)
+		{
+
+			camera.model = glm::mat4(1.0f);
+			//camera.model = glm::rotate(camera.model, (float)glfwGetTime() * glm::radians(50.0f), glm::vec3(0.5f, 1.0f, 0.0f));
+			camera.model = glm::translate(camera.model, cube_positions[i]);
+			float angle = 20.0f * (i + 1);
+			camera.model = glm::rotate(camera.model, (float)glfwGetTime() * glm::radians(angle), glm::vec3(1.0f, 0.3f, 0.5f));
+
+			//{
+			//	BufferUpdateDesc update;
+			//	update.buffer = camera_buf[frame_index];
+			//	update.size = sizeof(camera);
+			//	resource_update_desc = &update;
+			//	begin_update_resource(resource_update_desc);
+			//	std::memcpy(update.mapped_data, &camera, sizeof(camera));
+			//	end_update_resource(resource_update_desc);
+			//}
+
+			cmd_bind_pipeline(cmd, graphics_pipeline);
+			cmd_bind_vertex_buffer(cmd, vbo, 0, sizeof(float) * 5);
+			cmd_bind_index_buffer(cmd, ebo);
+			cmd_bind_descriptor_set(cmd, set, frame_index);
+			cmd_bind_descriptor_set(cmd, cam, frame_index);
+			cmd_bind_descriptor_set(cmd, texture_set, 0);
+			cmd_update_buffer(cmd, camera_buf[frame_index], sizeof(camera), &camera);
+			cmd_draw_indexed(cmd, 36, 0, 0);
+		}
+		//cmd_draw(cmd, 0, 36);
 		queue_submit(queue);
 
         imgui_render();

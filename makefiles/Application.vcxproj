@@ -10,7 +10,7 @@
   <Import Project="props\CommonProjectSetup.props" />
   <ItemDefinitionGroup>
     <ClCompile>
-      <AdditionalIncludeDirectories>$(SrcDir)engine\;$(ExternalDir)glad\include\;$(ExternalDir)glfw\include\;$(ExternalDir)imgui\;$(ExternalDir)dxc\inc\;$(ExternalDir)stb\;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(SrcDir)engine\;$(ExternalDir)glad\include\;$(ExternalDir)glfw\include\;$(ExternalDir)imgui\;$(ExternalDir)dxc\inc\;$(ExternalDir)stb\;$(ExternalDir)glm\;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <RuntimeLibrary Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">MultiThreadedDebugDLL</RuntimeLibrary>
       <LanguageStandard>stdcpp20</LanguageStandard>
     </ClCompile>

@@ -387,16 +387,18 @@ void util_create_shader_reflection(std::vector<uint8_t>& spirv, std::vector<Shad
     std::vector<SpvReflectDescriptorBinding*> descriptors(desc_size);
     result = spvReflectEnumerateDescriptorBindings(&module, &desc_size, descriptors.data());
 
-    resources.resize(desc_size);
     uint32_t i = 0;
     for (auto& descriptor : descriptors)
     {
-        auto& resource = resources[i];
+        ShaderResource resource;
         resource.name = descriptor->name;
         resource.binding = descriptor->binding;
         resource.set = descriptor->set;
         resource.type = util_convert_spv_resource_type(descriptor->resource_type);
         resource.index = i;
+
+        resources.push_back(resource);
+
         ++i;
     }
 
@@ -1072,6 +1074,16 @@ void gl_cmdDrawIndexed(CmdBuffer* cmd, uint32_t index_count,
     });
 }
 
+void gl_cmdUpdateBuffer(CmdBuffer* cmd, Buffer* buffer, size_t size, void* data)
+{
+    // HACK HACK HACK
+    std::vector<uint8_t> data_copy((uint8_t*)data, (uint8_t*)data + size);
+
+    cmd->commands.push_back([=]() {
+        glNamedBufferSubData(buffer->id, 0, size, data_copy.data());
+    });
+}
+
 void gl_queueSubmit(CmdQueue* queue)
 {
     for (auto& cmd : queue->queue)
@@ -1110,6 +1122,7 @@ bool gl_init_render()
     cmd_bind_index_buffer   = gl_cmdBindIndexBuffer;
     cmd_draw                = gl_cmdDraw;
     cmd_draw_indexed        = gl_cmdDrawIndexed;
+    cmd_update_buffer       = gl_cmdUpdateBuffer;
     queue_submit            = gl_queueSubmit;
 
     if (!gladLoadGLLoader((GLADloadproc)glfwGetProcAddress))

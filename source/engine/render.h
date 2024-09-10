@@ -438,6 +438,7 @@ DECLARE_YAR_RENDER_FUNC(void, cmd_bind_vertex_buffer, CmdBuffer* cmd, Buffer* bu
 DECLARE_YAR_RENDER_FUNC(void, cmd_bind_index_buffer, CmdBuffer* cmd, Buffer* buffer); // maybe for other render api there should be more params
 DECLARE_YAR_RENDER_FUNC(void, cmd_draw, CmdBuffer* cmd, uint32_t first_vertex, uint32_t count);
 DECLARE_YAR_RENDER_FUNC(void, cmd_draw_indexed, CmdBuffer* cmd, uint32_t index_count, uint32_t first_index, uint32_t first_vertex);
+DECLARE_YAR_RENDER_FUNC(void, cmd_update_buffer, CmdBuffer* cmd, Buffer* buffer, size_t size, void* data);
 DECLARE_YAR_RENDER_FUNC(void, queue_submit, CmdQueue* queue);
 
 void init_render();
