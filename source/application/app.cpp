@@ -14,12 +14,34 @@
 
 #include <iostream>
 
-struct CameraUniform
+struct MVP
 {
 	glm::mat4 model;
 	glm::mat4 view;
 	glm::mat4 proj;
-}camera;
+}mvp;
+
+struct Camera
+{
+	glm::vec3 pos = glm::vec3(0.0f, 0.0f, 3.0f);
+	glm::vec3 front = glm::vec3(0.0f, 0.0f, -1.0f);
+	glm::vec3 up = glm::vec3(0.0f, 1.0f, 0.0f);
+} camera;
+
+bool firstMouse = true;
+float yaw = -90.0f;	
+float pitch = 0.0f;
+float lastX = 800.0f / 2.0;
+float lastY = 600.0 / 2.0;
+float fov = 45.0f;
+
+float deltaTime = 0.0f;	
+float lastFrame = 0.0f;
+
+void framebuffer_size_callback(GLFWwindow* window, int width, int height);
+void mouse_callback(GLFWwindow* window, double xpos, double ypos);
+void scroll_callback(GLFWwindow* window, double xoffset, double yoffset);
+void process_input(GLFWwindow* window);
 
 auto main() -> int {
 	init_window();
@@ -146,10 +168,10 @@ auto main() -> int {
 	for (auto& ubo : ubos)
 		add_buffer(&buffer_desc, &ubo);
 
-	buffer_desc.size = sizeof(camera);
+	buffer_desc.size = sizeof(mvp);
 	buffer_desc.flags |= kBufferFlagDynamic;
-	Buffer* camera_buf[image_count] = { nullptr, nullptr };
-	for (auto& cam : camera_buf)
+	Buffer* mvp_buf[image_count] = { nullptr, nullptr };
+	for (auto& cam : mvp_buf)
 		add_buffer(&buffer_desc, &cam);
 
 	// Need to make something with shaders path 
@@ -183,10 +205,10 @@ auto main() -> int {
 		std::memcpy(update_desc.mapped_data, rgb, sizeof(rgb));
 		end_update_resource(resource_update_desc);
 
-		update_desc.buffer = camera_buf[frame_index];
-		update_desc.size = sizeof(camera);
+		update_desc.buffer = mvp_buf[frame_index];
+		update_desc.size = sizeof(mvp);
 		begin_update_resource(resource_update_desc);
-		std::memcpy(update_desc.mapped_data, &camera, sizeof(camera));
+		std::memcpy(update_desc.mapped_data, &mvp, sizeof(mvp));
 		end_update_resource(resource_update_desc);
 
 		TextureUpdateDesc tex_update_desc{};
@@ -224,7 +246,7 @@ auto main() -> int {
 	update_descriptor_set(&update_set_desc, set);
 
 	update_set_desc = {};
-	update_set_desc.buffers = { camera_buf[0], camera_buf[1] };
+	update_set_desc.buffers = { mvp_buf[0], mvp_buf[1] };
 	update_descriptor_set(&update_set_desc, cam);
 
 	set_desc.max_sets = 1;
@@ -258,6 +280,13 @@ auto main() -> int {
 
 	while(update_window())
 	{
+		float currentFrame = static_cast<float>(glfwGetTime());
+		deltaTime = currentFrame - lastFrame;
+		lastFrame = currentFrame;
+
+		process_input((GLFWwindow*)get_window());
+
+
 		rgb[rgb_index] = sin(glfwGetTime()) * 0.5f + 0.5f;
 		{ // update buffer data
 			BufferUpdateDesc update;
@@ -275,27 +304,15 @@ auto main() -> int {
 		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
 
-		camera.view = glm::mat4(1.0f);
-		camera.view = glm::translate(camera.view, glm::vec3(0.0f, 0.0f, -3.0f));
-		camera.proj = glm::perspective(glm::radians(45.0f), 800.0f / 600.0f, 0.1f, 100.0f);
+		mvp.view = glm::mat4(1.0f);
+		mvp.view = glm::lookAt(camera.pos, camera.pos + camera.front, camera.up);
+		mvp.proj = glm::perspective(glm::radians(fov), 800.0f / 600.0f, 0.1f, 100.0f);
 		for (int i = 0; i < 10; ++i)
 		{
-
-			camera.model = glm::mat4(1.0f);
-			//camera.model = glm::rotate(camera.model, (float)glfwGetTime() * glm::radians(50.0f), glm::vec3(0.5f, 1.0f, 0.0f));
-			camera.model = glm::translate(camera.model, cube_positions[i]);
+			mvp.model = glm::mat4(1.0f);
+			mvp.model = glm::translate(mvp.model, cube_positions[i]);
 			float angle = 20.0f * (i + 1);
-			camera.model = glm::rotate(camera.model, (float)glfwGetTime() * glm::radians(angle), glm::vec3(1.0f, 0.3f, 0.5f));
-
-			//{
-			//	BufferUpdateDesc update;
-			//	update.buffer = camera_buf[frame_index];
-			//	update.size = sizeof(camera);
-			//	resource_update_desc = &update;
-			//	begin_update_resource(resource_update_desc);
-			//	std::memcpy(update.mapped_data, &camera, sizeof(camera));
-			//	end_update_resource(resource_update_desc);
-			//}
+			mvp.model = glm::rotate(mvp.model, (float)glfwGetTime() * glm::radians(angle), glm::vec3(1.0f, 0.3f, 0.5f));
 
 			cmd_bind_pipeline(cmd, graphics_pipeline);
 			cmd_bind_vertex_buffer(cmd, vbo, 0, sizeof(float) * 5);
@@ -303,7 +320,7 @@ auto main() -> int {
 			cmd_bind_descriptor_set(cmd, set, frame_index);
 			cmd_bind_descriptor_set(cmd, cam, frame_index);
 			cmd_bind_descriptor_set(cmd, texture_set, 0);
-			cmd_update_buffer(cmd, camera_buf[frame_index], sizeof(camera), &camera);
+			cmd_update_buffer(cmd, mvp_buf[frame_index], 0, sizeof(mvp), &mvp);
 			cmd_draw_indexed(cmd, 36, 0, 0);
 		}
 		//cmd_draw(cmd, 0, 36);
@@ -320,4 +337,72 @@ auto main() -> int {
 	}
 
 	terminate_window();
+}
+
+void process_input(GLFWwindow* window)
+{
+	if (glfwGetKey(window, GLFW_KEY_ESCAPE) == GLFW_PRESS)
+		glfwSetWindowShouldClose(window, true);
+
+	float cameraSpeed = static_cast<float>(2.5 * deltaTime);
+	if (glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS)
+		camera.pos += cameraSpeed * camera.front;
+	if (glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS)
+		camera.pos -= cameraSpeed * camera.front;
+	if (glfwGetKey(window, GLFW_KEY_A) == GLFW_PRESS)
+		camera.pos -= glm::normalize(glm::cross(camera.front, camera.up)) * cameraSpeed;
+	if (glfwGetKey(window, GLFW_KEY_D) == GLFW_PRESS)
+		camera.pos += glm::normalize(glm::cross(camera.front, camera.up)) * cameraSpeed;
+}
+
+void framebuffer_size_callback(GLFWwindow* window, int width, int height)
+{
+	// make sure the viewport matches the new window dimensions; note that width and 
+	// height will be significantly larger than specified on retina displays.
+	glViewport(0, 0, width, height);
+}
+
+void mouse_callback(GLFWwindow* window, double xposIn, double yposIn)
+{
+	float xpos = static_cast<float>(xposIn);
+	float ypos = static_cast<float>(yposIn);
+
+	if (firstMouse)
+	{
+		lastX = xpos;
+		lastY = ypos;
+		firstMouse = false;
+	}
+
+	float xoffset = xpos - lastX;
+	float yoffset = lastY - ypos; 
+	lastX = xpos;
+	lastY = ypos;
+
+	float sensitivity = 0.1f; 
+	xoffset *= sensitivity;
+	yoffset *= sensitivity;
+
+	yaw += xoffset;
+	pitch += yoffset;
+
+	if (pitch > 89.0f)
+		pitch = 89.0f;
+	if (pitch < -89.0f)
+		pitch = -89.0f;
+
+	glm::vec3 front;
+	front.x = cos(glm::radians(yaw)) * cos(glm::radians(pitch));
+	front.y = sin(glm::radians(pitch));
+	front.z = sin(glm::radians(yaw)) * cos(glm::radians(pitch));
+	camera.front = glm::normalize(front);
+}
+
+void scroll_callback(GLFWwindow* window, double xoffset, double yoffset)
+{
+	fov -= (float)yoffset;
+	if (fov < 1.0f)
+		fov = 1.0f;
+	if (fov > 45.0f)
+		fov = 45.0f;
 }

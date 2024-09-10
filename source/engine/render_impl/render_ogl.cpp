@@ -1074,13 +1074,13 @@ void gl_cmdDrawIndexed(CmdBuffer* cmd, uint32_t index_count,
     });
 }
 
-void gl_cmdUpdateBuffer(CmdBuffer* cmd, Buffer* buffer, size_t size, void* data)
+void gl_cmdUpdateBuffer(CmdBuffer* cmd, Buffer* buffer, size_t offset, size_t size, void* data)
 {
     // HACK HACK HACK
     std::vector<uint8_t> data_copy((uint8_t*)data, (uint8_t*)data + size);
 
     cmd->commands.push_back([=]() {
-        glNamedBufferSubData(buffer->id, 0, size, data_copy.data());
+        glNamedBufferSubData(buffer->id, offset, size, data_copy.data());
     });
 }
 
