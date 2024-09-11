@@ -943,6 +943,38 @@ void gl_addCmd(CmdBufferDesc* desc, CmdBuffer** cmd)
 
     new (&new_cmd->commands) std::vector<Command>();
     desc->current_queue->queue.push_back(new_cmd);
+
+    if (desc->use_push_constant)
+    {
+        PushConstant* new_pc = 
+            (PushConstant*)std::malloc(sizeof(PushConstant));
+        if (new_pc == nullptr)
+            return;
+            
+        BufferDesc pc_desc{};
+        pc_desc.size = desc->pc_desc->size;
+        pc_desc.flags = kBufferFlagDynamic;
+        add_buffer(&pc_desc, &new_pc->buffer);
+
+        const auto& descriptors = desc->pc_desc->shader->resources;
+        std::string_view name(desc->pc_desc->name);
+        auto pc_reflection = std::find_if(
+            descriptors.begin(), descriptors.end(),
+            [&](const ShaderResource& res) {return res.name == name; }
+        );
+
+        if (pc_reflection != descriptors.end())
+        {
+            new_pc->binding = pc_reflection->binding;
+            new_pc->index = pc_reflection->index;
+        }
+
+        new_pc->size = desc->pc_desc->size;
+        new_pc->shader_program = desc->pc_desc->shader->program;
+
+        new_cmd->push_constant = new_pc;
+    }
+
     *cmd = new_cmd;
 }
 
@@ -1051,6 +1083,22 @@ void gl_cmdBindIndexBuffer(CmdBuffer* cmd, Buffer* buffer)
     });
 }
 
+void gl_cmdBindPushConstant(CmdBuffer* cmd, void* data)
+{
+    uint32_t size = cmd->push_constant->size;
+    uint32_t pc_id = cmd->push_constant->buffer->id;
+    uint32_t shader = cmd->push_constant->shader_program;
+    uint32_t index = cmd->push_constant->index;
+    uint32_t binding = cmd->push_constant->binding;
+    std::vector<uint8_t> data_copy((uint8_t*)data, (uint8_t*)data + size);
+
+    cmd->commands.push_back([=]() {
+        glNamedBufferSubData(pc_id, 0, size, data_copy.data());
+        glUniformBlockBinding(shader, index, binding);
+        glBindBufferBase(GL_UNIFORM_BUFFER, binding, pc_id);
+    });
+}
+
 void gl_cmdDraw(CmdBuffer* cmd, uint32_t first_vertex, uint32_t count)
 {
     GLuint& vao = current_vao;
@@ -1120,6 +1168,7 @@ bool gl_init_render()
     cmd_bind_descriptor_set = gl_cmdBindDescriptorSet;
     cmd_bind_vertex_buffer  = gl_cmdBindVertexBuffer;
     cmd_bind_index_buffer   = gl_cmdBindIndexBuffer;
+    cmd_bind_push_constant  = gl_cmdBindPushConstant;
     cmd_draw                = gl_cmdDraw;
     cmd_draw_indexed        = gl_cmdDrawIndexed;
     cmd_update_buffer       = gl_cmdUpdateBuffer;

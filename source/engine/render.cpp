@@ -37,6 +37,7 @@ cmd_bind_pipeline_fn       cmd_bind_pipeline;
 cmd_bind_descriptor_set_fn cmd_bind_descriptor_set;
 cmd_bind_vertex_buffer_fn  cmd_bind_vertex_buffer;
 cmd_bind_index_buffer_fn   cmd_bind_index_buffer;
+cmd_bind_push_constant_fn  cmd_bind_push_constant;
 cmd_draw_fn                cmd_draw;
 cmd_draw_indexed_fn        cmd_draw_indexed;
 cmd_update_buffer_fn       cmd_update_buffer;

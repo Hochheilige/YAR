@@ -346,6 +346,22 @@ struct DescriptorSet
     std::vector<uint32_t> textures;
 };
 
+struct PushConstantDesc
+{
+    Shader* shader;
+    std::string name;
+    uint32_t size;
+};
+
+struct PushConstant
+{
+    Buffer* buffer;
+    uint32_t size;
+    uint32_t binding;
+    uint32_t index;
+    uint32_t shader_program;
+};
+
 struct PipelineDesc
 {
     Shader* shader;
@@ -390,11 +406,14 @@ struct CmdQueue
 struct CmdBufferDesc
 {
     CmdQueue* current_queue;
+    bool use_push_constant;
+    PushConstantDesc* pc_desc;
 };
 
 struct CmdBuffer
 {
     std::vector<Command> commands;
+    PushConstant* push_constant;
 };
 
 // ======================================= //
@@ -436,6 +455,7 @@ DECLARE_YAR_RENDER_FUNC(void, cmd_bind_pipeline, CmdBuffer* cmd, Pipeline* pipel
 DECLARE_YAR_RENDER_FUNC(void, cmd_bind_descriptor_set, CmdBuffer* cmd, DescriptorSet* set, uint32_t index);
 DECLARE_YAR_RENDER_FUNC(void, cmd_bind_vertex_buffer, CmdBuffer* cmd, Buffer* buffer, uint32_t offset, uint32_t stride);
 DECLARE_YAR_RENDER_FUNC(void, cmd_bind_index_buffer, CmdBuffer* cmd, Buffer* buffer); // maybe for other render api there should be more params
+DECLARE_YAR_RENDER_FUNC(void, cmd_bind_push_constant, CmdBuffer* cmd, void* data);
 DECLARE_YAR_RENDER_FUNC(void, cmd_draw, CmdBuffer* cmd, uint32_t first_vertex, uint32_t count);
 DECLARE_YAR_RENDER_FUNC(void, cmd_draw_indexed, CmdBuffer* cmd, uint32_t index_count, uint32_t first_index, uint32_t first_vertex);
 DECLARE_YAR_RENDER_FUNC(void, cmd_update_buffer, CmdBuffer* cmd, Buffer* buffer, size_t offset, size_t size, void* data);

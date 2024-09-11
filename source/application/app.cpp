@@ -16,7 +16,7 @@
 
 struct MVP
 {
-	glm::mat4 model;
+	glm::mat4 model[10];
 	glm::mat4 view;
 	glm::mat4 proj;
 }mvp;
@@ -269,12 +269,19 @@ auto main() -> int {
 	CmdQueue* queue;
 	add_queue(&queue_desc, &queue);
 
+	PushConstantDesc pc_desc{};
+	pc_desc.name = "push_constant";
+	pc_desc.shader = shader;
+	pc_desc.size = sizeof(uint32_t);
 	CmdBufferDesc cmd_desc;
 	cmd_desc.current_queue = queue;
+	cmd_desc.use_push_constant = true;
+	cmd_desc.pc_desc = &pc_desc;
 	CmdBuffer* cmd;
 	add_cmd(&cmd_desc, &cmd);
 
 	uint32_t rgb_index = 0;
+
 
 	glEnable(GL_DEPTH_TEST);
 
@@ -303,16 +310,23 @@ auto main() -> int {
 		glClearColor(gBackGroundColor[0], gBackGroundColor[1], gBackGroundColor[2], 1.0f);
 		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-
 		mvp.view = glm::mat4(1.0f);
 		mvp.view = glm::lookAt(camera.pos, camera.pos + camera.front, camera.up);
 		mvp.proj = glm::perspective(glm::radians(fov), 800.0f / 600.0f, 0.1f, 100.0f);
-		for (int i = 0; i < 10; ++i)
+
+		BufferUpdateDesc update;
+		update.buffer = mvp_buf[frame_index];
+		update.size = sizeof(mvp);
+		resource_update_desc = &update;
+		begin_update_resource(resource_update_desc);
+
+		for (uint32_t i = 0; i < 10; ++i)
 		{
-			mvp.model = glm::mat4(1.0f);
-			mvp.model = glm::translate(mvp.model, cube_positions[i]);
+			mvp.model[i] = glm::mat4(1.0f);
+			mvp.model[i] = glm::translate(mvp.model[i], cube_positions[i]);
 			float angle = 20.0f * (i + 1);
-			mvp.model = glm::rotate(mvp.model, (float)glfwGetTime() * glm::radians(angle), glm::vec3(1.0f, 0.3f, 0.5f));
+			mvp.model[i] = glm::rotate(mvp.model[i], (float)glfwGetTime() * glm::radians(angle), glm::vec3(1.0f, 0.3f, 0.5f));
+			std::memcpy(update.mapped_data, &mvp, sizeof(mvp));
 
 			cmd_bind_pipeline(cmd, graphics_pipeline);
 			cmd_bind_vertex_buffer(cmd, vbo, 0, sizeof(float) * 5);
@@ -320,9 +334,10 @@ auto main() -> int {
 			cmd_bind_descriptor_set(cmd, set, frame_index);
 			cmd_bind_descriptor_set(cmd, cam, frame_index);
 			cmd_bind_descriptor_set(cmd, texture_set, 0);
-			cmd_update_buffer(cmd, mvp_buf[frame_index], 0, sizeof(mvp), &mvp);
+			cmd_bind_push_constant(cmd, &i);
 			cmd_draw_indexed(cmd, 36, 0, 0);
 		}
+		end_update_resource(resource_update_desc);
 		//cmd_draw(cmd, 0, 36);
 		queue_submit(queue);
 
