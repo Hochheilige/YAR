@@ -1,4 +1,5 @@
 #include <window.h>
+#include <imgui.h>
 #include <imgui_layer.h>
 #include <render.h>
 
@@ -379,6 +380,11 @@ void framebuffer_size_callback(GLFWwindow* window, int width, int height)
 
 void mouse_callback(GLFWwindow* window, double xposIn, double yposIn)
 {
+	if (ImGui::GetIO().WantCaptureMouse || 
+		glfwGetKey(window, GLFW_KEY_LEFT_ALT) != GLFW_PRESS) {
+		return;
+	}
+
 	float xpos = static_cast<float>(xposIn);
 	float ypos = static_cast<float>(yposIn);
 
