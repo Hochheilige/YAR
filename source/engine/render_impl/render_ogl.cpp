@@ -19,6 +19,8 @@
 #include <spirv_reflect.h>
 #include <spirv_glsl.hpp>
 #include <spirv_parser.hpp>
+#include <glm/glm.hpp>
+#include <glm/gtc/type_ptr.hpp>
 
 // ======================================= //
 //            Utils Variables              //
@@ -387,7 +389,6 @@ void util_create_shader_reflection(std::vector<uint8_t>& spirv, std::vector<Shad
     std::vector<SpvReflectDescriptorBinding*> descriptors(desc_size);
     result = spvReflectEnumerateDescriptorBindings(&module, &desc_size, descriptors.data());
 
-    uint32_t i = 0;
     for (auto& descriptor : descriptors)
     {
         ShaderResource resource;
@@ -395,11 +396,7 @@ void util_create_shader_reflection(std::vector<uint8_t>& spirv, std::vector<Shad
         resource.binding = descriptor->binding;
         resource.set = descriptor->set;
         resource.type = util_convert_spv_resource_type(descriptor->resource_type);
-        resource.index = i;
-
         resources.push_back(resource);
-
-        ++i;
     }
 
     spvReflectDestroyShaderModule(&module);
@@ -885,12 +882,14 @@ void gl_addDescriptorSet(DescriptorSetDesc* desc, DescriptorSet** set)
     new_set->max_set = desc->max_sets;
     new_set->program = desc->shader->program;
 
-    new (&new_set->descriptors) std::vector<ShaderResource>();
+    
+    std::vector<ShaderResource> tmp;
     std::copy_if(desc->shader->resources.begin(), desc->shader->resources.end(),
-        std::back_inserter(new_set->descriptors),
+        std::back_inserter(tmp),
         [=](ShaderResource& resource) {
             return resource.set == new_set->update_freq;
         });
+    new (&new_set->descriptors) std::set<ShaderResource>(tmp.begin(), tmp.end());
 
     new (&new_set->buffers) std::vector<std::vector<uint32_t>>();
     new (&new_set->textures) std::vector<std::vector<uint32_t>>();
@@ -966,7 +965,6 @@ void gl_addCmd(CmdBufferDesc* desc, CmdBuffer** cmd)
         if (pc_reflection != descriptors.end())
         {
             new_pc->binding = pc_reflection->binding;
-            new_pc->index = pc_reflection->index;
         }
 
         new_pc->size = desc->pc_desc->size;
@@ -1045,7 +1043,6 @@ void gl_cmdBindDescriptorSet(CmdBuffer* cmd, DescriptorSet* set, uint32_t index)
         {
             if (descriptor.type & kResourceTypeCBV && !set->buffers.empty())
             {
-                glUniformBlockBinding(set->program, descriptor.index, descriptor.binding);
                 glBindBufferBase(GL_UNIFORM_BUFFER, descriptor.binding, set->buffers[index]);
                 continue;
             }
@@ -1065,12 +1062,12 @@ void gl_cmdBindDescriptorSet(CmdBuffer* cmd, DescriptorSet* set, uint32_t index)
     });
 }
 
-void gl_cmdBindVertexBuffer(CmdBuffer* cmd, Buffer* buffer, uint32_t offset, uint32_t stride)
+void gl_cmdBindVertexBuffer(CmdBuffer* cmd, Buffer* buffer, uint32_t count, uint32_t offset, uint32_t stride)
 {
     GLuint& vao = current_vao;
     cmd->commands.push_back([=]() {
         glVertexArrayVertexBuffer(vao, 0, buffer->id, offset, stride); // maybe need to store binding?
-        for (int i = 0; i < 3; ++i)
+        for (int i = 0; i < count; ++i)
             glEnableVertexArrayAttrib(vao, i); // probably need to store somewhere
     });
 }
@@ -1088,13 +1085,13 @@ void gl_cmdBindPushConstant(CmdBuffer* cmd, void* data)
     uint32_t size = cmd->push_constant->size;
     uint32_t pc_id = cmd->push_constant->buffer->id;
     uint32_t shader = cmd->push_constant->shader_program;
-    uint32_t index = cmd->push_constant->index;
     uint32_t binding = cmd->push_constant->binding;
     std::vector<uint8_t> data_copy((uint8_t*)data, (uint8_t*)data + size);
 
+    glm::mat4 pc = *static_cast<glm::mat4*>(data);
+    
     cmd->commands.push_back([=]() {
-        glNamedBufferSubData(pc_id, 0, size, data_copy.data());
-        glUniformBlockBinding(shader, index, binding);
+        glNamedBufferSubData(pc_id, 0, size, glm::value_ptr(pc));
         glBindBufferBase(GL_UNIFORM_BUFFER, binding, pc_id);
     });
 }

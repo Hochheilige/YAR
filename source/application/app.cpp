@@ -15,13 +15,6 @@
 
 #include <iostream>
 
-struct MVP
-{
-	glm::mat4 model[10];
-	glm::mat4 view;
-	glm::mat4 proj;
-}mvp;
-
 struct Camera
 {
 	glm::vec3 pos = glm::vec3(0.0f, 0.0f, 3.0f);
@@ -29,15 +22,41 @@ struct Camera
 	glm::vec3 up = glm::vec3(0.0f, 1.0f, 0.0f);
 } camera;
 
+struct Material
+{
+	glm::vec3 ambient;
+	glm::vec3 diffuse;
+	glm::vec3 specular;
+} material;
+
+struct LightSource
+{
+	glm::vec3 position;
+	float pad1;
+	glm::vec3 color;
+	float pad2;
+};
+
+struct UBO
+{
+	glm::mat4 view;
+	glm::mat4 proj;
+	LightSource light;
+	glm::vec3 view_pos;
+	float pad;
+}ubo;
+
 bool firstMouse = true;
 float yaw = -90.0f;	
 float pitch = 0.0f;
-float lastX = 800.0f / 2.0;
-float lastY = 600.0 / 2.0;
+float lastX = 1920.0f / 2.0;
+float lastY = 1080.0 / 2.0;
 float fov = 45.0f;
 
 float deltaTime = 0.0f;	
 float lastFrame = 0.0f;
+
+glm::vec3* light_pos = nullptr;
 
 void framebuffer_size_callback(GLFWwindow* window, int width, int height);
 void mouse_callback(GLFWwindow* window, double xpos, double ypos);
@@ -53,36 +72,36 @@ auto main() -> int {
 	add_swapchain(true, &swapchain);
 
 	float vertices[] = {
-		// positions          // tex coords
-		-0.5f, -0.5f,  0.5f,  0.0f, 0.0f, 
-		 0.5f, -0.5f,  0.5f,  1.0f, 0.0f, 
-		 0.5f,  0.5f,  0.5f,  1.0f, 1.0f, 
-		-0.5f,  0.5f,  0.5f,  0.0f, 1.0f, 
+		   // positions    // tex coords    // normals
+		-0.5f, -0.5f,  0.5f,  0.0f, 0.0f, 0.0f, 0.0f, 1.0f,
+		 0.5f, -0.5f,  0.5f,  1.0f, 0.0f, 0.0f, 0.0f, 1.0f,
+		 0.5f,  0.5f,  0.5f,  1.0f, 1.0f, 0.0f, 0.0f, 1.0f,
+		-0.5f,  0.5f,  0.5f,  0.0f, 1.0f, 0.0f, 0.0f, 1.0f,
 
-		-0.5f, -0.5f, -0.5f,  0.0f, 0.0f, 
-		 0.5f, -0.5f, -0.5f,  1.0f, 0.0f, 
-		 0.5f,  0.5f, -0.5f,  1.0f, 1.0f, 
-		-0.5f,  0.5f, -0.5f,  0.0f, 1.0f, 
+		-0.5f, -0.5f, -0.5f,  0.0f, 0.0f, 0.0f, 0.0f, -1.0f,
+		 0.5f, -0.5f, -0.5f,  1.0f, 0.0f, 0.0f, 0.0f, -1.0f,
+		 0.5f,  0.5f, -0.5f,  1.0f, 1.0f, 0.0f, 0.0f, -1.0f,
+		-0.5f,  0.5f, -0.5f,  0.0f, 1.0f, 0.0f, 0.0f, -1.0f,
 
-		-0.5f, -0.5f, -0.5f,  1.0f, 0.0f, 
-		-0.5f, -0.5f,  0.5f,  0.0f, 0.0f, 
-		-0.5f,  0.5f,  0.5f,  0.0f, 1.0f, 
-		-0.5f,  0.5f, -0.5f,  1.0f, 1.0f, 
+		-0.5f, -0.5f, -0.5f,  1.0f, 0.0f, -1.0f, 0.0f, 0.0f,
+		-0.5f, -0.5f,  0.5f,  0.0f, 0.0f, -1.0f, 0.0f, 0.0f,
+		-0.5f,  0.5f,  0.5f,  0.0f, 1.0f, -1.0f, 0.0f, 0.0f,
+		-0.5f,  0.5f, -0.5f,  1.0f, 1.0f, -1.0f, 0.0f, 0.0f,
 
-		 0.5f, -0.5f, -0.5f,  0.0f, 0.0f, 
-		 0.5f, -0.5f,  0.5f,  1.0f, 0.0f, 
-		 0.5f,  0.5f,  0.5f,  1.0f, 1.0f, 
-		 0.5f,  0.5f, -0.5f,  0.0f, 1.0f, 
+		 0.5f, -0.5f, -0.5f,  0.0f, 0.0f, 1.0f, 0.0f, 0.0f,
+		 0.5f, -0.5f,  0.5f,  1.0f, 0.0f, 1.0f, 0.0f, 0.0f,
+		 0.5f,  0.5f,  0.5f,  1.0f, 1.0f, 1.0f, 0.0f, 0.0f,
+		 0.5f,  0.5f, -0.5f,  0.0f, 1.0f, 1.0f, 0.0f, 0.0f,
 
-		 -0.5f, -0.5f, -0.5f,  0.0f, 1.0f,
-		  0.5f, -0.5f, -0.5f,  1.0f, 1.0f,
-		  0.5f, -0.5f,  0.5f,  1.0f, 0.0f,
-		 -0.5f, -0.5f,  0.5f,  0.0f, 0.0f,
+		-0.5f, -0.5f, -0.5f,  0.0f, 1.0f, 0.0f, -1.0f, 0.0f,
+		 0.5f, -0.5f, -0.5f,  1.0f, 1.0f, 0.0f, -1.0f, 0.0f,
+		 0.5f, -0.5f,  0.5f,  1.0f, 0.0f, 0.0f, -1.0f, 0.0f,
+		-0.5f, -0.5f,  0.5f,  0.0f, 0.0f, 0.0f, -1.0f, 0.0f,
 
-		 -0.5f,  0.5f, -0.5f,  0.0f, 0.0f,
-		  0.5f,  0.5f, -0.5f,  1.0f, 0.0f,
-		  0.5f,  0.5f,  0.5f,  1.0f, 1.0f,
-		 -0.5f,  0.5f,  0.5f,  0.0f, 1.0f 
+		-0.5f,  0.5f, -0.5f,  0.0f, 0.0f, 0.0f, 1.0f, 0.0f,
+		 0.5f,  0.5f, -0.5f,  1.0f, 0.0f, 0.0f, 1.0f, 0.0f,
+		 0.5f,  0.5f,  0.5f,  1.0f, 1.0f, 0.0f, 1.0f, 0.0f,
+		-0.5f,  0.5f,  0.5f,  0.0f, 1.0f, 0.0f, 1.0f, 0.0f,
 	};
 
 
@@ -119,8 +138,9 @@ auto main() -> int {
 		glm::vec3(-1.3f,  1.0f, -1.5f)
 	};
 
-
-	float rgb[4] = { 0.0f, 0.0f, 0.0f, 0.0f };
+	light_pos = &cube_positions[0];
+	ubo.light.position = *light_pos;
+	ubo.light.color = glm::vec3(1.0f, 1.0f, 0.0f);
 
 	int32_t width, height, channels;
 	std::string name = "assets/hp-logo.png";
@@ -163,17 +183,16 @@ auto main() -> int {
 
 	constexpr uint32_t image_count = 2;
 	uint32_t frame_index = 0;
-	buffer_desc.size = sizeof(rgb);
-	buffer_desc.flags = kBufferFlagMapWrite;
-	Buffer* ubos[image_count] = { nullptr, nullptr };
-	for (auto& ubo : ubos)
-		add_buffer(&buffer_desc, &ubo);
 
-	buffer_desc.size = sizeof(mvp);
-	buffer_desc.flags |= kBufferFlagDynamic;
-	Buffer* mvp_buf[image_count] = { nullptr, nullptr };
-	for (auto& cam : mvp_buf)
-		add_buffer(&buffer_desc, &cam);
+	buffer_desc.size = sizeof(ubo);
+	buffer_desc.flags = kBufferFlagMapWrite;
+	Buffer* ubo_buf[image_count] = { nullptr, nullptr };
+	for (auto& buf : ubo_buf)
+		add_buffer(&buffer_desc, &buf);
+
+	buffer_desc.size = sizeof(material);
+	Buffer* mat_buf;
+	add_buffer(&buffer_desc, &mat_buf);
 
 	// Need to make something with shaders path 
 	ShaderLoadDesc shader_load_desc = {};
@@ -200,18 +219,13 @@ auto main() -> int {
 		std::memcpy(update_desc.mapped_data, indexes, sizeof(indexes));
 		end_update_resource(resource_update_desc);
 
-		update_desc.buffer = ubos[frame_index];
-		update_desc.size = sizeof(rgb);
+		material.ambient = glm::vec3(1.0f, 0.0f, 1.0f);
+		update_desc.buffer = mat_buf;
+		update_desc.size = sizeof(material);
 		begin_update_resource(resource_update_desc);
-		std::memcpy(update_desc.mapped_data, rgb, sizeof(rgb));
-		end_update_resource(resource_update_desc);
-
-		update_desc.buffer = mvp_buf[frame_index];
-		update_desc.size = sizeof(mvp);
-		begin_update_resource(resource_update_desc);
-		std::memcpy(update_desc.mapped_data, &mvp, sizeof(mvp));
-		end_update_resource(resource_update_desc);
-
+		std::memcpy(update_desc.mapped_data, &material, sizeof(material));
+		end_update_resource(resource_update_desc);		
+		
 		TextureUpdateDesc tex_update_desc{};
 		resource_update_desc = &tex_update_desc;
 		tex_update_desc.size = width * height * channels;
@@ -223,32 +237,27 @@ auto main() -> int {
 	}
 
 	VertexLayout layout = {0};
-	layout.attrib_count = 2;
+	layout.attrib_count = 3;
 	layout.attribs[0].size = 3;
 	layout.attribs[0].format = GL_FLOAT;
 	layout.attribs[0].offset = 0;
 	layout.attribs[1].size = 2;
 	layout.attribs[1].format = GL_FLOAT;
 	layout.attribs[1].offset = 3 * sizeof(float);
+	layout.attribs[2].size = 3;
+	layout.attribs[2].format = GL_FLOAT;
+	layout.attribs[2].offset = 5 * sizeof(float);
 
 	DescriptorSetDesc set_desc;
 	set_desc.max_sets = image_count;
-	set_desc.update_freq = kUpdateFreqPerFrame;
 	set_desc.shader = shader;
-	DescriptorSet* set;
-	add_descriptor_set(&set_desc, &set);
+	set_desc.update_freq = kUpdateFreqPerFrame;
+	DescriptorSet* ubo_desc;
+	add_descriptor_set(&set_desc, &ubo_desc);
 
-	DescriptorSet* cam;
-	add_descriptor_set(&set_desc, &cam);
-
-	UpdateDescriptorSetDesc update_set_desc;
-	// Maybe it can be done using loop for all buffers
-	update_set_desc.buffers = { ubos[0], ubos[1] };
-	update_descriptor_set(&update_set_desc, set);
-
-	update_set_desc = {};
-	update_set_desc.buffers = { mvp_buf[0], mvp_buf[1] };
-	update_descriptor_set(&update_set_desc, cam);
+	UpdateDescriptorSetDesc update_set_desc{};
+	update_set_desc.buffers = { ubo_buf[0], ubo_buf[1] };
+	update_descriptor_set(&update_set_desc, ubo_desc);
 
 	set_desc.max_sets = 1;
 	set_desc.update_freq = kUpdateFreqNone;
@@ -257,6 +266,7 @@ auto main() -> int {
 	update_set_desc = {};
 	update_set_desc.textures = { texture };
 	update_set_desc.samplers = { sampler };
+	update_set_desc.buffers = { mat_buf };
 	update_descriptor_set(&update_set_desc, texture_set);
 
 	PipelineDesc pipeline_desc = { 0 };
@@ -270,10 +280,12 @@ auto main() -> int {
 	CmdQueue* queue;
 	add_queue(&queue_desc, &queue);
 
+	// TODO: Don't use push constant with matrices
+	// use it to push indeces instead
 	PushConstantDesc pc_desc{};
 	pc_desc.name = "push_constant";
 	pc_desc.shader = shader;
-	pc_desc.size = sizeof(uint32_t);
+	pc_desc.size = sizeof(glm::mat4);
 	CmdBufferDesc cmd_desc;
 	cmd_desc.current_queue = queue;
 	cmd_desc.use_push_constant = true;
@@ -281,7 +293,7 @@ auto main() -> int {
 	CmdBuffer* cmd;
 	add_cmd(&cmd_desc, &cmd);
 
-	uint32_t rgb_index = 0;
+	glm::mat4 model{};
 
 
 	glEnable(GL_DEPTH_TEST);
@@ -294,52 +306,44 @@ auto main() -> int {
 
 		process_input((GLFWwindow*)get_window());
 
-
-		rgb[rgb_index] = sin(glfwGetTime()) * 0.5f + 0.5f;
-		{ // update buffer data
-			BufferUpdateDesc update;
-			update.buffer = ubos[frame_index];
-			update.size = sizeof(rgb);
-			resource_update_desc = &update;
-			begin_update_resource(resource_update_desc);
-			std::memcpy(update.mapped_data, rgb, sizeof(rgb));
-			end_update_resource(resource_update_desc);
-		}
-
 		imgui_begin_frame();
 
 		glClearColor(gBackGroundColor[0], gBackGroundColor[1], gBackGroundColor[2], 1.0f);
 		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-		mvp.view = glm::mat4(1.0f);
-		mvp.view = glm::lookAt(camera.pos, camera.pos + camera.front, camera.up);
-		mvp.proj = glm::perspective(glm::radians(fov), 800.0f / 600.0f, 0.1f, 100.0f);
-
+		ubo.light.position = *light_pos;
+		ubo.view_pos = camera.pos;
+		ubo.view = glm::mat4(1.0f);
+		ubo.view = glm::lookAt(camera.pos, camera.pos + camera.front, camera.up);
+		ubo.proj = glm::perspective(glm::radians(fov), 1920.0f / 1080.0f, 0.1f, 100.0f);
 		BufferUpdateDesc update;
-		update.buffer = mvp_buf[frame_index];
-		update.size = sizeof(mvp);
+		update.buffer = ubo_buf[frame_index];
+		update.size = sizeof(ubo);
 		resource_update_desc = &update;
 		begin_update_resource(resource_update_desc);
+		std::memcpy(update.mapped_data, &ubo, sizeof(ubo));
+		end_update_resource(resource_update_desc);
 
 		for (uint32_t i = 0; i < 10; ++i)
 		{
-			mvp.model[i] = glm::mat4(1.0f);
-			mvp.model[i] = glm::translate(mvp.model[i], cube_positions[i]);
-			float angle = 20.0f * (i + 1);
-			mvp.model[i] = glm::rotate(mvp.model[i], (float)glfwGetTime() * glm::radians(angle), glm::vec3(1.0f, 0.3f, 0.5f));
-			std::memcpy(update.mapped_data, &mvp, sizeof(mvp));
+			model = glm::mat4(1.0f);
+			model = glm::translate(model, cube_positions[i]);
+			if (i != 0) // i == 0 light position
+			{
+				float angle = 20.0f;// *(i + 1);
+				model = glm::rotate(model, (float)glfwGetTime() * glm::radians(angle), glm::vec3(1.0f, 0.3f, 0.5f));
+			}
 
 			cmd_bind_pipeline(cmd, graphics_pipeline);
-			cmd_bind_vertex_buffer(cmd, vbo, 0, sizeof(float) * 5);
+			// looks not good
+			cmd_bind_vertex_buffer(cmd, vbo, layout.attrib_count, 0, sizeof(float) * 8);
 			cmd_bind_index_buffer(cmd, ebo);
-			cmd_bind_descriptor_set(cmd, set, frame_index);
-			cmd_bind_descriptor_set(cmd, cam, frame_index);
+			cmd_bind_descriptor_set(cmd, ubo_desc, frame_index);
 			cmd_bind_descriptor_set(cmd, texture_set, 0);
-			cmd_bind_push_constant(cmd, &i);
+			cmd_bind_push_constant(cmd, glm::value_ptr(model));
 			cmd_draw_indexed(cmd, 36, 0, 0);
 		}
-		end_update_resource(resource_update_desc);
-		//cmd_draw(cmd, 0, 36);
+		
 		queue_submit(queue);
 
         imgui_render();
@@ -349,7 +353,6 @@ auto main() -> int {
         glfwPollEvents();
 		
 		frame_index = (frame_index + 1) % image_count;
-		rgb_index = (rgb_index + 1) % 3;
 	}
 
 	terminate_window();
@@ -369,6 +372,16 @@ void process_input(GLFWwindow* window)
 		camera.pos -= glm::normalize(glm::cross(camera.front, camera.up)) * cameraSpeed;
 	if (glfwGetKey(window, GLFW_KEY_D) == GLFW_PRESS)
 		camera.pos += glm::normalize(glm::cross(camera.front, camera.up)) * cameraSpeed;
+
+	// light source move
+	if (glfwGetKey(window, GLFW_KEY_UP) == GLFW_PRESS)
+		light_pos->y += cameraSpeed;
+	if (glfwGetKey(window, GLFW_KEY_DOWN) == GLFW_PRESS)
+		light_pos->y -= cameraSpeed;
+	if (glfwGetKey(window, GLFW_KEY_LEFT) == GLFW_PRESS)
+		light_pos->x -= cameraSpeed;
+	if (glfwGetKey(window, GLFW_KEY_RIGHT) == GLFW_PRESS)
+		light_pos->x += cameraSpeed;
 }
 
 void framebuffer_size_callback(GLFWwindow* window, int width, int height)

@@ -8,6 +8,7 @@
 #include <queue>
 #include <functional>
 #include <variant>
+#include <set>
 
 // ======================================= //
 //            Load Structures              //
@@ -237,8 +238,11 @@ struct ShaderResource
     ResourceType type;
     uint32_t binding;
     uint32_t set;
-    uint32_t index;
     // maybe also need to add texture specific things
+
+    bool operator<(const ShaderResource& other) const {
+        return name < other.name;
+    }
 };
 
 struct ShaderStageLoadDesc
@@ -339,7 +343,7 @@ struct DescriptorSet
     DescriptorSetUpdateFrequency update_freq;
     uint32_t max_set;
     uint32_t program; // only for gl
-    std::vector<ShaderResource> descriptors;
+    std::set<ShaderResource> descriptors;
 
     std::vector<uint32_t> buffers; // only for gl
     std::vector<uint32_t> samplers;
@@ -358,7 +362,6 @@ struct PushConstant
     Buffer* buffer;
     uint32_t size;
     uint32_t binding;
-    uint32_t index;
     uint32_t shader_program;
 };
 
@@ -453,7 +456,7 @@ DECLARE_YAR_RENDER_FUNC(void, remove_buffer, Buffer* buffer);
 DECLARE_YAR_RENDER_FUNC(void, update_descriptor_set, UpdateDescriptorSetDesc* desc, DescriptorSet* set);
 DECLARE_YAR_RENDER_FUNC(void, cmd_bind_pipeline, CmdBuffer* cmd, Pipeline* pipeline);
 DECLARE_YAR_RENDER_FUNC(void, cmd_bind_descriptor_set, CmdBuffer* cmd, DescriptorSet* set, uint32_t index);
-DECLARE_YAR_RENDER_FUNC(void, cmd_bind_vertex_buffer, CmdBuffer* cmd, Buffer* buffer, uint32_t offset, uint32_t stride);
+DECLARE_YAR_RENDER_FUNC(void, cmd_bind_vertex_buffer, CmdBuffer* cmd, Buffer* buffer, uint32_t count, uint32_t offset, uint32_t stride);
 DECLARE_YAR_RENDER_FUNC(void, cmd_bind_index_buffer, CmdBuffer* cmd, Buffer* buffer); // maybe for other render api there should be more params
 DECLARE_YAR_RENDER_FUNC(void, cmd_bind_push_constant, CmdBuffer* cmd, void* data);
 DECLARE_YAR_RENDER_FUNC(void, cmd_draw, CmdBuffer* cmd, uint32_t first_vertex, uint32_t count);
