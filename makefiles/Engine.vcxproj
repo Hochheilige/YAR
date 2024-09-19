@@ -1,4 +1,4 @@
-<?xml version="1.0" encoding="utf-8"?>
+﻿<?xml version="1.0" encoding="utf-8"?>
 <Project DefaultTargets="Build" ToolsVersion="15.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <PropertyGroup Label="Globals">
     <ProjectGuid>{18A19EC8-E3FD-4035-8BB9-A02ACD5A32BA}</ProjectGuid>
@@ -11,7 +11,7 @@
   <ItemDefinitionGroup>
     <ClCompile>
       <AdditionalIncludeDirectories>
-        $(ExternalDir)glad\include\;$(ExternalDir)glfw\include\;$(ExternalDir)imgui\;$(ExternalDir)spirv-reflect\;$(ExternalDir)spirv-cross\;%(AdditionalIncludeDirectories)
+        $(ExternalDir)glad\include\;$(ExternalDir)glfw\include\;$(ExternalDir)imgui\;$(ExternalDir)spirv-reflect\;$(ExternalDir)spirv-cross\;$(ExternalDir)glm\;%(AdditionalIncludeDirectories)
       </AdditionalIncludeDirectories>
       <RuntimeLibrary Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">MultiThreadedDebugDLL</RuntimeLibrary>
       <LanguageStandard>stdcpp20</LanguageStandard>

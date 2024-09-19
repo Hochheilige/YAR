@@ -21,6 +21,12 @@
     <PostBuildEvent>
       <Command>xcopy /E /I /Y "$(SrcDir)shaders" "$(ProjectOutputDir)shaders"</Command>
     </PostBuildEvent>
+    <PreBuildEvent>
+      <Command Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">scripts/post_build.bat $(SrcDir) $(ProjectOutputDir)</Command>
+    </PreBuildEvent>
+    <PreBuildEvent>
+      <Command Condition="'$(Configuration)|$(Platform)'=='Release|x64'">scripts/post_build.bat $(SrcDir) $(ProjectOutputDir)</Command>
+    </PreBuildEvent>
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClCompile Include="$(SrcDir)application\app.cpp" />
