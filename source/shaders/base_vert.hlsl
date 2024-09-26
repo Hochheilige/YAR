@@ -54,6 +54,7 @@ struct MVP
 {
     float4x4 view;
     float4x4 proj;
+    float4x4 model[10];
 };
 
 struct LightSource
@@ -72,7 +73,7 @@ struct Camera
 
 cbuffer push_constant : register(b0, space2)
 {
-    float4x4 model;
+    uint index;
 };
 
 cbuffer ubo : register(b1, space1)
@@ -84,6 +85,7 @@ cbuffer ubo : register(b1, space1)
 
 VSOutput main(VSInput input) {
     VSOutput output;
+    float4x4 model = mvp.model[index];
     output.position = mul(mul(mul(mvp.proj, mvp.view), model), float4(input.position, 1.0f));
     output.frag_pos = mul(model, float4(input.position, 1.0f));
     output.tex_coord = input.tex_coord;

@@ -12,6 +12,7 @@ struct MVP
 {
     float4x4 view;
     float4x4 proj;
+    float4x4 model[10];
 };
 
 struct Material
@@ -42,9 +43,14 @@ cbuffer ubo : register(b1, space1)
     Camera cam;
 };
 
+cbuffer push_constant : register(b0, space2)
+{
+    uint index;
+};
+
 cbuffer mat : register(b3, space0)
 {
-    Material material;
+    Material material[10];
 };
 
 float4 main(PSInput input) : SV_TARGET {

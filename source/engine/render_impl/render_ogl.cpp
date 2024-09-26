@@ -1087,11 +1087,9 @@ void gl_cmdBindPushConstant(CmdBuffer* cmd, void* data)
     uint32_t shader = cmd->push_constant->shader_program;
     uint32_t binding = cmd->push_constant->binding;
     std::vector<uint8_t> data_copy((uint8_t*)data, (uint8_t*)data + size);
-
-    glm::mat4 pc = *static_cast<glm::mat4*>(data);
     
     cmd->commands.push_back([=]() {
-        glNamedBufferSubData(pc_id, 0, size, glm::value_ptr(pc));
+        glNamedBufferSubData(pc_id, 0, size, data_copy.data());
         glBindBufferBase(GL_UNIFORM_BUFFER, binding, pc_id);
     });
 }

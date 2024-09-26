@@ -41,6 +41,7 @@ struct UBO
 {
 	glm::mat4 view;
 	glm::mat4 proj;
+	glm::mat4 model[10];
 	LightSource light;
 	glm::vec3 view_pos;
 	float pad;
@@ -285,7 +286,7 @@ auto main() -> int {
 	PushConstantDesc pc_desc{};
 	pc_desc.name = "push_constant";
 	pc_desc.shader = shader;
-	pc_desc.size = sizeof(glm::mat4);
+	pc_desc.size = sizeof(uint32_t);
 	CmdBufferDesc cmd_desc;
 	cmd_desc.current_queue = queue;
 	cmd_desc.use_push_constant = true;
@@ -316,13 +317,6 @@ auto main() -> int {
 		ubo.view = glm::mat4(1.0f);
 		ubo.view = glm::lookAt(camera.pos, camera.pos + camera.front, camera.up);
 		ubo.proj = glm::perspective(glm::radians(fov), 1920.0f / 1080.0f, 0.1f, 100.0f);
-		BufferUpdateDesc update;
-		update.buffer = ubo_buf[frame_index];
-		update.size = sizeof(ubo);
-		resource_update_desc = &update;
-		begin_update_resource(resource_update_desc);
-		std::memcpy(update.mapped_data, &ubo, sizeof(ubo));
-		end_update_resource(resource_update_desc);
 
 		for (uint32_t i = 0; i < 10; ++i)
 		{
@@ -333,14 +327,26 @@ auto main() -> int {
 				float angle = 20.0f;// *(i + 1);
 				model = glm::rotate(model, (float)glfwGetTime() * glm::radians(angle), glm::vec3(1.0f, 0.3f, 0.5f));
 			}
+			ubo.model[i] = model;
+		}
 
+		BufferUpdateDesc update;
+		update.buffer = ubo_buf[frame_index];
+		update.size = sizeof(ubo);
+		resource_update_desc = &update;
+		begin_update_resource(resource_update_desc);
+		std::memcpy(update.mapped_data, &ubo, sizeof(ubo));
+		end_update_resource(resource_update_desc);
+
+		for (uint32_t i = 0; i < 10; ++i)
+		{
 			cmd_bind_pipeline(cmd, graphics_pipeline);
 			// looks not good
 			cmd_bind_vertex_buffer(cmd, vbo, layout.attrib_count, 0, sizeof(float) * 8);
 			cmd_bind_index_buffer(cmd, ebo);
 			cmd_bind_descriptor_set(cmd, ubo_desc, frame_index);
 			cmd_bind_descriptor_set(cmd, texture_set, 0);
-			cmd_bind_push_constant(cmd, glm::value_ptr(model));
+			cmd_bind_push_constant(cmd, &i);
 			cmd_draw_indexed(cmd, 36, 0, 0);
 		}
 		
