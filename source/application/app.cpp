@@ -22,12 +22,15 @@ struct Camera
 	glm::vec3 up = glm::vec3(0.0f, 1.0f, 0.0f);
 } camera;
 
-struct Material
+struct  Material
 {
 	glm::vec3 ambient;
+	float pad1;
 	glm::vec3 diffuse;
+	float pad2;
 	glm::vec3 specular;
-} material;
+	float shinines;
+} material[10];
 
 struct LightSource
 {
@@ -220,8 +223,67 @@ auto main() -> int {
 		std::memcpy(update_desc.mapped_data, indexes, sizeof(indexes));
 		end_update_resource(resource_update_desc);
 
-		material.ambient = glm::vec3(1.0f, 0.0f, 1.0f);
+		// emerald
+		material[0].ambient = glm::vec3(0.0215f, 0.1745f, 0.0215f);
+		material[0].diffuse = glm::vec3(0.07568f, 0.61424f, 0.07568f);
+		material[0].specular = glm::vec3(0.633f, 0.727811f, 0.633f);
+		material[0].shinines = 128u * 0.6f;
+		
+		// emerald
+		material[1].ambient = glm::vec3(0.0215f, 0.1745f, 0.0215f);
+		material[1].diffuse = glm::vec3(0.07568f, 0.61424f, 0.07568f);
+		material[1].specular = glm::vec3(0.633f, 0.727811f, 0.633f);
+		material[1].shinines = 128u * 0.6f;;
+		
+		// green plastic
+		material[2].ambient = glm::vec3(0.0f, 0.0f, 0.0f);
+		material[2].diffuse = glm::vec3(0.1f, 0.35, 0.1f);
+		material[2].specular = glm::vec3(0.45f, 0.55f, 0.45f);
+		material[2].shinines = 128u * 0.25f;
+
+		// red rubber
+		material[3].ambient = glm::vec3(0.05f, 0.0f, 0.0f);
+		material[3].diffuse = glm::vec3(0.5f, 0.4f, 0.4f);
+		material[3].specular = glm::vec3(0.7f, 0.04f, 0.7f);
+		material[3].shinines = 128u * 0.078125f;
+
+		// silver
+		material[4].ambient = glm::vec3(0.19225f, 0.19225f, 0.19225f);
+		material[4].diffuse = glm::vec3(0.50754f, 0.50754, 0.50754f);
+		material[4].specular = glm::vec3(0.508273f, 0.508273f, 0.508273f);
+		material[4].shinines = 128u * 0.4f;
+
+		// gold 
+		material[5].ambient = glm::vec3(0.24725f, 0.1995f, 0.0745f);
+		material[5].diffuse = glm::vec3(0.75164f, 0.60648, 0.22648f);
+		material[5].specular = glm::vec3(0.628281f, 0.555802f, 0.366065f);
+		material[5].shinines = 128u * 0.4f;
+
+		// ruby
+		material[6].ambient = glm::vec3(0.1745, 0.01175, 0.01175);
+		material[6].diffuse = glm::vec3(0.61424, 0.04136, 0.04136);
+		material[6].specular = glm::vec3(0.727811, 0.626959, 0.626959);
+		material[6].shinines = 128u * 0.6f;
+
+		// pearl
+		material[7].ambient = glm::vec3(0.25, 0.20725, 0.20725);
+		material[7].diffuse = glm::vec3(1.0f, 0.829, 0.829);
+		material[7].specular = glm::vec3(0.296648, 0.296648, 0.296648);
+		material[7].shinines = 128u * 0.088;
+
+		// jade 
+		material[8].ambient = glm::vec3(0.135, 0.2225, 0.1575);
+		material[8].diffuse = glm::vec3(0.54, 0.89, 0.63);
+		material[8].specular = glm::vec3(0.316228, 0.316228, 0.316228);
+		material[8].shinines = 128u * 0.1f;
+
+		// turquoise
+		material[9].ambient = glm::vec3(0.1, 0.18725, 0.1745);
+		material[9].diffuse = glm::vec3(0.396, 0.74151, 0.69102);
+		material[9].specular = glm::vec3(0.297254, 0.30829, 0.306678);
+		material[9].shinines = 128u * 0.1f;
 		update_desc.buffer = mat_buf;
+
 		update_desc.size = sizeof(material);
 		begin_update_resource(resource_update_desc);
 		std::memcpy(update_desc.mapped_data, &material, sizeof(material));
@@ -286,7 +348,7 @@ auto main() -> int {
 	PushConstantDesc pc_desc{};
 	pc_desc.name = "push_constant";
 	pc_desc.shader = shader;
-	pc_desc.size = sizeof(uint32_t);
+	pc_desc.size = sizeof(uint32_t) * 4;
 	CmdBufferDesc cmd_desc;
 	cmd_desc.current_queue = queue;
 	cmd_desc.use_push_constant = true;

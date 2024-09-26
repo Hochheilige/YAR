@@ -20,20 +20,24 @@ struct Material
     float3 ambient;
     float3 diffuse;
     float3 specular;
+    float shinines;
 };
 
 struct LightSource
 {
     float3 position;
-    float pad1;
     float3 color;
-    float pad2;
 };
 
 struct Camera
 {
     float3 pos;
-    float pad;
+};
+
+
+cbuffer push_constant : register(b0, space2)
+{
+    uint index;
 };
 
 cbuffer ubo : register(b1, space1)
@@ -43,37 +47,33 @@ cbuffer ubo : register(b1, space1)
     Camera cam;
 };
 
-cbuffer push_constant : register(b0, space2)
-{
-    uint index;
-};
-
-cbuffer mat : register(b3, space0)
+cbuffer mat : register(b2, space0)
 {
     Material material[10];
 };
 
 float4 main(PSInput input) : SV_TARGET {
     float3 textureColor = logo.Sample(samplerState, input.tex_coord);
+    Material mater = material[index];
 
     // calculate ambient ligth
-    float ambient_str = 0.1f;
-    float3 ambient = ambient_str * ls.color;
+    float3 ambient = mater.ambient * ls.color;
 
     // calculate diffuse light
     float3 norm = normalize(input.normal);
     float3 light_dir = normalize(ls.position - input.frag_pos);
     float diff = max(dot(norm, light_dir), 0.0f);
-    float3 diffuse = diff * ls.color;
+    float3 diffuse = (diff * mater.diffuse) * ls.color;
 
     // calculate specular light
-    float specular_str = 0.5;
     float3 view_dir = normalize(cam.pos - input.frag_pos);
     float3 reflect_dir = reflect(-light_dir, norm);
-    float spec = pow(max(dot(view_dir, reflect_dir), 0.0), 32);
-    float3 specular = specular_str * spec * ls.color;
+    float spec = pow(max(dot(view_dir, reflect_dir), 0.0), mater.shinines);
+    float3 specular = (mater.specular * spec) * ls.color;
 
     float3 mat = ambient + diffuse + specular;
-    float4 res = float4(mat * textureColor, 1.0f);
+
+    // 0th cube is LightSource, so it renders with light source color
+    float4 res = lerp(float4(ls.color, 1.0f), float4(mat, 1.0f), index > 0);
     return res;
 }

@@ -57,18 +57,23 @@ struct MVP
     float4x4 model[10];
 };
 
+struct Material
+{
+    float3 ambient;
+    float3 diffuse;
+    float3 specular;
+    float shinines;
+};
+
 struct LightSource
 {
     float3 position;
-    float pad1;
     float3 color;
-    float pad2;
 };
 
 struct Camera
 {
     float3 pos;
-    float pad;
 };
 
 cbuffer push_constant : register(b0, space2)
@@ -81,6 +86,11 @@ cbuffer ubo : register(b1, space1)
     MVP mvp;
     LightSource ls;
     Camera cam;
+};
+
+cbuffer mat : register(b2, space0)
+{
+    Material material[10];
 };
 
 VSOutput main(VSInput input) {
