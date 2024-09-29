@@ -225,10 +225,10 @@ MAKE_ENUM_FLAG(uint8_t, ShaderStage);
 enum ResourceType : uint8_t
 {
     kResourceTypeUndefined = 0x00000000,
-    kResourceTypeSampler = 0x00000001,
-    kResourceTypeCBV = 0x00000002,
-    kResourceTypeSRV = 0x00000004,
-    kResourceTypeUAV = 0x00000008,
+    kResourceTypeCBV = 0x00000001,
+    kResourceTypeSRV = 0x00000002,
+    kResourceTypeUAV = 0x00000004,
+    kResourceTypeSampler = 0x00000008,
 };
 MAKE_ENUM_FLAG(uint8_t, ResourceType);
 
@@ -241,7 +241,9 @@ struct ShaderResource
     // maybe also need to add texture specific things
 
     bool operator<(const ShaderResource& other) const {
-        return name < other.name;
+        if (type == other.type)
+            return name < other.name;
+        return type < other.type;
     }
 };
 
@@ -262,7 +264,6 @@ struct ShaderStageDesc
 {
     std::vector<uint8_t> byte_code;
     std::string_view entry_point;
-    uint32_t shader; // Only for gl
 };
 
 struct ShaderDesc
@@ -326,10 +327,10 @@ struct DescriptorSetDesc
 
 struct UpdateDescriptorSetDesc
 {
-    std::vector<Buffer*> buffers;
-    std::vector<Texture*> textures;
-    std::vector<Sampler*> samplers;
-    // there should be a texture vector as well
+    uint32_t index;
+    std::vector<std::pair<std::string, Buffer*>> buffers;
+    std::vector<std::pair<std::string, Texture*>> textures;
+    std::vector<std::pair<std::string, Sampler*>> samplers;
 };
 
 // Idea of Descriptor Set doesn't look really useful in OpenGL
@@ -345,9 +346,9 @@ struct DescriptorSet
     uint32_t program; // only for gl
     std::set<ShaderResource> descriptors;
 
-    std::vector<uint32_t> buffers; // only for gl
-    std::vector<uint32_t> samplers;
-    std::vector<uint32_t> textures;
+    std::vector<DescriptorIndexMap> buffers; // only for gl
+    std::vector<DescriptorIndexMap> samplers;
+    std::vector<DescriptorIndexMap> textures;
 };
 
 struct PushConstantDesc

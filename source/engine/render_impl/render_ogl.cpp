@@ -187,7 +187,7 @@ bool util_compile_hlsl_to_spirv(ShaderStageLoadDesc* load_desc, std::vector<uint
 
     // Prepare the arguments for the compilation
     LPCWSTR arguments[] = {
-        L"-spirv", L"-fspv-target-env=vulkan1.2"              // Output format to SPIR-V
+        L"-spirv",            // Output format to SPIR-V
     };
 
     // Compile the shader
@@ -253,55 +253,8 @@ void util_load_shader_binary(ShaderStage stage, ShaderStageLoadDesc* load_desc, 
         throw std::runtime_error("Размер байт-кода некорректен: он должен быть кратен 4.");
     }
 
-    std::vector<uint32_t> spirv(buffer.size() / 4);
-    std::memcpy(spirv.data(), buffer.data(), buffer.size());
-
-    spirv_cross::CompilerGLSL glsl_compiler(spirv);
-
-    // Опциональные настройки для GLSL
-    spirv_cross::CompilerGLSL::Options options;
-    options.version = 450; // Версия GLSL
-    options.es = false;    // Это не GLSL ES
-    options.separate_shader_objects = true; // Включить раздельные шейдерные объекты (SOs)
-    glsl_compiler.set_common_options(options);
-
-    glsl_compiler.build_combined_image_samplers();
-    std::string glsl_code;
-    try {
-        // Компиляция SPIR-V в GLSL
-        glsl_code = glsl_compiler.compile();
-
-        // Вывод GLSL-кода
-        std::cout << "GLSL-код: \n" << glsl_code << std::endl;
-    }
-    catch (const std::exception& e) {
-        std::cerr << "Ошибка: " << e.what() << std::endl;
-        //return -1;
-    }
-
-    uint32_t shader = glCreateShader(gl_stage);
-    const char* src = glsl_code.c_str();
-    glShaderSource(shader, 1, &src, nullptr);
-    glCompileShader(shader);
-
-    GLint status;
-    glGetShaderiv(shader, GL_COMPILE_STATUS, &status);
-    if (status == GL_FALSE) {
-        GLint logLength;
-        glGetShaderiv(shader, GL_INFO_LOG_LENGTH, &logLength);
-        std::string log(logLength, ' ');
-        glGetShaderInfoLog(shader, logLength, &logLength, &log[0]);
-        std::cerr << "Ошибка компиляции шейдера: " << log << std::endl;
-        glDeleteShader(shader);
-        //return 0;
-    }
-
-    //glShaderBinary(1, &shader, GL_SHADER_BINARY_FORMAT_SPIR_V, buffer.data(), buffer.size());
-    //glSpecializeShader(shader, load_desc->entry_point.data(), 0, NULL, NULL);
-
     new(&stage_desc->byte_code) std::vector<uint8_t>(std::move(buffer));
     stage_desc->entry_point = load_desc->entry_point;
-    stage_desc->shader = shader;
 }
 
 GLbitfield util_buffer_flags_to_gl_storage_flag(BufferFlag flags)
@@ -860,11 +813,92 @@ void gl_addShader(ShaderDesc* desc, Shader** out_shader)
             break;
         }
 
-        // Shader created on Compile shader stage
-        glAttachShader(shader->program, stage->shader);
-        glDeleteShader(stage->shader);
-
+        // First of all create shader reflection to use binding and set
+        // from spirv to set up it in glsl code for combined image samplers
         util_create_shader_reflection(stage->byte_code, shader->resources);
+
+        auto gl_stage = util_shader_stage_to_gl_stage(stage_mask);
+        const auto& buffer = stage->byte_code;
+
+        std::vector<uint32_t> spirv(buffer.size() / 4);
+        std::memcpy(spirv.data(), buffer.data(), buffer.size());
+
+        spirv_cross::CompilerGLSL glsl_compiler(spirv);
+        spirv_cross::CompilerGLSL::Options options;
+        options.version = 450;
+        options.es = false;
+        options.separate_shader_objects = true;
+        glsl_compiler.set_common_options(options);
+        glsl_compiler.build_combined_image_samplers();
+
+        // here need to set up bindings for generated combined image samplers
+        // they should be the same as they were in hlsl code
+        const auto& combined_image_samplers = glsl_compiler.get_combined_image_samplers();
+        const auto& separate_images = glsl_compiler.get_shader_resources().separate_images;
+
+        for (const auto& image : combined_image_samplers)
+        {
+            // Find texture that was used to create this combined image sampler
+            const auto& separate_image = 
+                std::find_if(std::begin(separate_images), std::end(separate_images),
+                [&](const spirv_cross::Resource& img)
+                {
+                    return img.id == image.image_id;
+                }
+            );
+            if (separate_image != std::end(separate_images))
+            {
+                // Using texture name find resource from shader reflection
+                // that store correct binding and set
+                std::string_view texture_name(separate_image->name);
+                const auto& resources = shader->resources;
+                const auto& resource = std::find_if(resources.begin(), resources.end(),
+                    [&](const ShaderResource& res)
+                    {
+                        return res.name == texture_name;
+                    }
+                );
+                if (resource != resources.end())
+                {
+                    const uint32_t binding = resource->binding;
+                    const uint32_t set = resource->set;
+                    const spv::Decoration dec_binding = spv::Decoration::DecorationBinding;
+                    const spv::Decoration dec_set = spv::Decoration::DecorationDescriptorSet;
+                    glsl_compiler.set_name(image.combined_id, texture_name.data());
+                    glsl_compiler.set_decoration(image.combined_id, dec_binding, binding);
+                    glsl_compiler.set_decoration(image.combined_id, dec_set, set);
+                }
+            }
+
+        }
+
+        std::string glsl_code;
+        try {
+            glsl_code = glsl_compiler.compile();
+            std::cout << "Generated GLSL code: \n" << glsl_code << std::endl;
+        }
+        catch (const std::exception& e) {
+            std::cerr << "Error: " << e.what() << std::endl;
+        }
+
+        uint32_t gl_shader = glCreateShader(gl_stage);
+        const char* src = glsl_code.c_str();
+        glShaderSource(gl_shader, 1, &src, nullptr);
+        glCompileShader(gl_shader);
+
+        GLint status;
+        glGetShaderiv(gl_shader, GL_COMPILE_STATUS, &status);
+        if (status == GL_FALSE) {
+            GLint logLength;
+            glGetShaderiv(gl_shader, GL_INFO_LOG_LENGTH, &logLength);
+            std::string log(logLength, ' ');
+            glGetShaderInfoLog(gl_shader, logLength, &logLength, &log[0]);
+            std::cerr << "Shader compilation error: " << log << std::endl;
+            glDeleteShader(gl_shader);
+        }
+
+        glAttachShader(shader->program, gl_shader);
+        glDeleteShader(gl_shader);
     }
 
     glLinkProgram(shader->program);
@@ -882,7 +916,6 @@ void gl_addDescriptorSet(DescriptorSetDesc* desc, DescriptorSet** set)
     new_set->max_set = desc->max_sets;
     new_set->program = desc->shader->program;
 
-    
     std::vector<ShaderResource> tmp;
     std::copy_if(desc->shader->resources.begin(), desc->shader->resources.end(),
         std::back_inserter(tmp),
@@ -891,9 +924,9 @@ void gl_addDescriptorSet(DescriptorSetDesc* desc, DescriptorSet** set)
         });
     new (&new_set->descriptors) std::set<ShaderResource>(tmp.begin(), tmp.end());
 
-    new (&new_set->buffers) std::vector<std::vector<uint32_t>>();
-    new (&new_set->textures) std::vector<std::vector<uint32_t>>();
-    new (&new_set->samplers) std::vector<std::vector<uint32_t>>();
+    new (&new_set->buffers)  std::vector<DescriptorIndexMap>(new_set->max_set);
+    new (&new_set->textures) std::vector<DescriptorIndexMap>(new_set->max_set);
+    new (&new_set->samplers) std::vector<DescriptorIndexMap>(new_set->max_set);
 
     *set = new_set;
 }
@@ -1002,26 +1035,24 @@ void gl_updateDescriptorSet(UpdateDescriptorSetDesc* desc, DescriptorSet* set)
     // In case in opengl we don't need to actually
     // update descriptor set with data
     // we just going to save descriptor ids in vectors
+    if (desc->index > set->max_set)
+        return; // alert
 
-    // Probably need to add assert here
-    if (desc->buffers.size() > set->max_set)
-        return;
-    if (desc->textures.size() > set->max_set)
-        return;
+    uint32_t index = desc->index;
 
-    for (const auto& buffer : desc->buffers)
+    for (const auto& [name, buffer] : desc->buffers)
     {
-        set->buffers.push_back(buffer->id);
+        set->buffers[index].insert({ name, buffer->id });
     }
 
-    for (const auto& sampler : desc->samplers)
+    for (const auto& [name, sampler] : desc->samplers)
     {
-        set->samplers.push_back(sampler->id);
+        set->samplers[index].insert({ name, sampler->id });
     }
 
-    for (const auto& texture : desc->textures)
+    for (const auto& [name, texture] : desc->textures)
     {
-        set->textures.push_back(texture->id);
+        set->textures[index].insert({ name, texture->id });
     }
 }
 
@@ -1041,21 +1072,30 @@ void gl_cmdBindDescriptorSet(CmdBuffer* cmd, DescriptorSet* set, uint32_t index)
     cmd->commands.push_back([=]() {
         for (const auto& descriptor : set->descriptors)
         {
-            if (descriptor.type & kResourceTypeCBV && !set->buffers.empty())
+            if (descriptor.type & kResourceTypeCBV && !set->buffers[index].empty())
             {
-                glBindBufferBase(GL_UNIFORM_BUFFER, descriptor.binding, set->buffers[index]);
+                const auto& buffer = set->buffers[index].find(descriptor.name);
+                if (buffer != set->buffers[index].end())
+                    glBindBufferBase(GL_UNIFORM_BUFFER, descriptor.binding, buffer->second);
                 continue;
             }
 
-            if (descriptor.type & kResourceTypeSampler && !set->samplers.empty())
+            if (descriptor.type & kResourceTypeSampler && !set->samplers[index].empty())
             {
-                glBindSampler(descriptor.binding, set->samplers[index]);
+                const auto& sampler = set->samplers[index].find(descriptor.name);
+                if (sampler != set->samplers[index].end())
+                    glBindSampler(descriptor.binding, sampler->second);
                 continue;
             }
 
-            if (descriptor.type & kResourceTypeSRV && !set->textures.empty())
+            if (descriptor.type & kResourceTypeSRV && !set->textures[index].empty())
             {
-                glBindTextureUnit(descriptor.binding, set->textures[index]);
+                const auto& texture = set->textures[index].find(descriptor.name);
+                if (texture != set->textures[index].end())
+                {
+                    glBindTextureUnit(descriptor.binding, texture->second);
+                    //glBindSampler(descriptor.binding, set->samplers[index]["samplerState"]);
+                }
                 continue;
             }
         }

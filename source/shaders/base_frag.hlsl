@@ -5,7 +5,8 @@ struct PSInput {
     float3 normal : NORMAL;
 };
 
-Texture2D<float3> logo : register(t0, space0);
+Texture2D<float4> diffuse_map : register(t0, space0);
+Texture2D<float4> specular_map : register(t1, space0);
 SamplerState samplerState : register(s0, space0);
 
 struct MVP
@@ -17,23 +18,21 @@ struct MVP
 
 struct Material
 {
-    float3 ambient;
-    float3 diffuse;
-    float3 specular;
     float shinines;
 };
 
 struct LightSource
 {
     float3 position;
-    float3 color;
+    float3 ambient;
+    float3 diffuse;
+    float3 specular;
 };
 
 struct Camera
 {
     float3 pos;
 };
-
 
 cbuffer push_constant : register(b0, space2)
 {
@@ -53,27 +52,29 @@ cbuffer mat : register(b2, space0)
 };
 
 float4 main(PSInput input) : SV_TARGET {
-    float3 textureColor = logo.Sample(samplerState, input.tex_coord);
+    float4 diffuse_map_color = diffuse_map.Sample(samplerState, input.tex_coord);
+    float4 specular_map_color = specular_map.Sample(samplerState, input.tex_coord);
     Material mater = material[index];
 
     // calculate ambient ligth
-    float3 ambient = mater.ambient * ls.color;
+    float3 ambient = diffuse_map_color * ls.ambient;
 
     // calculate diffuse light
     float3 norm = normalize(input.normal);
     float3 light_dir = normalize(ls.position - input.frag_pos);
     float diff = max(dot(norm, light_dir), 0.0f);
-    float3 diffuse = (diff * mater.diffuse) * ls.color;
+    float3 diffuse = ls.diffuse * diff * diffuse_map_color;
 
     // calculate specular light
     float3 view_dir = normalize(cam.pos - input.frag_pos);
     float3 reflect_dir = reflect(-light_dir, norm);
-    float spec = pow(max(dot(view_dir, reflect_dir), 0.0), mater.shinines);
-    float3 specular = (mater.specular * spec) * ls.color;
+    float spec = pow(max(dot(view_dir, reflect_dir), 0.0), 64);
+    float3 specular = ls.specular * specular_map_color * spec;
 
     float3 mat = ambient + diffuse + specular;
 
     // 0th cube is LightSource, so it renders with light source color
-    float4 res = lerp(float4(ls.color, 1.0f), float4(mat, 1.0f), index > 0);
+    float4 res = lerp(float4(ls.specular, 1.0f), float4(mat, 1.0f), index > 0);
+    //float4 res = lerp(specular_map_color, diffuse_map_color, 0.5f);
     return res;
 }

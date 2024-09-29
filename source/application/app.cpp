@@ -22,22 +22,22 @@ struct Camera
 	glm::vec3 up = glm::vec3(0.0f, 1.0f, 0.0f);
 } camera;
 
-struct  Material
+struct Material
 {
-	glm::vec3 ambient;
-	float pad1;
-	glm::vec3 diffuse;
-	float pad2;
-	glm::vec3 specular;
 	float shinines;
+	float pad[3];
 } material[10];
 
 struct LightSource
 {
 	glm::vec3 position;
 	float pad1;
-	glm::vec3 color;
+	glm::vec3 ambient;
 	float pad2;
+	glm::vec3 diffuse;
+	float pad3;
+	glm::vec3 specular;
+	float pad4;
 };
 
 struct UBO
@@ -144,14 +144,20 @@ auto main() -> int {
 
 	light_pos = &cube_positions[0];
 	ubo.light.position = *light_pos;
-	ubo.light.color = glm::vec3(1.0f, 1.0f, 0.0f);
+	ubo.light.ambient = glm::vec3(0.2f, 0.2f, 0.2f);
+	ubo.light.diffuse = glm::vec3(0.5f, 0.5f, 0.5f);
+	ubo.light.specular = glm::vec3(1.0f, 1.0f, 1.0f);
+
+
+	Texture* diffuse_map_tex;
+	Texture* specular_map_tex;
 
 	int32_t width, height, channels;
-	std::string name = "assets/hp-logo.png";
+	std::string name = "assets/container2.png";
 	stbi_set_flip_vertically_on_load(true);
-	uint8_t* image_data = stbi_load(name.c_str(), &width, &height, &channels, 0);
-	Texture* texture;
-	if (image_data)
+	uint8_t* diffuse_map = stbi_load(name.c_str(), &width, &height, &channels, 0);
+
+	if (diffuse_map)
 	{
 		TextureDesc texture_desc{};
 		texture_desc.width = width;
@@ -159,13 +165,49 @@ auto main() -> int {
 		texture_desc.mip_levels = 1;
 		texture_desc.type = kTextureType2D;
 		texture_desc.format = kTextureFormatRGBA8;
-		add_texture(&texture_desc, &texture);
+		add_texture(&texture_desc, &diffuse_map_tex);
+
+		ResourceUpdateDesc resource_update_desc;
+		TextureUpdateDesc tex_update_desc{};
+		resource_update_desc = &tex_update_desc;
+		tex_update_desc.size = width * height * channels;
+		tex_update_desc.texture = diffuse_map_tex;
+		tex_update_desc.data = diffuse_map;
+		begin_update_resource(resource_update_desc);
+		std::memcpy(tex_update_desc.mapped_data, diffuse_map, tex_update_desc.size);
+		end_update_resource(resource_update_desc);
 	}
 	else
 	{
-		std::cerr << "Failed to load texture: " << name << std::endl;
+		std::cerr << "Failed to load diffuse_map_tex: " << name << std::endl;
 	}
-	//stbi_image_free(image_data);
+
+	name = "assets/container2_specular.png";
+	uint8_t* specular_map = stbi_load(name.c_str(), &width, &height, &channels, 0);
+	if (specular_map)
+	{
+		TextureDesc texture_desc{};
+		texture_desc.width = width;
+		texture_desc.height = height;
+		texture_desc.mip_levels = 1;
+		texture_desc.type = kTextureType2D;
+		texture_desc.format = kTextureFormatRGBA8;
+		add_texture(&texture_desc, &specular_map_tex);
+
+		ResourceUpdateDesc resource_update_desc;
+		TextureUpdateDesc tex_update_desc{};
+		resource_update_desc = &tex_update_desc;
+		tex_update_desc.size = width * height * channels;
+		tex_update_desc.texture = specular_map_tex;
+		tex_update_desc.data = specular_map;
+		begin_update_resource(resource_update_desc);
+		std::memcpy(tex_update_desc.mapped_data, specular_map, tex_update_desc.size);
+		end_update_resource(resource_update_desc);
+	}
+	else
+	{
+		std::cerr << "Failed to load specular_map_tex: " << name << std::endl;
+	}
 
 	Sampler* sampler;
 	SamplerDesc sampler_desc{};
@@ -224,79 +266,40 @@ auto main() -> int {
 		end_update_resource(resource_update_desc);
 
 		// emerald
-		material[0].ambient = glm::vec3(0.0215f, 0.1745f, 0.0215f);
-		material[0].diffuse = glm::vec3(0.07568f, 0.61424f, 0.07568f);
-		material[0].specular = glm::vec3(0.633f, 0.727811f, 0.633f);
 		material[0].shinines = 128u * 0.6f;
 		
 		// emerald
-		material[1].ambient = glm::vec3(0.0215f, 0.1745f, 0.0215f);
-		material[1].diffuse = glm::vec3(0.07568f, 0.61424f, 0.07568f);
-		material[1].specular = glm::vec3(0.633f, 0.727811f, 0.633f);
 		material[1].shinines = 128u * 0.6f;;
 		
 		// green plastic
-		material[2].ambient = glm::vec3(0.0f, 0.0f, 0.0f);
-		material[2].diffuse = glm::vec3(0.1f, 0.35, 0.1f);
-		material[2].specular = glm::vec3(0.45f, 0.55f, 0.45f);
 		material[2].shinines = 128u * 0.25f;
 
 		// red rubber
-		material[3].ambient = glm::vec3(0.05f, 0.0f, 0.0f);
-		material[3].diffuse = glm::vec3(0.5f, 0.4f, 0.4f);
-		material[3].specular = glm::vec3(0.7f, 0.04f, 0.7f);
 		material[3].shinines = 128u * 0.078125f;
 
 		// silver
-		material[4].ambient = glm::vec3(0.19225f, 0.19225f, 0.19225f);
-		material[4].diffuse = glm::vec3(0.50754f, 0.50754, 0.50754f);
-		material[4].specular = glm::vec3(0.508273f, 0.508273f, 0.508273f);
 		material[4].shinines = 128u * 0.4f;
 
 		// gold 
-		material[5].ambient = glm::vec3(0.24725f, 0.1995f, 0.0745f);
-		material[5].diffuse = glm::vec3(0.75164f, 0.60648, 0.22648f);
-		material[5].specular = glm::vec3(0.628281f, 0.555802f, 0.366065f);
 		material[5].shinines = 128u * 0.4f;
 
 		// ruby
-		material[6].ambient = glm::vec3(0.1745, 0.01175, 0.01175);
-		material[6].diffuse = glm::vec3(0.61424, 0.04136, 0.04136);
-		material[6].specular = glm::vec3(0.727811, 0.626959, 0.626959);
 		material[6].shinines = 128u * 0.6f;
 
 		// pearl
-		material[7].ambient = glm::vec3(0.25, 0.20725, 0.20725);
-		material[7].diffuse = glm::vec3(1.0f, 0.829, 0.829);
-		material[7].specular = glm::vec3(0.296648, 0.296648, 0.296648);
 		material[7].shinines = 128u * 0.088;
 
 		// jade 
-		material[8].ambient = glm::vec3(0.135, 0.2225, 0.1575);
-		material[8].diffuse = glm::vec3(0.54, 0.89, 0.63);
-		material[8].specular = glm::vec3(0.316228, 0.316228, 0.316228);
 		material[8].shinines = 128u * 0.1f;
 
 		// turquoise
-		material[9].ambient = glm::vec3(0.1, 0.18725, 0.1745);
-		material[9].diffuse = glm::vec3(0.396, 0.74151, 0.69102);
-		material[9].specular = glm::vec3(0.297254, 0.30829, 0.306678);
 		material[9].shinines = 128u * 0.1f;
-		update_desc.buffer = mat_buf;
 
+		update_desc.buffer = mat_buf;
 		update_desc.size = sizeof(material);
 		begin_update_resource(resource_update_desc);
 		std::memcpy(update_desc.mapped_data, &material, sizeof(material));
 		end_update_resource(resource_update_desc);		
-		
-		TextureUpdateDesc tex_update_desc{};
-		resource_update_desc = &tex_update_desc;
-		tex_update_desc.size = width * height * channels;
-		tex_update_desc.texture = texture;
-		tex_update_desc.data = image_data;
-		begin_update_resource(resource_update_desc);
-		std::memcpy(tex_update_desc.mapped_data, image_data, tex_update_desc.size);
-		end_update_resource(resource_update_desc);
 	}
 
 	VertexLayout layout = {0};
@@ -319,17 +322,31 @@ auto main() -> int {
 	add_descriptor_set(&set_desc, &ubo_desc);
 
 	UpdateDescriptorSetDesc update_set_desc{};
-	update_set_desc.buffers = { ubo_buf[0], ubo_buf[1] };
-	update_descriptor_set(&update_set_desc, ubo_desc);
+	for (uint32_t i = 0; i < image_count; ++i)
+	{
+		update_set_desc.index = i;
+		update_set_desc.buffers = {
+			{"ubo", ubo_buf[i]},
+		};
+		update_descriptor_set(&update_set_desc, ubo_desc);
+	}
 
 	set_desc.max_sets = 1;
 	set_desc.update_freq = kUpdateFreqNone;
 	DescriptorSet* texture_set;
 	add_descriptor_set(&set_desc, &texture_set);
 	update_set_desc = {};
-	update_set_desc.textures = { texture };
-	update_set_desc.samplers = { sampler };
-	update_set_desc.buffers = { mat_buf };
+	update_set_desc.index = 0;
+	update_set_desc.textures = {
+		{"diffuse_map",diffuse_map_tex}, 
+		{"specular_map", specular_map_tex}
+	};
+	update_set_desc.samplers = {
+		{"samplerState", sampler},
+	};
+	update_set_desc.buffers = { 
+		{"mat", mat_buf}
+	};
 	update_descriptor_set(&update_set_desc, texture_set);
 
 	PipelineDesc pipeline_desc = { 0 };
@@ -357,8 +374,6 @@ auto main() -> int {
 	add_cmd(&cmd_desc, &cmd);
 
 	glm::mat4 model{};
-
-
 	glEnable(GL_DEPTH_TEST);
 
 	while(update_window())

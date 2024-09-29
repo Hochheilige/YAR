@@ -59,16 +59,15 @@ struct MVP
 
 struct Material
 {
-    float3 ambient;
-    float3 diffuse;
-    float3 specular;
     float shinines;
 };
 
 struct LightSource
 {
     float3 position;
-    float3 color;
+    float3 ambient;
+    float3 diffuse;
+    float3 specular;
 };
 
 struct Camera
