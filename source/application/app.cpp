@@ -459,11 +459,23 @@ void process_input(GLFWwindow* window)
 	if (glfwGetKey(window, GLFW_KEY_Q) == GLFW_PRESS)
 		camera.pos -= camera.up * speed;
 
-	// light source move
-	if (glfwGetKey(window, GLFW_KEY_UP) == GLFW_PRESS)
-		light_pos->y += speed;
-	if (glfwGetKey(window, GLFW_KEY_DOWN) == GLFW_PRESS)
-		light_pos->y -= speed;
+
+	// Thing to move light source
+	if (glfwGetKey(window, GLFW_KEY_LEFT_ALT) != GLFW_PRESS)
+	{
+		if (glfwGetKey(window, GLFW_KEY_UP) == GLFW_PRESS)
+			light_pos->y += speed;
+		if (glfwGetKey(window, GLFW_KEY_DOWN) == GLFW_PRESS)
+			light_pos->y -= speed;
+	}
+	else
+	{
+		if (glfwGetKey(window, GLFW_KEY_UP) == GLFW_PRESS)
+			light_pos->z -= speed;
+		if (glfwGetKey(window, GLFW_KEY_DOWN) == GLFW_PRESS)
+			light_pos->z += speed;
+	}
+
 	if (glfwGetKey(window, GLFW_KEY_LEFT) == GLFW_PRESS)
 		light_pos->x -= speed;
 	if (glfwGetKey(window, GLFW_KEY_RIGHT) == GLFW_PRESS)
