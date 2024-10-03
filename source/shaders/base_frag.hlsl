@@ -23,15 +23,15 @@ struct Material
 
 struct LightSource
 {
-    float3 position;
-    float3 ambient;
-    float3 diffuse;
-    float3 specular;
+    float4 position[2];
+    float4 ambient[2];
+    float4 diffuse[2];
+    float4 specular[2];
 };
 
 struct Camera
 {
-    float3 pos;
+    float4 pos;
 };
 
 cbuffer push_constant : register(b0, space2)
@@ -56,25 +56,42 @@ float4 main(PSInput input) : SV_TARGET {
     float4 specular_map_color = specular_map.Sample(samplerState, input.tex_coord);
     Material mater = material[index];
 
-    // calculate ambient ligth
-    float3 ambient = diffuse_map_color * ls.ambient;
+    float4 mat = float4(0.0f, 0.0f, 0.0f, 0.0f);
+    for (uint i = 0; i < 2; ++i)
+    {
+        float4 light_pos = ls.position[i];
+        float4 light_diff = ls.diffuse[i];
+        float4 light_spec = ls.specular[i];
 
-    // calculate diffuse light
-    float3 norm = normalize(input.normal);
-    float3 light_dir = normalize(ls.position - input.frag_pos);
-    float diff = max(dot(norm, light_dir), 0.0f);
-    float3 diffuse = ls.diffuse * diff * diffuse_map_color;
+        float4 norm = float4(normalize(input.normal), 0.0f);
+        float4 frag_pos = float4(input.frag_pos, 0.0f);
+        // This component is 0.0f for directional light
+        float dir_light_component = light_pos.w;
 
-    // calculate specular light
-    float3 view_dir = normalize(cam.pos - input.frag_pos);
-    float3 reflect_dir = reflect(-light_dir, norm);
-    float spec = pow(max(dot(view_dir, reflect_dir), 0.0), 64);
-    float3 specular = ls.specular * specular_map_color * spec;
+        // calculate ambient ligth
+        float4 ambient = diffuse_map_color * ls.ambient[i];
 
-    float3 mat = ambient + diffuse + specular;
+        // calculate diffuse light
+        float4 light_dir = normalize(lerp(light_pos, 
+                                light_pos - frag_pos, 
+                                dir_light_component > 0)
+                            );
 
-    // 0th cube is LightSource, so it renders with light source color
-    float4 res = lerp(float4(ls.specular, 1.0f), float4(mat, 1.0f), index > 0);
-    //float4 res = lerp(specular_map_color, diffuse_map_color, 0.5f);
+        float diff = max(dot(norm, light_dir), 0.0f);
+        float4 diffuse = light_diff * diff * diffuse_map_color;
+
+        // calculate specular light
+        float4 view_dir = normalize(cam.pos - frag_pos);
+        float4 reflect_dir = reflect(-light_dir, norm);
+        float spec = pow(max(dot(view_dir, reflect_dir), 0.0), 64);
+        float4 specular = light_spec * specular_map_color * spec;
+        mat += (ambient + diffuse + specular);
+    }
+
+    // For now index == 0 is an index of a light source cube so I just color it with
+    // its light color
+    // FIX ME
+    float4 res = lerp(ls.specular[0], mat, index > 0);
+
     return res;
 }

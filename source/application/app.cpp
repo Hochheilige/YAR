@@ -28,16 +28,14 @@ struct Material
 	float pad[3];
 } material[10];
 
+static constexpr uint32_t kLightSourcesCount = 2;
+
 struct LightSource
 {
-	glm::vec3 position;
-	float pad1;
-	glm::vec3 ambient;
-	float pad2;
-	glm::vec3 diffuse;
-	float pad3;
-	glm::vec3 specular;
-	float pad4;
+	glm::vec4 position[kLightSourcesCount];
+	glm::vec4 ambient[kLightSourcesCount];
+	glm::vec4 diffuse[kLightSourcesCount];
+	glm::vec4 specular[kLightSourcesCount];
 };
 
 struct UBO
@@ -60,7 +58,7 @@ float fov = 45.0f;
 float deltaTime = 0.0f;	
 float lastFrame = 0.0f;
 
-glm::vec3* light_pos = nullptr;
+glm::vec4* light_pos = nullptr;
 
 void framebuffer_size_callback(GLFWwindow* window, int width, int height);
 void mouse_callback(GLFWwindow* window, double xpos, double ypos);
@@ -108,7 +106,6 @@ auto main() -> int {
 		-0.5f,  0.5f,  0.5f,  0.0f, 1.0f, 0.0f, 1.0f, 0.0f,
 	};
 
-
 	uint32_t indexes[] = {
 		0, 1, 2,
 		2, 3, 0,
@@ -129,24 +126,31 @@ auto main() -> int {
 		22, 23, 20
 	};
 
-	glm::vec3 cube_positions[] = {
-		glm::vec3(0.0f,  0.0f,  0.0f),
-		glm::vec3(2.0f,  5.0f, -15.0f),
-		glm::vec3(-1.5f, -2.2f, -2.5f),
-		glm::vec3(-3.8f, -2.0f, -12.3f),
-		glm::vec3(2.4f, -0.4f, -3.5f),
-		glm::vec3(-1.7f,  3.0f, -7.5f),
-		glm::vec3(1.3f, -2.0f, -2.5f),
-		glm::vec3(1.5f,  2.0f, -2.5f),
-		glm::vec3(1.5f,  0.2f, -1.5f),
-		glm::vec3(-1.3f,  1.0f, -1.5f)
+	glm::vec4 cube_positions[] = {
+		glm::vec4(0.0f,  0.0f,  0.0f  , 1.0f),
+		glm::vec4(2.0f,  5.0f, -15.0f , 1.0f),
+		glm::vec4(-1.5f, -2.2f, -2.5f , 1.0f),
+		glm::vec4(-3.8f, -2.0f, -12.3f, 1.0f),
+		glm::vec4(2.4f, -0.4f, -3.5f  , 1.0f),
+		glm::vec4(-1.7f,  3.0f, -7.5f , 1.0f),
+		glm::vec4(1.3f, -2.0f, -2.5f  , 1.0f),
+		glm::vec4(1.5f,  2.0f, -2.5f  , 1.0f),
+		glm::vec4(1.5f,  0.2f, -1.5f  , 1.0f),
+		glm::vec4(-1.3f,  1.0f, -1.5f , 1.0f)
 	};
 
+	// Not totally correct point light
 	light_pos = &cube_positions[0];
-	ubo.light.position = *light_pos;
-	ubo.light.ambient = glm::vec3(0.2f, 0.2f, 0.2f);
-	ubo.light.diffuse = glm::vec3(0.5f, 0.5f, 0.5f);
-	ubo.light.specular = glm::vec3(1.0f, 1.0f, 1.0f);
+	ubo.light.position[0] = *light_pos;
+	ubo.light.ambient[0] = glm::vec4(0.2f, 0.0f, 0.0f, 0.0f);
+	ubo.light.diffuse[0] = glm::vec4(0.5f, 0.0f, 0.0f, 0.0f);
+	ubo.light.specular[0] = glm::vec4(1.0f, 0.0f, 0.0f, 0.0f);
+
+	// directional light
+	ubo.light.position[1] = glm::vec4(0.0f, 0.0f, 3.0f, 0.0f);
+	ubo.light.ambient[1] = glm::vec4(0.0f, 0.2f, 0.0f, 0.0f);
+	ubo.light.diffuse[1] = glm::vec4(0.0f, 0.4f, 0.0f, 0.0f);
+	ubo.light.specular[1] = glm::vec4(0.0f, 1.0f, 0.0f, 0.0f);
 
 
 	Texture* diffuse_map_tex;
@@ -313,6 +317,7 @@ auto main() -> int {
 	layout.attribs[2].format = GL_FLOAT;
 	layout.attribs[2].offset = 5 * sizeof(float);
 
+
 	DescriptorSetDesc set_desc;
 	set_desc.max_sets = image_count;
 	set_desc.shader = shader;
@@ -388,7 +393,7 @@ auto main() -> int {
 		glClearColor(gBackGroundColor[0], gBackGroundColor[1], gBackGroundColor[2], 1.0f);
 		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-		ubo.light.position = *light_pos;
+		ubo.light.position[0] = *light_pos; // update point light pos
 		ubo.view_pos = camera.pos;
 		ubo.view = glm::mat4(1.0f);
 		ubo.view = glm::lookAt(camera.pos, camera.pos + camera.front, camera.up);
@@ -397,11 +402,15 @@ auto main() -> int {
 		for (uint32_t i = 0; i < 10; ++i)
 		{
 			model = glm::mat4(1.0f);
-			model = glm::translate(model, cube_positions[i]);
+			model = glm::translate(model, glm::vec3(cube_positions[i]));
 			if (i != 0) // i == 0 light position
 			{
 				float angle = 20.0f;// *(i + 1);
 				model = glm::rotate(model, (float)glfwGetTime() * glm::radians(angle), glm::vec3(1.0f, 0.3f, 0.5f));
+			}
+			else
+			{
+				model = glm::scale(model, glm::vec3(0.5f, 0.5f, 0.5f));
 			}
 			ubo.model[i] = model;
 		}

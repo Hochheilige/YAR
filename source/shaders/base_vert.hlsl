@@ -64,15 +64,15 @@ struct Material
 
 struct LightSource
 {
-    float3 position;
-    float3 ambient;
-    float3 diffuse;
-    float3 specular;
+    float4 position[2];
+    float4 ambient[2];
+    float4 diffuse[2];
+    float4 specular[2];
 };
 
 struct Camera
 {
-    float3 pos;
+    float4 pos;
 };
 
 cbuffer push_constant : register(b0, space2)
