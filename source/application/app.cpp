@@ -294,7 +294,6 @@ auto main() -> int {
 
 		// turquoise
 		material[9].shinines = 128u * 0.1f;
-
 		update_desc.buffer = mat_buf;
 		update_desc.size = sizeof(material);
 		begin_update_resource(resource_update_desc);
@@ -446,25 +445,29 @@ void process_input(GLFWwindow* window)
 	if (glfwGetKey(window, GLFW_KEY_ESCAPE) == GLFW_PRESS)
 		glfwSetWindowShouldClose(window, true);
 
-	float cameraSpeed = static_cast<float>(2.5 * deltaTime);
+	float speed = static_cast<float>(2.5 * deltaTime);
 	if (glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS)
-		camera.pos += cameraSpeed * camera.front;
+		camera.pos += speed * camera.front;
 	if (glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS)
-		camera.pos -= cameraSpeed * camera.front;
+		camera.pos -= speed * camera.front;
 	if (glfwGetKey(window, GLFW_KEY_A) == GLFW_PRESS)
-		camera.pos -= glm::normalize(glm::cross(camera.front, camera.up)) * cameraSpeed;
+		camera.pos -= glm::normalize(glm::cross(camera.front, camera.up)) * speed;
 	if (glfwGetKey(window, GLFW_KEY_D) == GLFW_PRESS)
-		camera.pos += glm::normalize(glm::cross(camera.front, camera.up)) * cameraSpeed;
+		camera.pos += glm::normalize(glm::cross(camera.front, camera.up)) * speed;
+	if (glfwGetKey(window, GLFW_KEY_E) == GLFW_PRESS)
+		camera.pos += camera.up * speed;
+	if (glfwGetKey(window, GLFW_KEY_Q) == GLFW_PRESS)
+		camera.pos -= camera.up * speed;
 
 	// light source move
 	if (glfwGetKey(window, GLFW_KEY_UP) == GLFW_PRESS)
-		light_pos->y += cameraSpeed;
+		light_pos->y += speed;
 	if (glfwGetKey(window, GLFW_KEY_DOWN) == GLFW_PRESS)
-		light_pos->y -= cameraSpeed;
+		light_pos->y -= speed;
 	if (glfwGetKey(window, GLFW_KEY_LEFT) == GLFW_PRESS)
-		light_pos->x -= cameraSpeed;
+		light_pos->x -= speed;
 	if (glfwGetKey(window, GLFW_KEY_RIGHT) == GLFW_PRESS)
-		light_pos->x += cameraSpeed;
+		light_pos->x += speed;
 }
 
 void framebuffer_size_callback(GLFWwindow* window, int width, int height)
@@ -477,7 +480,8 @@ void framebuffer_size_callback(GLFWwindow* window, int width, int height)
 void mouse_callback(GLFWwindow* window, double xposIn, double yposIn)
 {
 	if (ImGui::GetIO().WantCaptureMouse || 
-		glfwGetKey(window, GLFW_KEY_LEFT_ALT) != GLFW_PRESS) {
+		glfwGetMouseButton(window, GLFW_MOUSE_BUTTON_RIGHT) != GLFW_PRESS)
+	{
 		return;
 	}
 
