@@ -1096,7 +1096,9 @@ void gl_cmdBindDescriptorSet(CmdBuffer* cmd, DescriptorSet* set, uint32_t index)
                     if (sampler != set->descriptors.end())
                     {
                         glBindTextureUnit(descriptor.binding, comb.texture->id);
-                        glBindSampler(sampler->binding, comb.sampler->id);
+                        // In OpenGL in case of it use CombinedTextureSampler
+                        // binding point for sampler should be equal to texture binding point
+                        glBindSampler(descriptor.binding, comb.sampler->id);
                     }
                     else
                     {
