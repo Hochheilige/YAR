@@ -328,10 +328,14 @@ auto main() -> int {
 	UpdateDescriptorSetDesc update_set_desc{};
 	for (uint32_t i = 0; i < image_count; ++i)
 	{
-		update_set_desc.index = i;
-		update_set_desc.buffers = {
-			{"ubo", ubo_buf[i]},
+		std::vector<DescriptorInfo> infos{
+			{
+				.name = "ubo",
+				.descriptor = ubo_buf[i]
+			}
 		};
+		update_set_desc.index = i;
+		update_set_desc.infos = std::move(infos);
 		update_descriptor_set(&update_set_desc, ubo_desc);
 	}
 
@@ -339,18 +343,35 @@ auto main() -> int {
 	set_desc.update_freq = kUpdateFreqNone;
 	DescriptorSet* texture_set;
 	add_descriptor_set(&set_desc, &texture_set);
+
+	std::vector<DescriptorInfo> infos{
+		{
+			.name = "diffuse_map",
+			.descriptor =
+			DescriptorInfo::CombinedTextureSample{
+				diffuse_map_tex,
+				"samplerState",
+				sampler
+			}
+		},
+		{
+			.name = "specular_map",
+			.descriptor =
+			DescriptorInfo::CombinedTextureSample{
+				specular_map_tex,
+				"samplerState",
+				sampler
+			}
+		},
+		{
+			.name = "mat",
+			.descriptor = mat_buf
+		}
+	};
+
 	update_set_desc = {};
 	update_set_desc.index = 0;
-	update_set_desc.textures = {
-		{"diffuse_map",diffuse_map_tex}, 
-		{"specular_map", specular_map_tex}
-	};
-	update_set_desc.samplers = {
-		{"samplerState", sampler},
-	};
-	update_set_desc.buffers = { 
-		{"mat", mat_buf}
-	};
+	update_set_desc.infos = std::move(infos);
 	update_descriptor_set(&update_set_desc, texture_set);
 
 	PipelineDesc pipeline_desc = { 0 };
@@ -364,8 +385,6 @@ auto main() -> int {
 	CmdQueue* queue;
 	add_queue(&queue_desc, &queue);
 
-	// TODO: Don't use push constant with matrices
-	// use it to push indeces instead
 	PushConstantDesc pc_desc{};
 	pc_desc.name = "push_constant";
 	pc_desc.shader = shader;

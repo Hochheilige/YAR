@@ -325,12 +325,23 @@ struct DescriptorSetDesc
     Shader* shader;
 };
 
+struct DescriptorInfo
+{
+    struct CombinedTextureSample
+    {
+        Texture* texture;
+        std::string sampler_name;
+        Sampler* sampler;
+    };
+
+    std::string name;
+    std::variant<Buffer*, CombinedTextureSample> descriptor;
+};
+
 struct UpdateDescriptorSetDesc
 {
     uint32_t index;
-    std::vector<std::pair<std::string, Buffer*>> buffers;
-    std::vector<std::pair<std::string, Texture*>> textures;
-    std::vector<std::pair<std::string, Sampler*>> samplers;
+    std::vector<DescriptorInfo> infos;
 };
 
 // Idea of Descriptor Set doesn't look really useful in OpenGL
@@ -345,10 +356,7 @@ struct DescriptorSet
     uint32_t max_set;
     uint32_t program; // only for gl
     std::set<ShaderResource> descriptors;
-
-    std::vector<DescriptorIndexMap> buffers; // only for gl
-    std::vector<DescriptorIndexMap> samplers;
-    std::vector<DescriptorIndexMap> textures;
+    std::vector<std::vector<DescriptorInfo>> infos;
 };
 
 struct PushConstantDesc

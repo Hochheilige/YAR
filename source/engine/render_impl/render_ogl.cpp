@@ -923,10 +923,7 @@ void gl_addDescriptorSet(DescriptorSetDesc* desc, DescriptorSet** set)
             return resource.set == new_set->update_freq;
         });
     new (&new_set->descriptors) std::set<ShaderResource>(tmp.begin(), tmp.end());
-
-    new (&new_set->buffers)  std::vector<DescriptorIndexMap>(new_set->max_set);
-    new (&new_set->textures) std::vector<DescriptorIndexMap>(new_set->max_set);
-    new (&new_set->samplers) std::vector<DescriptorIndexMap>(new_set->max_set);
+    new (&new_set->infos) std::vector<std::vector<DescriptorInfo>>(new_set->max_set);
 
     *set = new_set;
 }
@@ -1039,21 +1036,7 @@ void gl_updateDescriptorSet(UpdateDescriptorSetDesc* desc, DescriptorSet* set)
         return; // alert
 
     uint32_t index = desc->index;
-
-    for (const auto& [name, buffer] : desc->buffers)
-    {
-        set->buffers[index].insert({ name, buffer->id });
-    }
-
-    for (const auto& [name, sampler] : desc->samplers)
-    {
-        set->samplers[index].insert({ name, sampler->id });
-    }
-
-    for (const auto& [name, texture] : desc->textures)
-    {
-        set->textures[index].insert({ name, texture->id });
-    }
+    set->infos[index] = std::move(desc->infos);
 }
 
 void gl_cmdBindPipeline(CmdBuffer* cmd, Pipeline* pipeline)
@@ -1072,31 +1055,58 @@ void gl_cmdBindDescriptorSet(CmdBuffer* cmd, DescriptorSet* set, uint32_t index)
     cmd->commands.push_back([=]() {
         for (const auto& descriptor : set->descriptors)
         {
-            if (descriptor.type & kResourceTypeCBV && !set->buffers[index].empty())
+            const auto& infos = set->infos[index];
+            if (descriptor.type & kResourceTypeCBV)
             {
-                const auto& buffer = set->buffers[index].find(descriptor.name);
-                if (buffer != set->buffers[index].end())
-                    glBindBufferBase(GL_UNIFORM_BUFFER, descriptor.binding, buffer->second);
-                continue;
-            }
+                const auto& info_iter = std::find_if(infos.begin(), infos.end(),
+                    [&](const DescriptorInfo& info)
+                    {
+                        return std::holds_alternative<Buffer*>(info.descriptor);
+                    }
+                );
 
-            if (descriptor.type & kResourceTypeSampler && !set->samplers[index].empty())
-            {
-                const auto& sampler = set->samplers[index].find(descriptor.name);
-                if (sampler != set->samplers[index].end())
-                    glBindSampler(descriptor.binding, sampler->second);
-                continue;
-            }
-
-            if (descriptor.type & kResourceTypeSRV && !set->textures[index].empty())
-            {
-                const auto& texture = set->textures[index].find(descriptor.name);
-                if (texture != set->textures[index].end())
+                if (info_iter != infos.end())
                 {
-                    glBindTextureUnit(descriptor.binding, texture->second);
-                    //glBindSampler(descriptor.binding, set->samplers[index]["samplerState"]);
+                    const Buffer* buffer = std::get<Buffer*>(info_iter->descriptor);
+                    glBindBufferBase(GL_UNIFORM_BUFFER, descriptor.binding, buffer->id);
                 }
-                continue;
+            }
+
+            if (descriptor.type & kResourceTypeSRV)
+            {
+                using CombTextureSampler = DescriptorInfo::CombinedTextureSample;
+                const auto& info_iter = std::find_if(infos.begin(), infos.end(),
+                    [&](const DescriptorInfo& info)
+                    {
+                        return 
+                            std::holds_alternative<CombTextureSampler>(info.descriptor) 
+                            && info.name == descriptor.name;
+                    }
+                );
+
+                if (info_iter != infos.end())
+                {
+                    const auto& comb = std::get<CombTextureSampler>(info_iter->descriptor);
+                    const auto& sampler = std::find_if(set->descriptors.begin(), set->descriptors.end(),
+                        [&](const ShaderResource& res)
+                        {
+                            return res.name == comb.sampler_name;
+                        }
+                    );
+                    if (sampler != set->descriptors.end())
+                    {
+                        glBindTextureUnit(descriptor.binding, comb.texture->id);
+                        glBindSampler(sampler->binding, comb.sampler->id);
+                    }
+                    else
+                    {
+                        // alert we have no sampler for texture
+                    }
+                }
+                else
+                {
+                    // alert we have no texture with this name
+                }
             }
         }
     });
