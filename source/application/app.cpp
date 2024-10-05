@@ -379,6 +379,7 @@ auto main() -> int {
 
 	glm::mat4 model{};
 	glEnable(GL_DEPTH_TEST);
+	glEnable(GL_BLEND);
 
 	while(update_window())
 	{
