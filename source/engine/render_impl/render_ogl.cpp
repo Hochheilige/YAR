@@ -902,7 +902,20 @@ void gl_addShader(ShaderDesc* desc, Shader** out_shader)
     }
 
     glLinkProgram(shader->program);
-    
+#if defined(_DEBUG)
+    // TODO: move it to some kind of macros or func
+    GLint linkStatus;
+    glGetProgramiv(shader->program, GL_LINK_STATUS, &linkStatus);
+    if (linkStatus == GL_FALSE) {
+        GLint logLength;
+        glGetProgramiv(shader->program, GL_INFO_LOG_LENGTH, &logLength);
+
+        std::vector<char> errorLog(logLength);
+        glGetProgramInfoLog(shader->program, logLength, &logLength, &errorLog[0]);
+
+        std::cerr << "Shader linking failed: " << &errorLog[0] << std::endl;
+    }
+#endif
     *out_shader = shader;
 }
 
