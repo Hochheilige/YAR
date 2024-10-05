@@ -21,13 +21,35 @@ struct Material
     float shinines;
 };
 
-struct LightSource
+#define DIR_LIGHT_COUNT 1
+#define POINT_LIGHT_COUNT 1
+#define SPOT_LIGHT_COUNT 1
+#define LS_COUNT DIR_LIGHT_COUNT + POINT_LIGHT_COUNT //+ SPOT_LIGHT_COUNT
+#define MAT_COUNT 10
+
+struct DirLight 
 {
-    float4 position[2];
-    float4 ambient[2];
-    float4 diffuse[2];
-    float4 specular[2];
-    float4 attenuation[2];
+    float4 direction[DIR_LIGHT_COUNT];
+};
+
+struct PointLight
+{
+    float4 position[POINT_LIGHT_COUNT];
+    float4 attenuation[POINT_LIGHT_COUNT];
+};
+
+struct SpotLight
+{
+    float4 position[SPOT_LIGHT_COUNT];
+    float4 direction[SPOT_LIGHT_COUNT];
+    float4 cutoff[SPOT_LIGHT_COUNT];
+};
+
+struct LightParams
+{
+    float4 ambient[LS_COUNT];
+    float4 diffuse[LS_COUNT];
+    float4 specular[LS_COUNT];
 };
 
 struct Camera
@@ -43,67 +65,122 @@ cbuffer push_constant : register(b0, space2)
 cbuffer ubo : register(b1, space1)
 {
     MVP mvp;
-    LightSource ls;
+    DirLight dir_light;
+    PointLight point_light;
+    //SpotLight spot_light;
+    LightParams light_params;
     Camera cam;
 };
 
 cbuffer mat : register(b2, space0)
 {
-    Material material[10];
+    Material material[MAT_COUNT];
 };
 
+struct LightCalculationParams
+{
+    float4 diffuse_map_color;
+    float4 specular_map_color;
+    float4 norm;
+    float4 frag_pos;
+    float4 cam_pos;
+    float4 ambient;
+    float4 diffuse;
+    float4 specular;
+};
+
+float4 calculate_dir_light(float4 light_dir, const LightCalculationParams lcp)
+{
+    float4 diffuse_map_color  = lcp.diffuse_map_color;
+    float4 specular_map_color = lcp.specular_map_color;
+    float4 norm               = lcp.norm;
+    float4 frag_pos           = lcp.frag_pos;
+    float4 cam_pos            = lcp.cam_pos;
+    float4 light_amb          = lcp.ambient;
+    float4 light_diff         = lcp.diffuse;
+    float4 light_spec         = lcp.specular;
+
+    float4 ambient = diffuse_map_color * light_amb;
+    
+    light_dir = normalize(light_dir);
+    float diff = max(dot(norm, light_dir), 0.0f);
+    float4 diffuse = light_diff * diff * diffuse_map_color;
+
+    float4 view_dir = normalize(cam_pos - frag_pos);
+    float4 reflect_dir = reflect(-light_dir, norm);
+    float spec = pow(max(dot(view_dir, reflect_dir), 0.0), 64);
+    float4 specular = light_spec * specular_map_color * spec;
+
+    return ambient + diffuse + specular;
+}
+
+float4 calculate_point_light(float4 position, float4 attenuation_params, const LightCalculationParams lcp)
+{
+    float4 diffuse_map_color  = lcp.diffuse_map_color;
+    float4 specular_map_color = lcp.specular_map_color;
+    float4 norm               = lcp.norm;
+    float4 frag_pos           = lcp.frag_pos;
+    float4 cam_pos            = lcp.cam_pos;
+    float4 light_amb          = lcp.ambient;
+    float4 light_diff         = lcp.diffuse;
+    float4 light_spec         = lcp.specular;
+    float con                 = attenuation_params.x;
+    float lin                 = attenuation_params.y;
+    float quadr               = attenuation_params.z;
+
+    float distance = length(position - frag_pos);
+    float attenuation = 1.0f / (con  + lin * distance + quadr * (distance * distance)); 
+
+    float4 ambient = diffuse_map_color * light_amb * attenuation;
+
+    float4 light_dir = normalize(position - frag_pos);
+    float diff = max(dot(norm, light_dir), 0.0f);
+    float4 diffuse = light_diff * diff * diffuse_map_color * attenuation;
+
+    float4 view_dir = normalize(cam_pos - frag_pos);
+    float4 reflect_dir = reflect(-light_dir, norm);
+    float spec = pow(max(dot(view_dir, reflect_dir), 0.0), 64);
+    float4 specular = light_spec * specular_map_color * spec * attenuation;
+
+    return ambient + diffuse + specular;
+}
+
 float4 main(PSInput input) : SV_TARGET {
-    float4 diffuse_map_color = diffuse_map.Sample(samplerState, input.tex_coord);
-    float4 specular_map_color = specular_map.Sample(samplerState, input.tex_coord);
-    Material mater = material[index];
+    LightCalculationParams lcp;
+    lcp.diffuse_map_color  = diffuse_map.Sample(samplerState, input.tex_coord);
+    lcp.specular_map_color = specular_map.Sample(samplerState, input.tex_coord);
+    lcp.norm               = float4(normalize(input.normal), 0.0f);
+    lcp.frag_pos           = float4(input.frag_pos, 0.0f);
+    lcp.cam_pos            = cam.pos;
+    Material mt = material[index]; 
 
-    float4 mat = float4(0.0f, 0.0f, 0.0f, 0.0f);
-    for (uint i = 0; i < 2; ++i)
+    float4 light_contribution = float4(0.0f, 0.0f, 0.0f, 0.0f);
+    for (uint i = 0; i < DIR_LIGHT_COUNT; ++i)
     {
-        float4 light_pos  = ls.position[i];
-        float4 light_diff = ls.diffuse[i];
-        float4 light_spec = ls.specular[i];
-        float4 norm       = float4(normalize(input.normal), 0.0f);
-        float4 frag_pos   = float4(input.frag_pos, 0.0f);
+        lcp.ambient  = light_params.ambient[i];
+        lcp.diffuse  = light_params.diffuse[i];
+        lcp.specular = light_params.specular[i];
+        light_contribution += calculate_dir_light(dir_light.direction[i], lcp);
+    }
 
-        // This component is 0.0f for directional light
-        float dir_light_component = light_pos.w;
+    for (i = DIR_LIGHT_COUNT; i < DIR_LIGHT_COUNT + POINT_LIGHT_COUNT; ++i)
+    {
+        lcp.ambient  = light_params.ambient[i];
+        lcp.diffuse  = light_params.diffuse[i];
+        lcp.specular = light_params.specular[i];
 
-        float con   = lerp(1.0f, ls.attenuation[i].x, dir_light_component);
-        float lin   = lerp(1.0f, ls.attenuation[i].y, dir_light_component);
-        float quadr = lerp(1.0f, ls.attenuation[i].z, dir_light_component);
-
-        float distance = length(light_pos - frag_pos);
-        float attenuation = lerp(
-                1.0f,
-                1.0f / (con  + lin * distance + quadr * (distance * distance)),
-                dir_light_component); 
-                
-        // calculate ambient ligth
-        float4 ambient = diffuse_map_color * ls.ambient[i] * attenuation;
-
-        // calculate diffuse light
-        float4 light_dir = normalize(lerp(light_pos, 
-                                light_pos - frag_pos, 
-                                dir_light_component)
-                            );
-
-        float diff = max(dot(norm, light_dir), 0.0f);
-        float4 diffuse = light_diff * diff * diffuse_map_color * attenuation;
-
-        // calculate specular light
-        float4 view_dir = normalize(cam.pos - frag_pos);
-        float4 reflect_dir = reflect(-light_dir, norm);
-        float spec = pow(max(dot(view_dir, reflect_dir), 0.0), 64);
-        float4 specular = light_spec * specular_map_color * spec * attenuation;
-
-        mat += (ambient + diffuse + specular);
+        light_contribution += 
+            calculate_point_light(
+                point_light.position[i - DIR_LIGHT_COUNT],
+                point_light.attenuation[i - DIR_LIGHT_COUNT], 
+                lcp
+            );
     }
 
     // For now index == 0 is an index of a light source cube so I just color it with
     // its light color
     // FIX ME
-    float4 res = lerp(ls.specular[0], mat, index > 0);
+    float4 res = lerp(light_params.specular[1], light_contribution, index > 0);
 
     return res;
 }

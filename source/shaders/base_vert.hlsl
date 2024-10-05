@@ -62,13 +62,35 @@ struct Material
     float shinines;
 };
 
-struct LightSource
+#define DIR_LIGHT_COUNT 1
+#define POINT_LIGHT_COUNT 1
+#define SPOT_LIGHT_COUNT 1
+#define LS_COUNT DIR_LIGHT_COUNT + POINT_LIGHT_COUNT //+ SPOT_LIGHT_COUNT
+#define MAT_COUNT 10
+
+struct DirLight 
 {
-    float4 position[2];
-    float4 ambient[2];
-    float4 diffuse[2];
-    float4 specular[2];
-    float4 attenuation[2];
+    float4 direction[DIR_LIGHT_COUNT];
+};
+
+struct PointLight
+{
+    float4 position[POINT_LIGHT_COUNT];
+    float4 attenuation[POINT_LIGHT_COUNT];
+};
+
+struct SpotLight
+{
+    float4 position[SPOT_LIGHT_COUNT];
+    float4 direction[SPOT_LIGHT_COUNT];
+    float4 cutoff[SPOT_LIGHT_COUNT];
+};
+
+struct LightParams
+{
+    float4 ambient[LS_COUNT];
+    float4 diffuse[LS_COUNT];
+    float4 specular[LS_COUNT];
 };
 
 struct Camera
@@ -84,13 +106,16 @@ cbuffer push_constant : register(b0, space2)
 cbuffer ubo : register(b1, space1)
 {
     MVP mvp;
-    LightSource ls;
+    DirLight dir_light;
+    PointLight point_light;
+    //SpotLight spot_light;
+    LightParams light_params;
     Camera cam;
 };
 
 cbuffer mat : register(b2, space0)
 {
-    Material material[10];
+    Material material[MAT_COUNT];
 };
 
 VSOutput main(VSInput input) {

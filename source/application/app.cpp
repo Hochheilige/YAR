@@ -28,15 +28,35 @@ struct Material
 	float pad[3];
 } material[10];
 
-static constexpr uint32_t kLightSourcesCount = 2;
+static constexpr uint32_t kDirLightCount = 1;
+static constexpr uint32_t kPointLightCount = 1;
+static constexpr uint32_t kSpotLightCount = 1;
+static constexpr uint64_t kLightSourcesCount = kDirLightCount + kPointLightCount;// +kSpotLightCount;
 
-struct LightSource
+struct DirectLight
 {
-	glm::vec4 position[kLightSourcesCount];
+	glm::vec4 direction[kDirLightCount];
+};
+
+struct PointLight
+{
+	glm::vec4 position[kPointLightCount];
+	glm::vec4 attenuation[kPointLightCount];
+};
+
+struct SpotLight
+{
+	glm::vec4 position[kSpotLightCount];
+	glm::vec4 direction[kSpotLightCount];
+	// not cool to use vec4 here
+	glm::vec4 cutoff[kSpotLightCount];
+};
+
+struct LightParams
+{
 	glm::vec4 ambient[kLightSourcesCount];
 	glm::vec4 diffuse[kLightSourcesCount];
 	glm::vec4 specular[kLightSourcesCount];
-	glm::vec4 attenuation[kLightSourcesCount];
 };
 
 struct UBO
@@ -44,9 +64,11 @@ struct UBO
 	glm::mat4 view;
 	glm::mat4 proj;
 	glm::mat4 model[10];
-	LightSource light;
-	glm::vec3 view_pos;
-	float pad;
+	DirectLight dir_light;
+	PointLight point_light;
+	//SpotLight spot_light;
+	LightParams light_params;
+	glm::vec4 view_pos;
 }ubo;
 
 bool firstMouse = true;
@@ -146,18 +168,20 @@ auto main() -> int {
 	// Point Light
 	memset(&ubo, 0x00, sizeof(ubo));
 
-	ubo.light.position[0] = *light_pos;
-	ubo.light.ambient[0] = glm::vec4(0.2f, 0.0f, 0.0f, 0.0f);
-	ubo.light.diffuse[0] = glm::vec4(0.5f, 0.0f, 0.0f, 0.0f);
-	ubo.light.specular[0] = glm::vec4(1.0f, 0.0f, 0.0f, 0.0f);
-	ubo.light.attenuation[0] = glm::vec4(1.0f, 0.09f, 0.032f, 0.0f);
+	// Dir Light
+	ubo.dir_light.direction[0] = glm::vec4(0.0f, 0.0f, 3.0f, 0.0f);
+	ubo.light_params.ambient[0] = glm::vec4(0.0f, 0.2f, 0.0f, 0.0f);
+	ubo.light_params.diffuse[0] = glm::vec4(0.0f, 0.4f, 0.0f, 0.0f);
+	ubo.light_params.specular[0] = glm::vec4(0.0f, 1.0f, 0.0f, 0.0f);
 
-	// directional light
-	ubo.light.position[1] = glm::vec4(0.0f, 0.0f, 3.0f, 0.0f);
-	ubo.light.ambient[1] = glm::vec4(0.0f, 0.2f, 0.0f, 0.0f);
-	ubo.light.diffuse[1] = glm::vec4(0.0f, 0.4f, 0.0f, 0.0f);
-	ubo.light.specular[1] = glm::vec4(0.0f, 1.0f, 0.0f, 0.0f);
+	// Point Light
+	ubo.point_light.position[0] = *light_pos;
+	ubo.point_light.attenuation[0] = glm::vec4(1.0f, 0.007f, 0.0002f, 0.0f);
+	ubo.light_params.ambient[1] = glm::vec4(0.2f, 0.0f, 0.0f, 0.0f);
+	ubo.light_params.diffuse[1] = glm::vec4(0.5f, 0.0f, 0.0f, 0.0f);
+	ubo.light_params.specular[1] = glm::vec4(1.0f, 0.0f, 0.0f, 0.0f);
 
+	// Spotlight
 
 	Texture* diffuse_map_tex;
 	Texture* specular_map_tex;
@@ -420,8 +444,8 @@ auto main() -> int {
 		glClearColor(gBackGroundColor[0], gBackGroundColor[1], gBackGroundColor[2], 1.0f);
 		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-		ubo.light.position[0] = *light_pos; // update point light pos
-		ubo.view_pos = camera.pos;
+		ubo.point_light.position[0] = *light_pos; // update point light pos
+		ubo.view_pos = glm::vec4(camera.pos, 0.0f);
 		ubo.view = glm::mat4(1.0f);
 		ubo.view = glm::lookAt(camera.pos, camera.pos + camera.front, camera.up);
 		ubo.proj = glm::perspective(glm::radians(fov), 1920.0f / 1080.0f, 0.1f, 100.0f);
