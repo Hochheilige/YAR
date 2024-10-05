@@ -183,11 +183,16 @@ auto main() -> int {
 	ubo.light_params.specular[1] = glm::vec4(1.0f, 0.0f, 0.0f, 0.0f);
 
 	// Spotlight
-	ubo.spot_light.cutoff[0] = glm::vec4(glm::cos(glm::radians(12.5f)), 0.0f, 0.0f, 0.0f);
+	ubo.spot_light.cutoff[0] = glm::vec4(
+		glm::cos(glm::radians(12.5f)), 
+		glm::cos(glm::radians(17.5f)),
+		0.0f, 0.0f
+	);
 	ubo.spot_light.attenuation[0] = glm::vec4(1.0f, 0.007f, 0.0002f, 0.0f);
 	ubo.light_params.ambient[2] = glm::vec4(0.0f, 0.0f, 0.2f, 0.0f);
 	ubo.light_params.diffuse[2] = glm::vec4(0.0f, 0.0f, 0.5f, 0.0f);
 	ubo.light_params.specular[2] = glm::vec4(0.0f, 0.0f, 1.0f, 0.0f);
+
 
 	Texture* diffuse_map_tex;
 	Texture* specular_map_tex;

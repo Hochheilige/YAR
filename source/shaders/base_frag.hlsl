@@ -162,26 +162,23 @@ float4 calculate_spot_light(float4 position, float4 direction, float4 cutoff, fl
 
     float4 light_dir = normalize(position - frag_pos);
     float theta = dot(light_dir, normalize(-direction));
-    if (theta > cutoff.x)
-    {
-        float distance = length(position - frag_pos);
-        float attenuation = 1.0f / (con  + lin * distance + quadr * (distance * distance)); 
+    float epsilon   = cutoff.x - cutoff.y;
+    float intensity = clamp((theta - cutoff.y) / epsilon, 0.0, 1.0);   
 
-        float4 ambient = diffuse_map_color * light_amb;
+    float distance = length(position - frag_pos);
+    float attenuation = 1.0f / (con  + lin * distance + quadr * (distance * distance)); 
 
-        float4 light_dir = normalize(position - frag_pos);
-        float diff = max(dot(norm, light_dir), 0.0f);
-        float4 diffuse = light_diff * diff * diffuse_map_color * attenuation;
+    float4 ambient = diffuse_map_color * light_amb;
 
-        float4 view_dir = normalize(cam_pos - frag_pos);
-        float4 reflect_dir = reflect(-light_dir, norm);
-        float spec = pow(max(dot(view_dir, reflect_dir), 0.0), 64);
-        float4 specular = light_spec * specular_map_color * spec * attenuation;
+    float diff = max(dot(norm, light_dir), 0.0f);
+    float4 diffuse = light_diff * diff * diffuse_map_color * attenuation * intensity;
+    
+    float4 view_dir = normalize(cam_pos - frag_pos);
+    float4 reflect_dir = reflect(-light_dir, norm);
+    float spec = pow(max(dot(view_dir, reflect_dir), 0.0), 64);
+    float4 specular = light_spec * specular_map_color * spec * attenuation * intensity;
 
-        return ambient + diffuse + specular;
-    }
-
-    return float4(0.0f, 0.0f, 0.0f, 0.0f);
+    return ambient + diffuse + specular;
 }
 
 float4 main(PSInput input) : SV_TARGET {
