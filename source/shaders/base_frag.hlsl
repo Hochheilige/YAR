@@ -27,6 +27,7 @@ struct LightSource
     float4 ambient[2];
     float4 diffuse[2];
     float4 specular[2];
+    float4 attenuation[2];
 };
 
 struct Camera
@@ -59,32 +60,43 @@ float4 main(PSInput input) : SV_TARGET {
     float4 mat = float4(0.0f, 0.0f, 0.0f, 0.0f);
     for (uint i = 0; i < 2; ++i)
     {
-        float4 light_pos = ls.position[i];
+        float4 light_pos  = ls.position[i];
         float4 light_diff = ls.diffuse[i];
         float4 light_spec = ls.specular[i];
+        float4 norm       = float4(normalize(input.normal), 0.0f);
+        float4 frag_pos   = float4(input.frag_pos, 0.0f);
 
-        float4 norm = float4(normalize(input.normal), 0.0f);
-        float4 frag_pos = float4(input.frag_pos, 0.0f);
         // This component is 0.0f for directional light
         float dir_light_component = light_pos.w;
 
+        float con   = lerp(1.0f, ls.attenuation[i].x, dir_light_component);
+        float lin   = lerp(1.0f, ls.attenuation[i].y, dir_light_component);
+        float quadr = lerp(1.0f, ls.attenuation[i].z, dir_light_component);
+
+        float distance = length(light_pos - frag_pos);
+        float attenuation = lerp(
+                1.0f,
+                1.0f / (con  + lin * distance + quadr * (distance * distance)),
+                dir_light_component); 
+                
         // calculate ambient ligth
-        float4 ambient = diffuse_map_color * ls.ambient[i];
+        float4 ambient = diffuse_map_color * ls.ambient[i] * attenuation;
 
         // calculate diffuse light
         float4 light_dir = normalize(lerp(light_pos, 
                                 light_pos - frag_pos, 
-                                dir_light_component > 0)
+                                dir_light_component)
                             );
 
         float diff = max(dot(norm, light_dir), 0.0f);
-        float4 diffuse = light_diff * diff * diffuse_map_color;
+        float4 diffuse = light_diff * diff * diffuse_map_color * attenuation;
 
         // calculate specular light
         float4 view_dir = normalize(cam.pos - frag_pos);
         float4 reflect_dir = reflect(-light_dir, norm);
         float spec = pow(max(dot(view_dir, reflect_dir), 0.0), 64);
-        float4 specular = light_spec * specular_map_color * spec;
+        float4 specular = light_spec * specular_map_color * spec * attenuation;
+
         mat += (ambient + diffuse + specular);
     }
 

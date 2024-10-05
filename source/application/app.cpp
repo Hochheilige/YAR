@@ -36,6 +36,7 @@ struct LightSource
 	glm::vec4 ambient[kLightSourcesCount];
 	glm::vec4 diffuse[kLightSourcesCount];
 	glm::vec4 specular[kLightSourcesCount];
+	glm::vec4 attenuation[kLightSourcesCount];
 };
 
 struct UBO
@@ -139,12 +140,17 @@ auto main() -> int {
 		glm::vec4(-1.3f,  1.0f, -1.5f , 1.0f)
 	};
 
-	// Not totally correct point light
+
 	light_pos = &cube_positions[0];
+
+	// Point Light
+	memset(&ubo, 0x00, sizeof(ubo));
+
 	ubo.light.position[0] = *light_pos;
 	ubo.light.ambient[0] = glm::vec4(0.2f, 0.0f, 0.0f, 0.0f);
 	ubo.light.diffuse[0] = glm::vec4(0.5f, 0.0f, 0.0f, 0.0f);
 	ubo.light.specular[0] = glm::vec4(1.0f, 0.0f, 0.0f, 0.0f);
+	ubo.light.attenuation[0] = glm::vec4(1.0f, 0.09f, 0.032f, 0.0f);
 
 	// directional light
 	ubo.light.position[1] = glm::vec4(0.0f, 0.0f, 3.0f, 0.0f);
@@ -368,6 +374,7 @@ auto main() -> int {
 			.descriptor = mat_buf
 		}
 	};
+
 
 	update_set_desc = {};
 	update_set_desc.index = 0;

@@ -68,6 +68,7 @@ struct LightSource
     float4 ambient[2];
     float4 diffuse[2];
     float4 specular[2];
+    float4 attenuation[2];
 };
 
 struct Camera
