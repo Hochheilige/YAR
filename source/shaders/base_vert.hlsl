@@ -65,7 +65,7 @@ struct Material
 #define DIR_LIGHT_COUNT 1
 #define POINT_LIGHT_COUNT 1
 #define SPOT_LIGHT_COUNT 1
-#define LS_COUNT DIR_LIGHT_COUNT + POINT_LIGHT_COUNT //+ SPOT_LIGHT_COUNT
+#define LS_COUNT DIR_LIGHT_COUNT + POINT_LIGHT_COUNT + SPOT_LIGHT_COUNT
 #define MAT_COUNT 10
 
 struct DirLight 
@@ -84,6 +84,7 @@ struct SpotLight
     float4 position[SPOT_LIGHT_COUNT];
     float4 direction[SPOT_LIGHT_COUNT];
     float4 cutoff[SPOT_LIGHT_COUNT];
+    float4 attenuation[SPOT_LIGHT_COUNT];
 };
 
 struct LightParams
@@ -108,7 +109,7 @@ cbuffer ubo : register(b1, space1)
     MVP mvp;
     DirLight dir_light;
     PointLight point_light;
-    //SpotLight spot_light;
+    SpotLight spot_light;
     LightParams light_params;
     Camera cam;
 };

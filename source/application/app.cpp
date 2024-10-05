@@ -31,7 +31,7 @@ struct Material
 static constexpr uint32_t kDirLightCount = 1;
 static constexpr uint32_t kPointLightCount = 1;
 static constexpr uint32_t kSpotLightCount = 1;
-static constexpr uint64_t kLightSourcesCount = kDirLightCount + kPointLightCount;// +kSpotLightCount;
+static constexpr uint64_t kLightSourcesCount = kDirLightCount + kPointLightCount +kSpotLightCount;
 
 struct DirectLight
 {
@@ -50,6 +50,7 @@ struct SpotLight
 	glm::vec4 direction[kSpotLightCount];
 	// not cool to use vec4 here
 	glm::vec4 cutoff[kSpotLightCount];
+	glm::vec4 attenuation[kPointLightCount];
 };
 
 struct LightParams
@@ -66,7 +67,7 @@ struct UBO
 	glm::mat4 model[10];
 	DirectLight dir_light;
 	PointLight point_light;
-	//SpotLight spot_light;
+	SpotLight spot_light;
 	LightParams light_params;
 	glm::vec4 view_pos;
 }ubo;
@@ -182,6 +183,11 @@ auto main() -> int {
 	ubo.light_params.specular[1] = glm::vec4(1.0f, 0.0f, 0.0f, 0.0f);
 
 	// Spotlight
+	ubo.spot_light.cutoff[0] = glm::vec4(glm::cos(glm::radians(12.5f)), 0.0f, 0.0f, 0.0f);
+	ubo.spot_light.attenuation[0] = glm::vec4(1.0f, 0.007f, 0.0002f, 0.0f);
+	ubo.light_params.ambient[2] = glm::vec4(0.0f, 0.0f, 0.2f, 0.0f);
+	ubo.light_params.diffuse[2] = glm::vec4(0.0f, 0.0f, 0.5f, 0.0f);
+	ubo.light_params.specular[2] = glm::vec4(0.0f, 0.0f, 1.0f, 0.0f);
 
 	Texture* diffuse_map_tex;
 	Texture* specular_map_tex;
@@ -449,6 +455,8 @@ auto main() -> int {
 		ubo.view = glm::mat4(1.0f);
 		ubo.view = glm::lookAt(camera.pos, camera.pos + camera.front, camera.up);
 		ubo.proj = glm::perspective(glm::radians(fov), 1920.0f / 1080.0f, 0.1f, 100.0f);
+		ubo.spot_light.position[0] = ubo.view_pos;
+		ubo.spot_light.direction[0] = glm::vec4(camera.front, 0.0f);
 
 		for (uint32_t i = 0; i < 10; ++i)
 		{
