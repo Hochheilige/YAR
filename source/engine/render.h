@@ -331,11 +331,10 @@ struct DescriptorInfo
     {
         Texture* texture;
         std::string sampler_name;
-        Sampler* sampler;
     };
 
     std::string name;
-    std::variant<Buffer*, CombinedTextureSample> descriptor;
+    std::variant<Buffer*, Sampler*, CombinedTextureSample> descriptor;
 };
 
 struct UpdateDescriptorSetDesc

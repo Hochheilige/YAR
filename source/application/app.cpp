@@ -392,7 +392,6 @@ auto main() -> int {
 			DescriptorInfo::CombinedTextureSample{
 				diffuse_map_tex,
 				"samplerState",
-				sampler
 			}
 		},
 		{
@@ -401,8 +400,11 @@ auto main() -> int {
 			DescriptorInfo::CombinedTextureSample{
 				specular_map_tex,
 				"samplerState",
-				sampler
 			}
+		},
+		{
+			.name = "samplerState",
+			.descriptor = sampler
 		},
 		{
 			.name = "mat",

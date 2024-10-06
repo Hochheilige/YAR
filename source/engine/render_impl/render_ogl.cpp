@@ -1100,18 +1100,21 @@ void gl_cmdBindDescriptorSet(CmdBuffer* cmd, DescriptorSet* set, uint32_t index)
                 if (info_iter != infos.end())
                 {
                     const auto& comb = std::get<CombTextureSampler>(info_iter->descriptor);
-                    const auto& sampler = std::find_if(set->descriptors.begin(), set->descriptors.end(),
-                        [&](const ShaderResource& res)
+                    const auto& sampler_iter = std::find_if(infos.begin(), infos.end(),
+                        [&](const DescriptorInfo& info)
                         {
-                            return res.name == comb.sampler_name;
+                            return
+                                std::holds_alternative<Sampler*>(info.descriptor)
+                                && info.name == comb.sampler_name;
                         }
                     );
-                    if (sampler != set->descriptors.end())
+                    if (sampler_iter != infos.end())
                     {
+                        const Sampler* sampler = std::get<Sampler*>(sampler_iter->descriptor);
                         glBindTextureUnit(descriptor.binding, comb.texture->id);
                         // In OpenGL in case of it use CombinedTextureSampler
                         // binding point for sampler should be equal to texture binding point
-                        glBindSampler(descriptor.binding, comb.sampler->id);
+                        glBindSampler(descriptor.binding, sampler->id);
                     }
                     else
                     {
