@@ -7,11 +7,13 @@ from tqdm import tqdm
 def run_command_with_progress(command, estimated_time=30, description="Running command"):
     print(f"starting: {description}")
 
-    process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
 
     with tqdm(total=100, desc=description, unit="%", ncols=100, ascii=True, file=sys.stdout) as progress_bar:
         start_time = time.time()
+
         while process.poll() is None:
+            output = process.stdout.readline()
             elapsed_time = time.time() - start_time
             progress = min((elapsed_time / estimated_time) * 100, 100)
             progress_bar.update(progress - progress_bar.n)
@@ -38,13 +40,13 @@ def add_git_submodule(repo_url, submodule_path):
     add_command = ['git', 'submodule', 'add', repo_url, submodule_path]
     update_command = ['git', 'submodule', 'update', '--init', '--recursive']
 
-    estimated_time_add = 10
-    estimated_time_update = 10
+    estimated_time_add = 15
+    estimated_time_update = 15
 
     run_command_with_progress(add_command, estimated_time=estimated_time_add, description="adding submodule")
     run_command_with_progress(update_command, estimated_time=estimated_time_update, description="updating submodule")
 
-def build_project(project_path, project_name):
+def build_project(project_path, project_name, cmake_additional_commands):
     configurations = ["Debug", "Release"]
     tools_dir = os.path.dirname(os.path.abspath(__file__))
     root_dir = os.path.dirname(tools_dir)
@@ -55,12 +57,8 @@ def build_project(project_path, project_name):
         "-B", build_dir, 
         f"-DCMAKE_ARCHIVE_OUTPUT_DIRECTORY_DEBUG={root_dir}/external/lib/Debug",
         f"-DCMAKE_ARCHIVE_OUTPUT_DIRECTORY_RELEASE={root_dir}/external/lib/Release",
-        "-DBUILD_SHARED_LIBS=OFF",
-        "-DGLFW_LIBRARY_TYPE=STATIC",
-        "-DGLFW_BUILD_EXAMPLES=0",
-        "-DGLFW_BUILD_TESTS=0", 
-        "-DGLFW_BUILD_DOCS=0"
     ]
+    cmake_command += cmake_additional_commands
     run_command_with_progress(cmake_command, estimated_time=15, description=f"Configuring {project_name} project")
 
     for config in configurations:
@@ -73,7 +71,7 @@ def build_project(project_path, project_name):
         description = f"Building {project_name} ({config} configuration)"
 
         # Run the build command with progress
-        run_command_with_progress(build_command, estimated_time=15, description=description)
+        run_command_with_progress(build_command, estimated_time=120, description=description)
 
 output_path = 'external/glad'
 if os.path.isdir(output_path):
@@ -93,6 +91,7 @@ submodules_urls = [
     "https://github.com/KhronosGroup/SPIRV-Reflect.git",
     "https://github.com/KhronosGroup/SPIRV-Cross.git",
     "https://github.com/g-truc/glm.git",
+    "https://github.com/assimp/assimp",
 ]
 
 submodules_paths = [
@@ -102,9 +101,25 @@ submodules_paths = [
     "external/spirv-reflect",
     "external/spirv-cross",
     "external/glm",
+    "external/assimp",
 ]
 
 for url, path in zip(submodules_urls, submodules_paths):
     add_git_submodule(url, path)
 
-build_project(submodules_paths[0], "glfw")
+build_project(submodules_paths[0], "glfw", 
+        ["-DBUILD_SHARED_LIBS=OFF",
+        "-DGLFW_LIBRARY_TYPE=STATIC",
+        "-DGLFW_BUILD_EXAMPLES=0",
+        "-DGLFW_BUILD_TESTS=0", 
+        "-DGLFW_BUILD_DOCS=0"
+        ]
+)
+build_project(submodules_paths[6], "assimp", 
+        ["-DBUILD_SHARED_LIBS=OFF",
+         "-DASSIMP_BUILD_TESTS=OFF",
+         "-DASSIMP_INSTALL=OFF",
+         "-DASSIMP_INJECT_DEBUG_POSTFIX=OFF",
+         "-DASSIMP_BUILD_ASSIMP_VIEW=OFF"
+        ]
+)
