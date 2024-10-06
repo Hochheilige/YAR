@@ -14,6 +14,153 @@
 #include <glm/gtc/type_ptr.hpp>
 
 #include <iostream>
+#include <optional>
+
+using VertexData = std::variant<glm::vec2, glm::vec3, glm::vec4>;
+
+struct VertexAttributeLayout
+{
+	VertexData data;
+	std::string name;
+};
+
+struct Vertex
+{
+	std::vector<VertexData> data;
+};
+
+struct VertexBuffer
+{
+	VertexBuffer(const std::vector<VertexAttributeLayout>&& attr, const std::vector<Vertex>&& vert) :
+		attributes(attr), vertexes(vert), plain_data(), size(0) {}
+
+	std::vector<VertexAttributeLayout> attributes;
+	std::vector<Vertex> vertexes;
+
+private:
+	std::vector<float> plain_data;
+	size_t size;
+
+	size_t get_vertex_buffer_size()
+	{
+		size_t data_size = 0;
+		for (const auto& vertex : vertexes)
+		{
+			data_size += vertex.data.size();
+		}
+		return data_size * sizeof(float);
+	}
+
+public:
+	float* get_plain_data()
+	{
+		size_t data_size = get_vertex_buffer_size();
+		if (data_size != size)
+		{
+			size = data_size;
+
+			plain_data.reserve(data_size);
+
+			for (const auto& vertex : vertexes)
+			{
+				for (const auto& attr : vertex.data)
+				{
+					std::visit([&](auto&& arg) {
+						using T = std::decay_t<decltype(arg)>;
+						if constexpr (std::is_same_v<T, glm::vec2>)
+						{
+							plain_data.push_back(arg.x);
+							plain_data.push_back(arg.y);
+						}
+						else if constexpr (std::is_same_v<T, glm::vec3>)
+						{
+							plain_data.push_back(arg.x);
+							plain_data.push_back(arg.y);
+							plain_data.push_back(arg.z);
+						}
+						else if constexpr (std::is_same_v<T, glm::vec4>)
+						{
+							plain_data.push_back(arg.x);
+							plain_data.push_back(arg.y);
+							plain_data.push_back(arg.z);
+							plain_data.push_back(arg.w);
+						}
+						}, attr);
+				}
+			}
+		}
+
+		return plain_data.data();
+	}
+
+	size_t get_size()
+	{
+		return vertex_size() * vertexes.size();
+	}
+
+	uint32_t offsetof_by_name(std::string_view name)
+	{
+		size_t offset = 0;
+		for (const auto& attr : attributes) {
+			if (attr.name == name) {
+				return offset;
+			}
+			if (std::holds_alternative<glm::vec2>(attr.data)) {
+				offset += sizeof(glm::vec2);
+			}
+			else if (std::holds_alternative<glm::vec3>(attr.data)) {
+				offset += sizeof(glm::vec3);
+			}
+			else if (std::holds_alternative<glm::vec4>(attr.data)) {
+				offset += sizeof(glm::vec4);
+			}
+		}
+		return -1;
+	}
+
+	size_t attribute_size(std::string_view name)
+	{
+		for (const auto& attr : attributes) {
+			if (attr.name == name) {
+				if (std::holds_alternative<glm::vec2>(attr.data)) {
+					return 2;
+				}
+				else if (std::holds_alternative<glm::vec3>(attr.data)) {
+					return 3;
+				}
+				else if (std::holds_alternative<glm::vec4>(attr.data)) {
+					return 4;
+				}
+			}
+		}
+		return -1;
+	}
+
+	size_t vertex_size()
+	{
+		size_t size = 0;
+		for (const auto& attr : attributes) {
+			if (std::holds_alternative<glm::vec2>(attr.data)) {
+				size += sizeof(glm::vec2);
+			}
+			else if (std::holds_alternative<glm::vec3>(attr.data)) {
+				size += sizeof(glm::vec3);
+			}
+			else if (std::holds_alternative<glm::vec4>(attr.data)) {
+				size += sizeof(glm::vec4);
+			}
+		}
+		return size;
+	}
+};
+
+struct Mesh
+{
+	VertexBuffer buf;
+	std::vector<uint32_t> indices;
+	// there should be textures probably
+
+};
 
 struct Camera
 {
@@ -97,37 +244,43 @@ auto main() -> int {
 	SwapChain* swapchain;
 	add_swapchain(true, &swapchain);
 
-	float vertices[] = {
-		   // positions    // tex coords    // normals
-		-0.5f, -0.5f,  0.5f,  0.0f, 0.0f, 0.0f, 0.0f, 1.0f,
-		 0.5f, -0.5f,  0.5f,  1.0f, 0.0f, 0.0f, 0.0f, 1.0f,
-		 0.5f,  0.5f,  0.5f,  1.0f, 1.0f, 0.0f, 0.0f, 1.0f,
-		-0.5f,  0.5f,  0.5f,  0.0f, 1.0f, 0.0f, 0.0f, 1.0f,
+	VertexBuffer vertex_buffer{
+		{
+			VertexAttributeLayout{glm::vec3{}, "position"},
+			VertexAttributeLayout{glm::vec2{}, "tex_coords"},
+			VertexAttributeLayout{glm::vec3{}, "normal"},
+		},
+		{
+			Vertex{{glm::vec3(-0.5f, -0.5f,  0.5f), glm::vec2{0.0f, 0.0f}, glm::vec3{0.0f, 0.0f, 1.0f}}},
+			Vertex{{glm::vec3( 0.5f, -0.5f,  0.5f), glm::vec2{1.0f, 0.0f}, glm::vec3{0.0f, 0.0f, 1.0f}}},
+			Vertex{{glm::vec3( 0.5f,  0.5f,  0.5f), glm::vec2{1.0f, 1.0f}, glm::vec3{0.0f, 0.0f, 1.0f}}},
+			Vertex{{glm::vec3(-0.5f,  0.5f,  0.5f), glm::vec2{0.0f, 1.0f}, glm::vec3{0.0f, 0.0f, 1.0f}}},
 
-		-0.5f, -0.5f, -0.5f,  0.0f, 0.0f, 0.0f, 0.0f, -1.0f,
-		 0.5f, -0.5f, -0.5f,  1.0f, 0.0f, 0.0f, 0.0f, -1.0f,
-		 0.5f,  0.5f, -0.5f,  1.0f, 1.0f, 0.0f, 0.0f, -1.0f,
-		-0.5f,  0.5f, -0.5f,  0.0f, 1.0f, 0.0f, 0.0f, -1.0f,
+			Vertex{{glm::vec3(-0.5f, -0.5f, -0.5f), glm::vec2{0.0f, 0.0f}, glm::vec3{0.0f, 0.0f, -1.0f}}},
+			Vertex{{glm::vec3( 0.5f, -0.5f, -0.5f), glm::vec2{1.0f, 0.0f}, glm::vec3{0.0f, 0.0f, -1.0f}}},
+			Vertex{{glm::vec3( 0.5f,  0.5f, -0.5f), glm::vec2{1.0f, 1.0f}, glm::vec3{0.0f, 0.0f, -1.0f}}},
+			Vertex{{glm::vec3(-0.5f,  0.5f, -0.5f), glm::vec2{0.0f, 1.0f}, glm::vec3{0.0f, 0.0f, -1.0f}}},
 
-		-0.5f, -0.5f, -0.5f,  1.0f, 0.0f, -1.0f, 0.0f, 0.0f,
-		-0.5f, -0.5f,  0.5f,  0.0f, 0.0f, -1.0f, 0.0f, 0.0f,
-		-0.5f,  0.5f,  0.5f,  0.0f, 1.0f, -1.0f, 0.0f, 0.0f,
-		-0.5f,  0.5f, -0.5f,  1.0f, 1.0f, -1.0f, 0.0f, 0.0f,
+			Vertex{{glm::vec3(-0.5f, -0.5f, -0.5f), glm::vec2{1.0f, 0.0f}, glm::vec3{-1.0f, 0.0f, 0.0f}}},
+			Vertex{{glm::vec3(-0.5f, -0.5f,  0.5f), glm::vec2{0.0f, 0.0f}, glm::vec3{-1.0f, 0.0f, 0.0f}}},
+			Vertex{{glm::vec3(-0.5f,  0.5f,  0.5f), glm::vec2{0.0f, 1.0f}, glm::vec3{-1.0f, 0.0f, 0.0f}}},
+			Vertex{{glm::vec3(-0.5f,  0.5f, -0.5f), glm::vec2{1.0f, 1.0f}, glm::vec3{-1.0f, 0.0f, 0.0f}}},
 
-		 0.5f, -0.5f, -0.5f,  0.0f, 0.0f, 1.0f, 0.0f, 0.0f,
-		 0.5f, -0.5f,  0.5f,  1.0f, 0.0f, 1.0f, 0.0f, 0.0f,
-		 0.5f,  0.5f,  0.5f,  1.0f, 1.0f, 1.0f, 0.0f, 0.0f,
-		 0.5f,  0.5f, -0.5f,  0.0f, 1.0f, 1.0f, 0.0f, 0.0f,
+			Vertex{{glm::vec3(0.5f, -0.5f, -0.5f), glm::vec2{0.0f, 0.0f}, glm::vec3{1.0f, 0.0f, 0.0f}}},
+			Vertex{{glm::vec3(0.5f, -0.5f,  0.5f), glm::vec2{1.0f, 0.0f}, glm::vec3{1.0f, 0.0f, 0.0f}}},
+			Vertex{{glm::vec3(0.5f,  0.5f,  0.5f), glm::vec2{1.0f, 1.0f}, glm::vec3{1.0f, 0.0f, 0.0f}}},
+			Vertex{{glm::vec3(0.5f,  0.5f, -0.5f), glm::vec2{0.0f, 1.0f}, glm::vec3{1.0f, 0.0f, 0.0f}}},
 
-		-0.5f, -0.5f, -0.5f,  0.0f, 1.0f, 0.0f, -1.0f, 0.0f,
-		 0.5f, -0.5f, -0.5f,  1.0f, 1.0f, 0.0f, -1.0f, 0.0f,
-		 0.5f, -0.5f,  0.5f,  1.0f, 0.0f, 0.0f, -1.0f, 0.0f,
-		-0.5f, -0.5f,  0.5f,  0.0f, 0.0f, 0.0f, -1.0f, 0.0f,
+			Vertex{{glm::vec3(-0.5f, -0.5f, -0.5f), glm::vec2{0.0f, 1.0f}, glm::vec3{0.0f, -1.0f, 0.0f}}},
+			Vertex{{glm::vec3( 0.5f, -0.5f, -0.5f), glm::vec2{1.0f, 1.0f}, glm::vec3{0.0f, -1.0f, 0.0f}}},
+			Vertex{{glm::vec3( 0.5f, -0.5f,  0.5f), glm::vec2{1.0f, 0.0f}, glm::vec3{0.0f, -1.0f, 0.0f}}},
+			Vertex{{glm::vec3(-0.5f, -0.5f,  0.5f), glm::vec2{0.0f, 0.0f}, glm::vec3{0.0f, -1.0f, 0.0f}}},
 
-		-0.5f,  0.5f, -0.5f,  0.0f, 0.0f, 0.0f, 1.0f, 0.0f,
-		 0.5f,  0.5f, -0.5f,  1.0f, 0.0f, 0.0f, 1.0f, 0.0f,
-		 0.5f,  0.5f,  0.5f,  1.0f, 1.0f, 0.0f, 1.0f, 0.0f,
-		-0.5f,  0.5f,  0.5f,  0.0f, 1.0f, 0.0f, 1.0f, 0.0f,
+			Vertex{{glm::vec3(-0.5f,  0.5f, -0.5f), glm::vec2{0.0f, 0.0f}, glm::vec3{0.0f, 1.0f, 0.0f}}},
+			Vertex{{glm::vec3( 0.5f,  0.5f, -0.5f), glm::vec2{1.0f, 0.0f}, glm::vec3{0.0f, 1.0f, 0.0f}}},
+			Vertex{{glm::vec3( 0.5f,  0.5f,  0.5f), glm::vec2{1.0f, 1.0f}, glm::vec3{0.0f, 1.0f, 0.0f}}},
+			Vertex{{glm::vec3(-0.5f,  0.5f,  0.5f), glm::vec2{0.0f, 1.0f}, glm::vec3{0.0f, 1.0f, 0.0f}}},
+		}
 	};
 
 	uint32_t indexes[] = {
@@ -263,7 +416,7 @@ auto main() -> int {
 	add_sampler(&sampler_desc, &sampler);
 
 	BufferDesc buffer_desc;
-	buffer_desc.size = sizeof(vertices);
+	buffer_desc.size = vertex_buffer.get_size();
 	buffer_desc.flags = kBufferFlagGPUOnly;
 	Buffer* vbo = nullptr;
 	add_buffer(&buffer_desc, &vbo);
@@ -299,9 +452,9 @@ auto main() -> int {
 		BufferUpdateDesc update_desc{};
 		resource_update_desc = &update_desc;
 		update_desc.buffer = vbo;
-		update_desc.size = sizeof(vertices);
+		update_desc.size = vertex_buffer.get_size();
 		begin_update_resource(resource_update_desc);
-		std::memcpy(update_desc.mapped_data, vertices, sizeof(vertices));
+		std::memcpy(update_desc.mapped_data, vertex_buffer.get_plain_data(), vertex_buffer.get_size());
 		end_update_resource(resource_update_desc);
 
 		update_desc.buffer = ebo;
@@ -348,15 +501,15 @@ auto main() -> int {
 
 	VertexLayout layout = {0};
 	layout.attrib_count = 3;
-	layout.attribs[0].size = 3;
+	layout.attribs[0].size = vertex_buffer.attribute_size("position");
 	layout.attribs[0].format = GL_FLOAT;
-	layout.attribs[0].offset = 0;
-	layout.attribs[1].size = 2;
+	layout.attribs[0].offset = vertex_buffer.offsetof_by_name("position");
+	layout.attribs[1].size = vertex_buffer.attribute_size("tex_coords");
 	layout.attribs[1].format = GL_FLOAT;
-	layout.attribs[1].offset = 3 * sizeof(float);
-	layout.attribs[2].size = 3;
+	layout.attribs[1].offset = vertex_buffer.offsetof_by_name("tex_coords");
+	layout.attribs[2].size = vertex_buffer.attribute_size("normal");
 	layout.attribs[2].format = GL_FLOAT;
-	layout.attribs[2].offset = 5 * sizeof(float);
+	layout.attribs[2].offset = vertex_buffer.offsetof_by_name("normal");
 
 
 	DescriptorSetDesc set_desc;
