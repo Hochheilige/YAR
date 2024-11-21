@@ -232,6 +232,11 @@ enum ResourceType : uint8_t
 };
 MAKE_ENUM_FLAG(uint8_t, ResourceType);
 
+enum VertexAttribFormat : uint8_t
+{
+    kAttribFormatFloat = 0,
+};
+
 struct ShaderResource
 {
     std::string name;
@@ -285,7 +290,7 @@ struct Shader
 struct VertexAttrib
 {
     uint32_t size;
-    uint32_t format;
+    VertexAttribFormat format;
     uint32_t binding;
     uint32_t offset;    
 };

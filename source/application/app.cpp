@@ -502,13 +502,13 @@ auto main() -> int {
 	VertexLayout layout = {0};
 	layout.attrib_count = 3;
 	layout.attribs[0].size = vertex_buffer.attribute_size("position");
-	layout.attribs[0].format = GL_FLOAT;
+	layout.attribs[0].format = kAttribFormatFloat;
 	layout.attribs[0].offset = vertex_buffer.offsetof_by_name("position");
 	layout.attribs[1].size = vertex_buffer.attribute_size("tex_coords");
-	layout.attribs[1].format = GL_FLOAT;
+	layout.attribs[1].format = kAttribFormatFloat;
 	layout.attribs[1].offset = vertex_buffer.offsetof_by_name("tex_coords");
 	layout.attribs[2].size = vertex_buffer.attribute_size("normal");
-	layout.attribs[2].format = GL_FLOAT;
+	layout.attribs[2].format = kAttribFormatFloat;
 	layout.attribs[2].offset = vertex_buffer.offsetof_by_name("normal");
 
 

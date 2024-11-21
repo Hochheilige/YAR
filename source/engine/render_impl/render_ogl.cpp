@@ -92,7 +92,7 @@ void APIENTRY util_debug_message_callback(GLenum source, GLenum type,
     std::cout << log.str() << std::endl;
 }
 
-uint32_t util_shader_stage_to_gl_stage(ShaderStage stage)
+static GLenum util_shader_stage_to_gl_stage(ShaderStage stage)
 {
     switch (stage)
     {
@@ -112,11 +112,10 @@ uint32_t util_shader_stage_to_gl_stage(ShaderStage stage)
     }
 }
 
-std::wstring util_stage_to_target_profile(ShaderStage stage)
+static std::wstring util_stage_to_target_profile(ShaderStage stage)
 {
     switch (stage)
     {
-
     case kShaderStageVert:
         return L"vs_6_0";
     case kShaderStageFrag:
@@ -131,7 +130,7 @@ std::wstring util_stage_to_target_profile(ShaderStage stage)
     }
 }
 
-std::string_view util_get_file_ext(std::string_view path)
+static std::string_view util_get_file_ext(std::string_view path)
 {
     size_t dot_pos = path.find_last_of('.');
     if (dot_pos == std::string_view::npos)
@@ -141,12 +140,12 @@ std::string_view util_get_file_ext(std::string_view path)
 }
 
 // Helper function to convert std::wstring to LPCWSTR
-LPCWSTR util_to_LPCWSTR(const std::wstring& s) 
+static LPCWSTR util_to_LPCWSTR(const std::wstring& s) 
 {
     return s.c_str();
 }
 
-std::wstring util_convert_to_wstring(std::string_view str_view)
+static std::wstring util_convert_to_wstring(std::string_view str_view)
  {
     std::wstring_convert<std::codecvt_utf8<wchar_t>> converter;
     std::string str(str_view);
@@ -161,7 +160,7 @@ struct SpirvHeader {
     uint32_t instructionOffset;
 };
 
-bool util_compile_hlsl_to_spirv(ShaderStageLoadDesc* load_desc, std::vector<uint8_t>& spirv) {
+static bool util_compile_hlsl_to_spirv(ShaderStageLoadDesc* load_desc, std::vector<uint8_t>& spirv) {
     // Initialize the Dxc compiler and utils
     CComPtr<IDxcCompiler> compiler;
     CComPtr<IDxcLibrary> library;
@@ -221,9 +220,8 @@ bool util_compile_hlsl_to_spirv(ShaderStageLoadDesc* load_desc, std::vector<uint
     return true;
 }
 
-void util_load_shader_binary(ShaderStage stage, ShaderStageLoadDesc* load_desc, ShaderDesc* shader_desc)
+static void util_load_shader_binary(ShaderStage stage, ShaderStageLoadDesc* load_desc, ShaderDesc* shader_desc)
 {
-    uint32_t gl_stage = util_shader_stage_to_gl_stage(stage);
     ShaderStageDesc* stage_desc = nullptr;
     switch (stage)
     {
@@ -250,14 +248,14 @@ void util_load_shader_binary(ShaderStage stage, ShaderStageLoadDesc* load_desc, 
     util_compile_hlsl_to_spirv(load_desc, buffer);
 
     if (buffer.size() % 4 != 0) {
-        throw std::runtime_error("Размер байт-кода некорректен: он должен быть кратен 4.");
+        throw std::runtime_error("Wrong byte-code size");
     }
 
     new(&stage_desc->byte_code) std::vector<uint8_t>(std::move(buffer));
     stage_desc->entry_point = load_desc->entry_point;
 }
 
-GLbitfield util_buffer_flags_to_gl_storage_flag(BufferFlag flags)
+static GLbitfield util_buffer_flags_to_gl_storage_flag(BufferFlag flags)
 {
     bool is_map_flag = flags & kBufferFlagMapRead
         || flags & kBufferFlagMapWrite
@@ -296,7 +294,7 @@ GLbitfield util_buffer_flags_to_gl_storage_flag(BufferFlag flags)
     return gl_flags;
 }
 
-GLenum util_buffer_flags_to_map_access(BufferFlag flags)
+static GLenum util_buffer_flags_to_map_access(BufferFlag flags)
 {
     if (flags & kBufferFlagMapRead)
         return GL_READ_ONLY;
@@ -309,7 +307,7 @@ GLenum util_buffer_flags_to_map_access(BufferFlag flags)
     return GL_NONE;
 }
 
-ResourceType util_convert_spv_resource_type(SpvReflectResourceType type)
+static ResourceType util_convert_spv_resource_type(SpvReflectResourceType type)
 {
     switch (type)
     {
@@ -328,7 +326,7 @@ ResourceType util_convert_spv_resource_type(SpvReflectResourceType type)
     }
 }
 
-void util_create_shader_reflection(std::vector<uint8_t>& spirv, std::vector<ShaderResource>& resources)
+static void util_create_shader_reflection(std::vector<uint8_t>& spirv, std::vector<ShaderResource>& resources)
 {
     // In case I use spirv_cross to convert sprir-v to glsl
     // maybe there is no needs in spirv_reflect and it is possible to get reflection from spirv cross
@@ -355,7 +353,7 @@ void util_create_shader_reflection(std::vector<uint8_t>& spirv, std::vector<Shad
     spvReflectDestroyShaderModule(&module);
 }
 
-GLenum util_get_gl_internal_format(TextureFormat format)
+static GLenum util_get_gl_internal_format(TextureFormat format)
 {
     switch (format)
     {
@@ -384,7 +382,7 @@ GLenum util_get_gl_internal_format(TextureFormat format)
     }
 }
 
-GLenum util_get_gl_format(TextureFormat format)
+static GLenum util_get_gl_format(TextureFormat format)
 {
     switch (format)
     {
@@ -408,36 +406,7 @@ GLenum util_get_gl_format(TextureFormat format)
     }
 }
 
-GLenum GetGLInternalFormat(TextureFormat format)
-{
-    switch (format)
-    {
-    case kTextureFormatR8:
-        return GL_R8;
-    case kTextureFormatRGB8:
-        return GL_RGB8;
-    case kTextureFormatRGBA8:
-        return GL_RGBA8;
-    case kTextureFormatRGB16F:
-        return GL_RGB16F;
-    case kTextureFormatRGBA16F:
-        return GL_RGBA16F;
-    case kTextureFormatRGBA32F:
-        return GL_RGBA32F;
-    case kTextureFormatDepth16:
-        return GL_DEPTH_COMPONENT16;
-    case kTextureFormatDepth24:
-        return GL_DEPTH_COMPONENT24;
-    case kTextureFormatDepth32F:
-        return GL_DEPTH_COMPONENT32F;
-    case kTextureFormatDepth24Stencil8:
-        return GL_DEPTH24_STENCIL8;
-    default:
-        return GL_NONE; // Неизвестный формат
-    }
-}
-
-GLenum util_get_gl_tetxure_data_type(TextureFormat format)
+static GLenum util_get_gl_tetxure_data_type(TextureFormat format)
 {
     switch (format)
     {
@@ -463,7 +432,7 @@ GLenum util_get_gl_tetxure_data_type(TextureFormat format)
     }
 }
 
-GLenum util_get_gl_texture_target(TextureType type)
+static GLenum util_get_gl_texture_target(TextureType type)
 {
     switch (type)
     {
@@ -484,7 +453,7 @@ GLenum util_get_gl_texture_target(TextureType type)
     }
 }
 
-GLint util_get_gl_min_filter(FilterType min, FilterType mipmap)
+static GLint util_get_gl_min_filter(FilterType min, FilterType mipmap)
 {
     if (mipmap == kFilterTypeNone)
     {
@@ -511,6 +480,17 @@ static GLint util_get_gl_wrap_mode(WrapMode mode)
     case kWrapModeClampToEdge: return GL_CLAMP_TO_EDGE;
     case KWrapModeClampToBorder: return GL_CLAMP_TO_BORDER;
     default: return GL_REPEAT;
+    }
+}
+
+static GLenum util_get_gl_attrib_format(VertexAttribFormat format)
+{
+    switch (format)
+    {
+    case kAttribFormatFloat:
+        return GL_FLOAT;
+    default:
+        return GL_FLOAT;
     }
 }
 
@@ -817,7 +797,7 @@ void gl_addShader(ShaderDesc* desc, Shader** out_shader)
         // from spirv to set up it in glsl code for combined image samplers
         util_create_shader_reflection(stage->byte_code, shader->resources);
 
-        auto gl_stage = util_shader_stage_to_gl_stage(stage_mask);
+        GLenum gl_stage = util_shader_stage_to_gl_stage(stage_mask);
         const auto& buffer = stage->byte_code;
 
         std::vector<uint32_t> spirv(buffer.size() / 4);
@@ -881,7 +861,7 @@ void gl_addShader(ShaderDesc* desc, Shader** out_shader)
             std::cerr << "Error: " << e.what() << std::endl;
         }
 
-        uint32_t gl_shader = glCreateShader(gl_stage);
+        GLuint gl_shader = glCreateShader(gl_stage);
         const char* src = glsl_code.c_str();
         glShaderSource(gl_shader, 1, &src, nullptr);
         glCompileShader(gl_shader);
@@ -954,7 +934,7 @@ void gl_addPipeline(PipelineDesc* desc, Pipeline** pipeline)
     for (int i = 0; i < desc->vertex_layout->attrib_count; ++i)
     {
         GLint size     = desc->vertex_layout->attribs[i].size;
-        GLenum format  = desc->vertex_layout->attribs[i].format;
+        GLenum format  = util_get_gl_attrib_format(desc->vertex_layout->attribs[i].format);
         GLuint offset  = desc->vertex_layout->attribs[i].offset;
         GLuint binding = desc->vertex_layout->attribs[i].binding;
         glVertexArrayAttribFormat(vao, i, size, format, GL_FALSE, offset);

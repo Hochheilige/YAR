@@ -29,13 +29,27 @@
     </ClCompile>
     <ClCompile Include="$(SrcDir)engine\render.cpp" />
     <ClCompile Include="$(SrcDir)engine\render_impl\render_ogl.cpp" />
-    <ClCompile Include="$(ExternalDir)spirv-reflect\spirv_reflect.cpp" />
-    <ClCompile Include="$(ExternalDir)spirv-cross\spirv_parser.cpp" />
-    <ClCompile Include="$(ExternalDir)spirv-cross\spirv_glsl.cpp" />
-    <ClCompile Include="$(ExternalDir)spirv-cross\spirv_cross.cpp" />
-    <ClCompile Include="$(ExternalDir)spirv-cross\spirv_cross_util.cpp" />
-    <ClCompile Include="$(ExternalDir)spirv-cross\spirv_cross_parsed_ir.cpp" />
-    <ClCompile Include="$(ExternalDir)spirv-cross\spirv_cfg.cpp" />
+    <ClCompile Include="$(ExternalDir)spirv-cross\spirv_cfg.cpp">
+      <Filter>external\spirv</Filter>
+    </ClCompile>
+    <ClCompile Include="$(ExternalDir)spirv-cross\spirv_cross.cpp">
+      <Filter>external\spirv</Filter>
+    </ClCompile>
+    <ClCompile Include="$(ExternalDir)spirv-cross\spirv_cross_parsed_ir.cpp">
+      <Filter>external\spirv</Filter>
+    </ClCompile>
+    <ClCompile Include="$(ExternalDir)spirv-cross\spirv_cross_util.cpp">
+      <Filter>external\spirv</Filter>
+    </ClCompile>
+    <ClCompile Include="$(ExternalDir)spirv-cross\spirv_glsl.cpp">
+      <Filter>external\spirv</Filter>
+    </ClCompile>
+    <ClCompile Include="$(ExternalDir)spirv-cross\spirv_parser.cpp">
+      <Filter>external\spirv</Filter>
+    </ClCompile>
+    <ClCompile Include="$(ExternalDir)spirv-reflect\spirv_reflect.cpp">
+      <Filter>external\spirv</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="$(SrcDir)engine\window.h" />
@@ -52,9 +66,8 @@
     <Filter Include="external\glad">
       <UniqueIdentifier>{420345bf-8738-4fc1-8aa1-0f869a0c24a8}</UniqueIdentifier>
     </Filter>
-  </ItemGroup>
-  <ItemGroup>
-    <FxCompile Include="..\source\shaders\base_frag.hlsl" />
-    <FxCompile Include="..\source\shaders\base_vert.hlsl" />
+    <Filter Include="external\spirv">
+      <UniqueIdentifier>{81e37e1b-20d3-450c-858a-c7648ee77206}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
 </Project>
