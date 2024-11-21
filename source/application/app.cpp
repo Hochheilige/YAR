@@ -29,29 +29,19 @@ struct Vertex
 	std::vector<VertexData> data;
 };
 
-struct VertexBuffer
+class VertexBuffer
 {
+public:
 	VertexBuffer(const std::vector<VertexAttributeLayout>&& attr, const std::vector<Vertex>&& vert) :
 		attributes(attr), vertexes(vert), plain_data(), size(0) {}
 
-	std::vector<VertexAttributeLayout> attributes;
-	std::vector<Vertex> vertexes;
+	VertexBuffer(const VertexBuffer& other) :
+		attributes(other.attributes),
+		vertexes(other.vertexes),
+		plain_data(other.plain_data),
+		size(other.size)
+	{}
 
-private:
-	std::vector<float> plain_data;
-	size_t size;
-
-	size_t get_vertex_buffer_size()
-	{
-		size_t data_size = 0;
-		for (const auto& vertex : vertexes)
-		{
-			data_size += vertex.data.size();
-		}
-		return data_size * sizeof(float);
-	}
-
-public:
 	float* get_plain_data()
 	{
 		size_t data_size = get_vertex_buffer_size();
@@ -93,12 +83,12 @@ public:
 		return plain_data.data();
 	}
 
-	size_t get_size()
+	const size_t get_size() const
 	{
 		return vertex_size() * vertexes.size();
 	}
 
-	uint32_t offsetof_by_name(std::string_view name)
+	const uint32_t offsetof_by_name(std::string_view name) const
 	{
 		size_t offset = 0;
 		for (const auto& attr : attributes) {
@@ -118,7 +108,7 @@ public:
 		return -1;
 	}
 
-	size_t attribute_size(std::string_view name)
+	const size_t attribute_size(std::string_view name) const
 	{
 		for (const auto& attr : attributes) {
 			if (attr.name == name) {
@@ -136,7 +126,7 @@ public:
 		return -1;
 	}
 
-	size_t vertex_size()
+	const size_t vertex_size() const
 	{
 		size_t size = 0;
 		for (const auto& attr : attributes) {
@@ -152,14 +142,88 @@ public:
 		}
 		return size;
 	}
+
+	const uint32_t attrib_count() const
+	{
+		return attributes.size();
+	}
+
+private:
+	std::vector<VertexAttributeLayout> attributes;
+	std::vector<Vertex> vertexes;
+	std::vector<float> plain_data;
+	size_t size;
+
+	size_t get_vertex_buffer_size()
+	{
+		size_t data_size = 0;
+		for (const auto& vertex : vertexes)
+		{
+			data_size += vertex.data.size();
+		}
+		return data_size * sizeof(float);
+	}
 };
 
-struct Mesh
+class Mesh
 {
-	VertexBuffer buf;
-	std::vector<uint32_t> indices;
-	// there should be textures probably
+public:
+	Mesh(const VertexBuffer& buffer, const std::vector<uint32_t>& indices, const std::vector<Texture*> textures) :
+		buffer(buffer), indices(indices), textures(textures),
+		gpu_vertex_buffer(nullptr), gpu_index_buffer(nullptr)
+	{
+		upload_buffers();
+	}
 
+	void Draw(CmdBuffer* cmd)
+	{
+		cmd_bind_vertex_buffer(cmd, gpu_vertex_buffer, buffer.attrib_count(), 0, buffer.vertex_size());
+		cmd_bind_index_buffer(cmd, gpu_index_buffer);
+		cmd_draw_indexed(cmd, indices.size(), 0, 0);
+	}
+
+	const VertexBuffer& get_vertex_buffer() const
+	{
+		return buffer;
+	}
+
+private:
+	void upload_buffers()
+	{
+		BufferDesc buffer_desc;
+		buffer_desc.size = buffer.get_size();
+		buffer_desc.flags = kBufferFlagGPUOnly;
+		add_buffer(&buffer_desc, &gpu_vertex_buffer);
+
+		uint64_t indexes_size = indices.size() * sizeof(uint32_t);
+		buffer_desc.size = indexes_size;
+		add_buffer(&buffer_desc, &gpu_index_buffer);
+
+		ResourceUpdateDesc resource_update_desc;
+		{ // update buffers data
+			BufferUpdateDesc update_desc{};
+			resource_update_desc = &update_desc;
+			update_desc.buffer = gpu_vertex_buffer;
+			update_desc.size = buffer.get_size();
+			begin_update_resource(resource_update_desc);
+			std::memcpy(update_desc.mapped_data, buffer.get_plain_data(), buffer.get_size());
+			end_update_resource(resource_update_desc);
+
+			update_desc.buffer = gpu_index_buffer;
+			update_desc.size = indexes_size;
+			begin_update_resource(resource_update_desc);
+			std::memcpy(update_desc.mapped_data, indices.data(), indexes_size);
+			end_update_resource(resource_update_desc);
+		}
+	}
+
+private:
+	VertexBuffer buffer;
+	std::vector<uint32_t> indices;
+	std::vector<Texture*> textures;
+
+	Buffer* gpu_vertex_buffer;
+	Buffer* gpu_index_buffer;
 };
 
 struct Camera
@@ -283,7 +347,7 @@ auto main() -> int {
 		}
 	};
 
-	uint32_t indexes[] = {
+	std::vector<uint32_t> indexes = {
 		0, 1, 2,
 		2, 3, 0,
 
@@ -407,6 +471,13 @@ auto main() -> int {
 		std::cerr << "Failed to load specular_map_tex: " << name << std::endl;
 	}
 
+	std::vector<Texture*> textures = {
+		diffuse_map_tex,
+		specular_map_tex
+	};
+
+	Mesh test_mesh(vertex_buffer, indexes, textures);
+
 	Sampler* sampler;
 	SamplerDesc sampler_desc{};
 	sampler_desc.min_filter = kFilterTypeNearest;
@@ -457,10 +528,11 @@ auto main() -> int {
 		std::memcpy(update_desc.mapped_data, vertex_buffer.get_plain_data(), vertex_buffer.get_size());
 		end_update_resource(resource_update_desc);
 
+		uint64_t indexes_size = indexes.size() * sizeof(uint32_t);
 		update_desc.buffer = ebo;
-		update_desc.size = sizeof(indexes);
+		update_desc.size = indexes_size;
 		begin_update_resource(resource_update_desc);
-		std::memcpy(update_desc.mapped_data, indexes, sizeof(indexes));
+		std::memcpy(update_desc.mapped_data, indexes.data(), indexes_size);
 		end_update_resource(resource_update_desc);
 
 		// emerald
@@ -510,7 +582,6 @@ auto main() -> int {
 	layout.attribs[2].size = vertex_buffer.attribute_size("normal");
 	layout.attribs[2].format = kAttribFormatFloat;
 	layout.attribs[2].offset = vertex_buffer.offsetof_by_name("normal");
-
 
 	DescriptorSetDesc set_desc;
 	set_desc.max_sets = image_count;
@@ -646,12 +717,13 @@ auto main() -> int {
 		{
 			cmd_bind_pipeline(cmd, graphics_pipeline);
 			// looks not good
-			cmd_bind_vertex_buffer(cmd, vbo, layout.attrib_count, 0, sizeof(float) * 8);
-			cmd_bind_index_buffer(cmd, ebo);
+			//cmd_bind_vertex_buffer(cmd, vbo, layout.attrib_count, 0, sizeof(float) * 8);
+			//cmd_bind_index_buffer(cmd, ebo);
 			cmd_bind_descriptor_set(cmd, ubo_desc, frame_index);
 			cmd_bind_descriptor_set(cmd, texture_set, 0);
 			cmd_bind_push_constant(cmd, &i);
-			cmd_draw_indexed(cmd, 36, 0, 0);
+			test_mesh.Draw(cmd);
+			//cmd_draw_indexed(cmd, 36, 0, 0);
 		}
 		
 		queue_submit(queue);
