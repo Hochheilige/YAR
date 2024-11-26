@@ -175,7 +175,21 @@ public:
 		upload_buffers();
 	}
 
-	void Draw(CmdBuffer* cmd)
+	void setup_vertex_layout(VertexLayout& layout)
+	{
+		layout.attrib_count = buffer.attrib_count();
+		layout.attribs[0].size = buffer.attribute_size("position");
+		layout.attribs[0].format = kAttribFormatFloat;
+		layout.attribs[0].offset = buffer.offsetof_by_name("position");
+		layout.attribs[1].size = buffer.attribute_size("tex_coords");
+		layout.attribs[1].format = kAttribFormatFloat;
+		layout.attribs[1].offset = buffer.offsetof_by_name("tex_coords");
+		layout.attribs[2].size = buffer.attribute_size("normal");
+		layout.attribs[2].format = kAttribFormatFloat;
+		layout.attribs[2].offset = buffer.offsetof_by_name("normal");
+	}
+
+	void draw(CmdBuffer* cmd)
 	{
 		cmd_bind_vertex_buffer(cmd, gpu_vertex_buffer, buffer.attrib_count(), 0, buffer.vertex_size());
 		cmd_bind_index_buffer(cmd, gpu_index_buffer);
@@ -224,6 +238,15 @@ private:
 
 	Buffer* gpu_vertex_buffer;
 	Buffer* gpu_index_buffer;
+};
+
+class Model
+{
+public:
+	
+private:
+	std::vector<Mesh> meshes;
+
 };
 
 struct Camera
@@ -572,16 +595,7 @@ auto main() -> int {
 	}
 
 	VertexLayout layout = {0};
-	layout.attrib_count = 3;
-	layout.attribs[0].size = vertex_buffer.attribute_size("position");
-	layout.attribs[0].format = kAttribFormatFloat;
-	layout.attribs[0].offset = vertex_buffer.offsetof_by_name("position");
-	layout.attribs[1].size = vertex_buffer.attribute_size("tex_coords");
-	layout.attribs[1].format = kAttribFormatFloat;
-	layout.attribs[1].offset = vertex_buffer.offsetof_by_name("tex_coords");
-	layout.attribs[2].size = vertex_buffer.attribute_size("normal");
-	layout.attribs[2].format = kAttribFormatFloat;
-	layout.attribs[2].offset = vertex_buffer.offsetof_by_name("normal");
+	test_mesh.setup_vertex_layout(layout);
 
 	DescriptorSetDesc set_desc;
 	set_desc.max_sets = image_count;
@@ -722,7 +736,7 @@ auto main() -> int {
 			cmd_bind_descriptor_set(cmd, ubo_desc, frame_index);
 			cmd_bind_descriptor_set(cmd, texture_set, 0);
 			cmd_bind_push_constant(cmd, &i);
-			test_mesh.Draw(cmd);
+			test_mesh.draw(cmd);
 			//cmd_draw_indexed(cmd, 36, 0, 0);
 		}
 		
