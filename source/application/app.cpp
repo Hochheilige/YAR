@@ -64,7 +64,7 @@ Texture* load_texture(const std::string_view& name)
 		texture_desc.height = height;
 		texture_desc.mip_levels = 1;
 		texture_desc.type = kTextureType2D;
-		texture_desc.format = kTextureFormatRGB8;
+		texture_desc.format = channels == 3 ? kTextureFormatRGB8 : kTextureFormatRGBA8;
 		add_texture(&texture_desc, &tex);
 
 		ResourceUpdateDesc resource_update_desc;
@@ -866,7 +866,7 @@ auto main() -> int {
 
 
 	Mesh test_mesh(vertex_buffer, indexes, textures);
-	Model mdl("assets/backpack/backpack.obj");
+	Model mdl("assets/sponza/sponza.obj");
 
 	Sampler* sampler;
 	SamplerDesc sampler_desc{};
@@ -1094,7 +1094,7 @@ auto main() -> int {
 
 		model = glm::mat4(1.0f);
 		model = glm::translate(model, glm::vec3(backpack_pos));
-		model = glm::scale(model, glm::vec3(0.5f, 0.5f, 0.5f));
+		model = glm::scale(model, glm::vec3(0.05f, 0.05f, 0.05f));
 		ubo.model[10] = model;
 
 		BufferUpdateDesc update;
