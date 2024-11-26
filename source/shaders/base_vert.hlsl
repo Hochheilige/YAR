@@ -1,7 +1,7 @@
 struct VSInput {
     float3 position : POSITION;
-    float2 tex_coord : TEXCOORD;
     float3 normal : NORMAL;
+    float2 tex_coord : TEXCOORD;
 };
 
 struct VSOutput {
@@ -54,7 +54,7 @@ struct MVP
 {
     float4x4 view;
     float4x4 proj;
-    float4x4 model[10];
+    float4x4 model[11];
 };
 
 struct Material
@@ -66,7 +66,7 @@ struct Material
 #define POINT_LIGHT_COUNT 1
 #define SPOT_LIGHT_COUNT 1
 #define LS_COUNT DIR_LIGHT_COUNT + POINT_LIGHT_COUNT + SPOT_LIGHT_COUNT
-#define MAT_COUNT 10
+#define MAT_COUNT 11
 
 struct DirLight 
 {

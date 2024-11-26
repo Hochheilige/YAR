@@ -13,8 +13,77 @@
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/type_ptr.hpp>
 
+#include <assimp/Importer.hpp>
+#include <assimp/scene.h>
+#include <assimp/postprocess.h>
+
 #include <iostream>
 #include <optional>
+
+Texture* load_white_texture()
+{
+	int32_t channels = 4;
+	size_t size = channels;
+	std::vector<uint8_t> white_data(size, 255);
+
+	Texture* tex;
+	TextureDesc texture_desc{};
+	texture_desc.width = 1;
+	texture_desc.height = 1;
+	texture_desc.mip_levels = 1;
+	texture_desc.type = kTextureType2D;
+	texture_desc.format = kTextureFormatRGBA8;
+	add_texture(&texture_desc, &tex);
+
+	ResourceUpdateDesc resource_update_desc;
+	TextureUpdateDesc tex_update_desc{};
+	resource_update_desc = &tex_update_desc;
+	tex_update_desc.size = size;
+	tex_update_desc.texture = tex;
+	tex_update_desc.data = white_data.data();
+	begin_update_resource(resource_update_desc);
+	std::memcpy(tex_update_desc.mapped_data, white_data.data(), tex_update_desc.size);
+	end_update_resource(resource_update_desc);
+
+	return tex;
+}
+
+
+Texture* load_texture(const std::string_view& name)
+{
+	Texture* tex;
+
+	int32_t width, height, channels;
+	stbi_set_flip_vertically_on_load(true);
+	uint8_t* buf = stbi_load(name.data(), &width, &height, &channels, 0);
+
+	if (buf)
+	{
+		TextureDesc texture_desc{};
+		texture_desc.width = width;
+		texture_desc.height = height;
+		texture_desc.mip_levels = 1;
+		texture_desc.type = kTextureType2D;
+		texture_desc.format = kTextureFormatRGB8;
+		add_texture(&texture_desc, &tex);
+
+		ResourceUpdateDesc resource_update_desc;
+		TextureUpdateDesc tex_update_desc{};
+		resource_update_desc = &tex_update_desc;
+		tex_update_desc.size = width * height * channels;
+		tex_update_desc.texture = tex;
+		tex_update_desc.data = buf;
+		begin_update_resource(resource_update_desc);
+		std::memcpy(tex_update_desc.mapped_data, buf, tex_update_desc.size);
+		end_update_resource(resource_update_desc);
+	}
+	else
+	{
+		std::cout << "error loading texture: " << name;
+	}
+
+	return tex;
+}
 
 using VertexData = std::variant<glm::vec2, glm::vec3, glm::vec4>;
 
@@ -181,12 +250,12 @@ public:
 		layout.attribs[0].size = buffer.attribute_size("position");
 		layout.attribs[0].format = kAttribFormatFloat;
 		layout.attribs[0].offset = buffer.offsetof_by_name("position");
-		layout.attribs[1].size = buffer.attribute_size("tex_coords");
+		layout.attribs[1].size = buffer.attribute_size("normal");
 		layout.attribs[1].format = kAttribFormatFloat;
-		layout.attribs[1].offset = buffer.offsetof_by_name("tex_coords");
-		layout.attribs[2].size = buffer.attribute_size("normal");
+		layout.attribs[1].offset = buffer.offsetof_by_name("normal");
+		layout.attribs[2].size = buffer.attribute_size("tex_coords");
 		layout.attribs[2].format = kAttribFormatFloat;
-		layout.attribs[2].offset = buffer.offsetof_by_name("normal");
+		layout.attribs[2].offset = buffer.offsetof_by_name("tex_coords");
 	}
 
 	void draw(CmdBuffer* cmd)
@@ -199,6 +268,13 @@ public:
 	const VertexBuffer& get_vertex_buffer() const
 	{
 		return buffer;
+	}
+
+	Texture* get_texture(uint32_t index) const
+	{
+		if (index >= textures.size())
+			return nullptr;
+		return textures[index];
 	}
 
 private:
@@ -243,10 +319,297 @@ private:
 class Model
 {
 public:
-	
+	Model(const std::string_view& path)
+	{
+		Assimp::Importer imp;
+		const aiScene * scene = imp.ReadFile(path.data(), aiProcess_Triangulate | aiProcess_FlipUVs);
+
+		if (!scene || scene->mFlags & AI_SCENE_FLAGS_INCOMPLETE || !scene->mRootNode)
+		{
+			std::cout << "Error [assimp]:" << imp.GetErrorString() << std::endl;
+			return;
+		}
+		directory = path.substr(0, path.find_last_of('/'));
+
+		process_node(scene->mRootNode, scene);
+	}
+
+	void setup_descriptor_set(Shader* shader, DescriptorSetUpdateFrequency update_freq, Sampler* sampler)
+	{
+		DescriptorSetDesc set_desc;
+		set_desc.max_sets = meshes.size();
+		set_desc.shader = shader;
+		set_desc.update_freq = update_freq;
+		add_descriptor_set(&set_desc, &set);
+
+		uint32_t index = 0;
+		for (const auto& mesh : meshes)
+		{
+			// It is incorrect we can't garauntee that 
+			// 0th texture is diffuse_map,
+			// 1st texture is specular_map, etc
+			// TODO: store info about textures inside Mesh
+			std::vector<DescriptorInfo> infos{
+				{
+					.name = "diffuse_map",
+					.descriptor =
+					DescriptorInfo::CombinedTextureSample{
+						mesh.get_texture(0),
+						"samplerState",
+					}
+				},
+				{
+					.name = "specular_map",
+					.descriptor =
+					DescriptorInfo::CombinedTextureSample{
+						mesh.get_texture(1),
+						"samplerState",
+					}
+				},
+				{
+					.name = "samplerState",
+					.descriptor = sampler
+				},
+			};
+
+			UpdateDescriptorSetDesc update_set_desc = {};
+			update_set_desc.index = index;
+			update_set_desc.infos = std::move(infos);
+			update_descriptor_set(&update_set_desc, set);
+			++index;
+		}
+	}
+
+	void setup_vertex_layout(VertexLayout& layout)
+	{
+		meshes[0].setup_vertex_layout(layout);
+	}
+
+	void draw(CmdBuffer* cmd)
+	{
+		for (uint32_t i = 0; i < meshes.size(); ++i)
+		{
+			cmd_bind_descriptor_set(cmd, set, i);
+			meshes[i].draw(cmd);
+		}
+	}
+
 private:
+	void process_node(aiNode* node, const aiScene* scene)
+	{
+		// process all the node's meshes (if any)
+		for (unsigned int i = 0; i < node->mNumMeshes; i++)
+		{
+			aiMesh* mesh = scene->mMeshes[node->mMeshes[i]];
+			meshes.push_back(process_mesh(mesh, scene));
+		}
+		// then do the same for each of its children
+		for (unsigned int i = 0; i < node->mNumChildren; i++)
+		{
+			process_node(node->mChildren[i], scene);
+		}
+	}
+	
+	Mesh process_mesh(aiMesh* mesh, const aiScene* scene)
+	{
+		std::vector<VertexAttributeLayout> layouts;
+		std::vector<Vertex> vertices;
+		std::vector<uint32_t> indices;
+		std::vector<Texture*> textures;
+
+		bool has_pos = false;
+		bool has_norm = false;
+		bool has_tang = false;
+		bool has_color = false;
+		bool has_tex_coord = false;
+
+		if (mesh->HasPositions())
+		{
+			has_pos = true;
+			layouts.push_back({ glm::vec3{}, "position" });
+		}
+
+		if (mesh->HasNormals())
+		{
+			has_norm = true;
+			layouts.push_back({ glm::vec3{}, "normal" });
+		}
+
+		if (mesh->HasTangentsAndBitangents())
+		{
+			has_tang = true;
+			layouts.push_back({ glm::vec3{}, "tangent" });
+			layouts.push_back({ glm::vec3{}, "bi_tangent" });
+		}
+
+		for (uint32_t i = 0; i < mesh->GetNumUVChannels(); ++i)
+		{
+			if (mesh->HasVertexColors(i))
+			{
+				has_color = true;
+				layouts.push_back({ glm::vec4{}, "color" + i });
+			}
+		}
+
+		for (uint32_t i = 0; i < mesh->GetNumUVChannels(); ++i)
+		{
+			if (mesh->HasTextureCoords(i))
+			{
+				has_tex_coord = true;
+				if (mesh->mNumUVComponents[i] == 2)
+					layouts.push_back({ glm::vec2{}, "tex_coords" + i });
+				
+				if (mesh->mNumUVComponents[i] == 3)
+					layouts.push_back({ glm::vec3{}, "tex_coords" + i });
+			}
+		}
+
+		for (uint32_t i = 0; i < mesh->mNumVertices; ++i)
+		{
+			Vertex vertex;
+
+			if (has_pos)
+			{
+				glm::vec3 pos;
+				pos.x = mesh->mVertices[i].x;
+				pos.y = mesh->mVertices[i].y;
+				pos.z = mesh->mVertices[i].z;
+				vertex.data.push_back(pos);
+			}
+
+			if (has_norm)
+			{
+				glm::vec3 norm;
+				norm.x = mesh->mNormals[i].x;
+				norm.y = mesh->mNormals[i].y;
+				norm.z = mesh->mNormals[i].z;
+				vertex.data.push_back(norm);
+			}
+
+			if (has_tang)
+			{
+				glm::vec3 tang;
+				tang.x = mesh->mTangents[i].x;
+				tang.y = mesh->mTangents[i].y;
+				tang.z = mesh->mTangents[i].z;
+				vertex.data.push_back(tang);
+
+				tang.x = mesh->mBitangents[i].x;
+				tang.y = mesh->mBitangents[i].y;
+				tang.z = mesh->mBitangents[i].z;
+				vertex.data.push_back(tang);
+			}
+
+			if (has_color)
+			{
+				for (uint32_t j = 0; j < mesh->GetNumColorChannels(); ++j)
+				{
+					glm::vec4 col;
+					col.r = mesh->mColors[i][j].r;
+					col.g = mesh->mColors[i][j].g;
+					col.b = mesh->mColors[i][j].b;
+					col.a = mesh->mColors[i][j].a;
+					vertex.data.push_back(col);
+				}
+			}
+
+			if (has_tex_coord)
+			{
+				for (uint32_t j = 0; j < mesh->GetNumUVChannels(); ++j)
+				{
+					if (mesh->mNumUVComponents[j] == 2)
+					{
+						glm::vec2 tex_coord;
+						tex_coord.x = mesh->mTextureCoords[j][i].x;
+						tex_coord.y = mesh->mTextureCoords[j][i].y;
+						vertex.data.push_back(tex_coord);
+					}
+
+					if (mesh->mNumUVComponents[j] == 3)
+					{
+						glm::vec3 tex_coord;
+						tex_coord.x = mesh->mTextureCoords[j][i].x;
+						tex_coord.y = mesh->mTextureCoords[j][i].y;
+						tex_coord.z = mesh->mTextureCoords[j][i].z;
+						vertex.data.push_back(tex_coord);
+					}
+				}
+			}
+
+			vertices.push_back(vertex);
+		}
+		VertexBuffer buffer(std::move(layouts), std::move(vertices));
+
+		for (uint32_t i = 0; i < mesh->mNumFaces; ++i)
+		{
+			aiFace face = mesh->mFaces[i];
+			for (uint32_t j = 0; j < face.mNumIndices; ++j)
+				indices.push_back(face.mIndices[j]);
+		}
+
+			// process material
+		if (mesh->mMaterialIndex >= 0)
+		{
+			aiMaterial* material = scene->mMaterials[mesh->mMaterialIndex];
+			std::vector<Texture*> diffuseMaps = load_material_textures(material,
+				aiTextureType_DIFFUSE);
+			textures.insert(textures.end(), diffuseMaps.begin(), diffuseMaps.end());
+			std::vector<Texture*> specularMaps = load_material_textures(material,
+				aiTextureType_SPECULAR);
+			textures.insert(textures.end(), specularMaps.begin(), specularMaps.end());
+		}
+
+		return Mesh(buffer, indices, textures);
+	}
+
+	std::vector<Texture*> load_material_textures(aiMaterial* mat, aiTextureType type)
+	{
+		std::vector<Texture*> textures;
+		for (uint32_t i = 0; i < mat->GetTextureCount(type); ++i)
+		{
+			aiString str;
+			mat->GetTexture(type, i, &str);
+			std::string path = directory + '/' + str.C_Str();
+			bool skip = false;
+			auto tex = loaded_textures.find(path);
+			if (tex != loaded_textures.end())
+			{
+				// TODO: optimize this
+				textures.push_back(tex->second);
+				skip = true;
+			}
+
+			if (!skip)
+			{
+				Texture* tex = load_texture(path);
+				textures.push_back(tex);
+				loaded_textures[path] = tex;
+			}
+		}
+
+		if (textures.empty())
+		{
+			textures.push_back(load_white_texture());
+		}
+
+		return textures;
+	}
+
+private:
+	std::string directory;
 	std::vector<Mesh> meshes;
 
+	DescriptorSet* set;
+
+	std::unordered_map<std::string, Texture*> loaded_textures;
+};
+
+class GeometryRenderer
+{
+public:
+
+private:
+	std::vector<Model> models;
 };
 
 struct Camera
@@ -260,7 +623,7 @@ struct Material
 {
 	float shinines;
 	float pad[3];
-} material[10];
+} material[11];
 
 static constexpr uint32_t kDirLightCount = 1;
 static constexpr uint32_t kPointLightCount = 1;
@@ -298,7 +661,7 @@ struct UBO
 {
 	glm::mat4 view;
 	glm::mat4 proj;
-	glm::mat4 model[10];
+	glm::mat4 model[11];
 	DirectLight dir_light;
 	PointLight point_light;
 	SpotLight spot_light;
@@ -338,35 +701,35 @@ auto main() -> int {
 			VertexAttributeLayout{glm::vec3{}, "normal"},
 		},
 		{
-			Vertex{{glm::vec3(-0.5f, -0.5f,  0.5f), glm::vec2{0.0f, 0.0f}, glm::vec3{0.0f, 0.0f, 1.0f}}},
-			Vertex{{glm::vec3( 0.5f, -0.5f,  0.5f), glm::vec2{1.0f, 0.0f}, glm::vec3{0.0f, 0.0f, 1.0f}}},
-			Vertex{{glm::vec3( 0.5f,  0.5f,  0.5f), glm::vec2{1.0f, 1.0f}, glm::vec3{0.0f, 0.0f, 1.0f}}},
-			Vertex{{glm::vec3(-0.5f,  0.5f,  0.5f), glm::vec2{0.0f, 1.0f}, glm::vec3{0.0f, 0.0f, 1.0f}}},
+			Vertex{{glm::vec3(-0.5f, -0.5f,  0.5f), glm::vec3{0.0f, 0.0f, 1.0f}, glm::vec2{0.0f, 0.0f}}},
+			Vertex{{glm::vec3( 0.5f, -0.5f,  0.5f), glm::vec3{0.0f, 0.0f, 1.0f}, glm::vec2{1.0f, 0.0f}}},
+			Vertex{{glm::vec3( 0.5f,  0.5f,  0.5f), glm::vec3{0.0f, 0.0f, 1.0f}, glm::vec2{1.0f, 1.0f}}},
+			Vertex{{glm::vec3(-0.5f,  0.5f,  0.5f), glm::vec3{0.0f, 0.0f, 1.0f}, glm::vec2{0.0f, 1.0f}}},
 
-			Vertex{{glm::vec3(-0.5f, -0.5f, -0.5f), glm::vec2{0.0f, 0.0f}, glm::vec3{0.0f, 0.0f, -1.0f}}},
-			Vertex{{glm::vec3( 0.5f, -0.5f, -0.5f), glm::vec2{1.0f, 0.0f}, glm::vec3{0.0f, 0.0f, -1.0f}}},
-			Vertex{{glm::vec3( 0.5f,  0.5f, -0.5f), glm::vec2{1.0f, 1.0f}, glm::vec3{0.0f, 0.0f, -1.0f}}},
-			Vertex{{glm::vec3(-0.5f,  0.5f, -0.5f), glm::vec2{0.0f, 1.0f}, glm::vec3{0.0f, 0.0f, -1.0f}}},
+			Vertex{{glm::vec3(-0.5f, -0.5f, -0.5f), glm::vec3{0.0f, 0.0f, -1.0f}, glm::vec2{0.0f, 0.0f}}},
+			Vertex{{glm::vec3( 0.5f, -0.5f, -0.5f), glm::vec3{0.0f, 0.0f, -1.0f}, glm::vec2{1.0f, 0.0f}}},
+			Vertex{{glm::vec3( 0.5f,  0.5f, -0.5f), glm::vec3{0.0f, 0.0f, -1.0f}, glm::vec2{1.0f, 1.0f}}},
+			Vertex{{glm::vec3(-0.5f,  0.5f, -0.5f), glm::vec3{0.0f, 0.0f, -1.0f}, glm::vec2{0.0f, 1.0f}}},
 
-			Vertex{{glm::vec3(-0.5f, -0.5f, -0.5f), glm::vec2{1.0f, 0.0f}, glm::vec3{-1.0f, 0.0f, 0.0f}}},
-			Vertex{{glm::vec3(-0.5f, -0.5f,  0.5f), glm::vec2{0.0f, 0.0f}, glm::vec3{-1.0f, 0.0f, 0.0f}}},
-			Vertex{{glm::vec3(-0.5f,  0.5f,  0.5f), glm::vec2{0.0f, 1.0f}, glm::vec3{-1.0f, 0.0f, 0.0f}}},
-			Vertex{{glm::vec3(-0.5f,  0.5f, -0.5f), glm::vec2{1.0f, 1.0f}, glm::vec3{-1.0f, 0.0f, 0.0f}}},
+			Vertex{{glm::vec3(-0.5f, -0.5f, -0.5f), glm::vec3{-1.0f, 0.0f, 0.0f}, glm::vec2{1.0f, 0.0f}}},
+			Vertex{{glm::vec3(-0.5f, -0.5f,  0.5f), glm::vec3{-1.0f, 0.0f, 0.0f}, glm::vec2{0.0f, 0.0f}}},
+			Vertex{{glm::vec3(-0.5f,  0.5f,  0.5f), glm::vec3{-1.0f, 0.0f, 0.0f}, glm::vec2{0.0f, 1.0f}}},
+			Vertex{{glm::vec3(-0.5f,  0.5f, -0.5f), glm::vec3{-1.0f, 0.0f, 0.0f}, glm::vec2{1.0f, 1.0f}}},
 
-			Vertex{{glm::vec3(0.5f, -0.5f, -0.5f), glm::vec2{0.0f, 0.0f}, glm::vec3{1.0f, 0.0f, 0.0f}}},
-			Vertex{{glm::vec3(0.5f, -0.5f,  0.5f), glm::vec2{1.0f, 0.0f}, glm::vec3{1.0f, 0.0f, 0.0f}}},
-			Vertex{{glm::vec3(0.5f,  0.5f,  0.5f), glm::vec2{1.0f, 1.0f}, glm::vec3{1.0f, 0.0f, 0.0f}}},
-			Vertex{{glm::vec3(0.5f,  0.5f, -0.5f), glm::vec2{0.0f, 1.0f}, glm::vec3{1.0f, 0.0f, 0.0f}}},
+			Vertex{{glm::vec3(0.5f, -0.5f, -0.5f), glm::vec3{1.0f, 0.0f, 0.0f}, glm::vec2{0.0f, 0.0f}}},
+			Vertex{{glm::vec3(0.5f, -0.5f,  0.5f), glm::vec3{1.0f, 0.0f, 0.0f}, glm::vec2{1.0f, 0.0f}}},
+			Vertex{{glm::vec3(0.5f,  0.5f,  0.5f), glm::vec3{1.0f, 0.0f, 0.0f}, glm::vec2{1.0f, 1.0f}}},
+			Vertex{{glm::vec3(0.5f,  0.5f, -0.5f), glm::vec3{1.0f, 0.0f, 0.0f}, glm::vec2{0.0f, 1.0f}}},
 
-			Vertex{{glm::vec3(-0.5f, -0.5f, -0.5f), glm::vec2{0.0f, 1.0f}, glm::vec3{0.0f, -1.0f, 0.0f}}},
-			Vertex{{glm::vec3( 0.5f, -0.5f, -0.5f), glm::vec2{1.0f, 1.0f}, glm::vec3{0.0f, -1.0f, 0.0f}}},
-			Vertex{{glm::vec3( 0.5f, -0.5f,  0.5f), glm::vec2{1.0f, 0.0f}, glm::vec3{0.0f, -1.0f, 0.0f}}},
-			Vertex{{glm::vec3(-0.5f, -0.5f,  0.5f), glm::vec2{0.0f, 0.0f}, glm::vec3{0.0f, -1.0f, 0.0f}}},
+			Vertex{{glm::vec3(-0.5f, -0.5f, -0.5f), glm::vec3{0.0f, -1.0f, 0.0f}, glm::vec2{0.0f, 1.0f}}},
+			Vertex{{glm::vec3( 0.5f, -0.5f, -0.5f), glm::vec3{0.0f, -1.0f, 0.0f}, glm::vec2{1.0f, 1.0f}}},
+			Vertex{{glm::vec3( 0.5f, -0.5f,  0.5f), glm::vec3{0.0f, -1.0f, 0.0f}, glm::vec2{1.0f, 0.0f}}},
+			Vertex{{glm::vec3(-0.5f, -0.5f,  0.5f), glm::vec3{0.0f, -1.0f, 0.0f}, glm::vec2{0.0f, 0.0f}}},
 
-			Vertex{{glm::vec3(-0.5f,  0.5f, -0.5f), glm::vec2{0.0f, 0.0f}, glm::vec3{0.0f, 1.0f, 0.0f}}},
-			Vertex{{glm::vec3( 0.5f,  0.5f, -0.5f), glm::vec2{1.0f, 0.0f}, glm::vec3{0.0f, 1.0f, 0.0f}}},
-			Vertex{{glm::vec3( 0.5f,  0.5f,  0.5f), glm::vec2{1.0f, 1.0f}, glm::vec3{0.0f, 1.0f, 0.0f}}},
-			Vertex{{glm::vec3(-0.5f,  0.5f,  0.5f), glm::vec2{0.0f, 1.0f}, glm::vec3{0.0f, 1.0f, 0.0f}}},
+			Vertex{{glm::vec3(-0.5f,  0.5f, -0.5f), glm::vec3{0.0f, 1.0f, 0.0f}, glm::vec2{0.0f, 0.0f}}},
+			Vertex{{glm::vec3( 0.5f,  0.5f, -0.5f), glm::vec3{0.0f, 1.0f, 0.0f}, glm::vec2{1.0f, 0.0f}}},
+			Vertex{{glm::vec3( 0.5f,  0.5f,  0.5f), glm::vec3{0.0f, 1.0f, 0.0f}, glm::vec2{1.0f, 1.0f}}},
+			Vertex{{glm::vec3(-0.5f,  0.5f,  0.5f), glm::vec3{0.0f, 1.0f, 0.0f}, glm::vec2{0.0f, 1.0f}}},
 		}
 	};
 
@@ -402,6 +765,8 @@ auto main() -> int {
 		glm::vec4(1.5f,  0.2f, -1.5f  , 1.0f),
 		glm::vec4(-1.3f,  1.0f, -1.5f , 1.0f)
 	};
+
+	glm::vec4 backpack_pos(0.0f);
 
 
 	light_pos = &cube_positions[0];
@@ -499,7 +864,9 @@ auto main() -> int {
 		specular_map_tex
 	};
 
+
 	Mesh test_mesh(vertex_buffer, indexes, textures);
+	Model mdl("assets/backpack/backpack.obj");
 
 	Sampler* sampler;
 	SamplerDesc sampler_desc{};
@@ -587,6 +954,9 @@ auto main() -> int {
 
 		// turquoise
 		material[9].shinines = 128u * 0.1f;
+
+		material[10].shinines = 1;
+
 		update_desc.buffer = mat_buf;
 		update_desc.size = sizeof(material);
 		begin_update_resource(resource_update_desc);
@@ -595,7 +965,8 @@ auto main() -> int {
 	}
 
 	VertexLayout layout = {0};
-	test_mesh.setup_vertex_layout(layout);
+	//test_mesh.setup_vertex_layout(layout);
+	mdl.setup_vertex_layout(layout);
 
 	DescriptorSetDesc set_desc;
 	set_desc.max_sets = image_count;
@@ -655,6 +1026,8 @@ auto main() -> int {
 	update_set_desc.index = 0;
 	update_set_desc.infos = std::move(infos);
 	update_descriptor_set(&update_set_desc, texture_set);
+
+	mdl.setup_descriptor_set(shader, kUpdateFreqNone, sampler);
 
 	PipelineDesc pipeline_desc = { 0 };
 	pipeline_desc.shader = shader;
@@ -719,6 +1092,11 @@ auto main() -> int {
 			ubo.model[i] = model;
 		}
 
+		model = glm::mat4(1.0f);
+		model = glm::translate(model, glm::vec3(backpack_pos));
+		model = glm::scale(model, glm::vec3(0.5f, 0.5f, 0.5f));
+		ubo.model[10] = model;
+
 		BufferUpdateDesc update;
 		update.buffer = ubo_buf[frame_index];
 		update.size = sizeof(ubo);
@@ -739,6 +1117,12 @@ auto main() -> int {
 			test_mesh.draw(cmd);
 			//cmd_draw_indexed(cmd, 36, 0, 0);
 		}
+
+		cmd_bind_pipeline(cmd, graphics_pipeline);
+		cmd_bind_descriptor_set(cmd, ubo_desc, frame_index);
+		uint32_t index = 10;
+		cmd_bind_push_constant(cmd, &index);
+		mdl.draw(cmd);
 		
 		queue_submit(queue);
 

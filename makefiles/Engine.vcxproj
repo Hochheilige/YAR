@@ -11,7 +11,7 @@
   <ItemDefinitionGroup>
     <ClCompile>
       <AdditionalIncludeDirectories>
-        $(ExternalDir)glad\include\;$(ExternalDir)glfw\include\;$(ExternalDir)imgui\;$(ExternalDir)spirv-reflect\;$(ExternalDir)spirv-cross\;$(ExternalDir)glm\;$(ExternalDir)assimp\include;%(AdditionalIncludeDirectories)
+        $(ExternalDir)glad\include\;$(ExternalDir)glfw\include\;$(ExternalDir)imgui\;$(ExternalDir)spirv-reflect\;$(ExternalDir)spirv-cross\;$(ExternalDir)glm\;$(ExternalDir)assimp\include;$(ExternalDir)assimp\build\include;%(AdditionalIncludeDirectories)
       </AdditionalIncludeDirectories>
       <RuntimeLibrary Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">MultiThreadedDebugDLL</RuntimeLibrary>
       <LanguageStandard>stdcpp20</LanguageStandard>
