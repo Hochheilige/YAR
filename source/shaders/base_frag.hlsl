@@ -9,6 +9,7 @@ struct PSInput {
 
 Texture2D<float4> diffuse_map : register(t0, space0);
 Texture2D<float4> specular_map : register(t1, space0);
+Texture2D<float4> normal_map : register(t2, space0);
 SamplerState samplerState : register(s0, space0);
 
 struct LightCalculationParams
@@ -118,7 +119,8 @@ float4 main(PSInput input) : SV_TARGET {
     LightCalculationParams lcp;
     lcp.diffuse_map_color  = diffuse_map.Sample(samplerState, input.tex_coord);
     lcp.specular_map_color = specular_map.Sample(samplerState, input.tex_coord);
-    lcp.norm               = float4(normalize(input.normal), 0.0f);
+    lcp.norm               = normal_map.Sample(samplerState, input.tex_coord);
+    lcp.norm               = normalize(lcp.norm * 2.0f - 1.0f);
     lcp.frag_pos           = float4(input.frag_pos, 0.0f);
     lcp.cam_pos            = cam.pos;
     Material mt = material[index]; 

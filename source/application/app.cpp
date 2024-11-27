@@ -54,8 +54,16 @@ Texture* load_texture(const std::string_view& name)
 	Texture* tex;
 
 	int32_t width, height, channels;
-	stbi_set_flip_vertically_on_load(true);
+	stbi_set_flip_vertically_on_load(false);
 	uint8_t* buf = stbi_load(name.data(), &width, &height, &channels, 0);
+
+	TextureFormat format;
+	if (channels == 1)
+		format = kTextureFormatR8;
+	if (channels == 3)
+		format = kTextureFormatRGB8;
+	if (channels == 4)
+		format = kTextureFormatRGBA8;
 
 	if (buf)
 	{
@@ -64,7 +72,7 @@ Texture* load_texture(const std::string_view& name)
 		texture_desc.height = height;
 		texture_desc.mip_levels = 1;
 		texture_desc.type = kTextureType2D;
-		texture_desc.format = channels == 3 ? kTextureFormatRGB8 : kTextureFormatRGBA8;
+		texture_desc.format = format;
 		add_texture(&texture_desc, &tex);
 
 		ResourceUpdateDesc resource_update_desc;
@@ -367,6 +375,14 @@ public:
 					}
 				},
 				{
+					.name = "normal_map",
+					.descriptor =
+					DescriptorInfo::CombinedTextureSample{
+						mesh.get_texture(2),
+						"samplerState",
+					}
+				},
+				{
 					.name = "samplerState",
 					.descriptor = sampler
 				},
@@ -551,12 +567,15 @@ private:
 		if (mesh->mMaterialIndex >= 0)
 		{
 			aiMaterial* material = scene->mMaterials[mesh->mMaterialIndex];
-			std::vector<Texture*> diffuseMaps = load_material_textures(material,
+			std::vector<Texture*> diffuse_maps = load_material_textures(material,
 				aiTextureType_DIFFUSE);
-			textures.insert(textures.end(), diffuseMaps.begin(), diffuseMaps.end());
-			std::vector<Texture*> specularMaps = load_material_textures(material,
+			textures.insert(textures.end(), diffuse_maps.begin(), diffuse_maps.end());
+			std::vector<Texture*> specular_maps = load_material_textures(material,
 				aiTextureType_SPECULAR);
-			textures.insert(textures.end(), specularMaps.begin(), specularMaps.end());
+			textures.insert(textures.end(), specular_maps.begin(), specular_maps.end());
+			std::vector<Texture*> normal_maps = load_material_textures(material,
+				aiTextureType_HEIGHT);
+			textures.insert(textures.end(), normal_maps.begin(), normal_maps.end());
 		}
 
 		return Mesh(buffer, indices, textures);
@@ -564,6 +583,12 @@ private:
 
 	std::vector<Texture*> load_material_textures(aiMaterial* mat, aiTextureType type)
 	{
+		auto ambCount = mat->GetTextureCount(aiTextureType_AMBIENT);
+		auto difCount = mat->GetTextureCount(aiTextureType_DIFFUSE);
+		auto specCount = mat->GetTextureCount(aiTextureType_SPECULAR);
+		auto normCount = mat->GetTextureCount(aiTextureType_NORMALS);
+		auto emCount = mat->GetTextureCount(aiTextureType_EMISSIVE);
+		auto heCount = mat->GetTextureCount(aiTextureType_HEIGHT);
 		std::vector<Texture*> textures;
 		for (uint32_t i = 0; i < mat->GetTextureCount(type); ++i)
 		{
@@ -872,8 +897,8 @@ auto main() -> int {
 	SamplerDesc sampler_desc{};
 	sampler_desc.min_filter = kFilterTypeNearest;
 	sampler_desc.mag_filter = kFilterTypeNearest;
-	sampler_desc.wrap_u = kWrapModeClampToEdge;
-	sampler_desc.wrap_v = kWrapModeClampToEdge;
+	sampler_desc.wrap_u = kWrapModeRepeat;
+	sampler_desc.wrap_v = kWrapModeRepeat;
 	add_sampler(&sampler_desc, &sampler);
 
 	BufferDesc buffer_desc;
@@ -1012,6 +1037,14 @@ auto main() -> int {
 			}
 		},
 		{
+			.name = "normal_map",
+			.descriptor =
+			DescriptorInfo::CombinedTextureSample{
+				load_white_texture(),
+				"samplerState",
+			}
+		},
+		{
 			.name = "samplerState",
 			.descriptor = sampler
 		},
@@ -1092,9 +1125,10 @@ auto main() -> int {
 			ubo.model[i] = model;
 		}
 
+
 		model = glm::mat4(1.0f);
 		model = glm::translate(model, glm::vec3(backpack_pos));
-		model = glm::scale(model, glm::vec3(0.05f, 0.05f, 0.05f));
+		model = glm::scale(model, glm::vec3(0.01f, 0.01f, 0.01f));
 		ubo.model[10] = model;
 
 		BufferUpdateDesc update;
