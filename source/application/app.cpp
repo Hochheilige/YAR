@@ -48,7 +48,6 @@ Texture* load_white_texture()
 	return tex;
 }
 
-
 Texture* load_texture(const std::string_view& name)
 {
 	Texture* tex;
@@ -583,12 +582,6 @@ private:
 
 	std::vector<Texture*> load_material_textures(aiMaterial* mat, aiTextureType type)
 	{
-		auto ambCount = mat->GetTextureCount(aiTextureType_AMBIENT);
-		auto difCount = mat->GetTextureCount(aiTextureType_DIFFUSE);
-		auto specCount = mat->GetTextureCount(aiTextureType_SPECULAR);
-		auto normCount = mat->GetTextureCount(aiTextureType_NORMALS);
-		auto emCount = mat->GetTextureCount(aiTextureType_EMISSIVE);
-		auto heCount = mat->GetTextureCount(aiTextureType_HEIGHT);
 		std::vector<Texture*> textures;
 		for (uint32_t i = 0; i < mat->GetTextureCount(type); ++i)
 		{
