@@ -8,6 +8,7 @@
     <LibraryOutputDir>$(ProjectRoot)build\$(Platform)\$(Configuration)\lib\</LibraryOutputDir>
     <ToolDir>$(ProjectRoot)tools\</ToolDir>
     <SrcDir>$(ProjectRoot)source\</SrcDir>
+    <ShadersDir>$(SrcDir)shaders\</ShadersDir>
     <ExternalDir>$(ProjectRoot)external\</ExternalDir>
     <ExternalLibOutDir>$(ExternalDir)lib\$(Configuration)\</ExternalLibOutDir>
     <SolutionPlatform Condition="'$(Platform)' == 'x64'">Windows</SolutionPlatform>

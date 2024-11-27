@@ -18,14 +18,8 @@
       <AdditionalLibraryDirectories>$(LibraryOutputDir);%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
       <AdditionalDependencies>Engine.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
-    <PostBuildEvent>
-      <Command>xcopy /E /I /Y "$(SrcDir)shaders" "$(ProjectOutputDir)shaders"</Command>
-    </PostBuildEvent>
     <PreBuildEvent>
-      <Command Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">scripts/post_build.bat $(SrcDir) $(ProjectOutputDir)</Command>
-    </PreBuildEvent>
-    <PreBuildEvent>
-      <Command Condition="'$(Configuration)|$(Platform)'=='Release|x64'">scripts/post_build.bat $(SrcDir) $(ProjectOutputDir)</Command>
+      <Command Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">py scripts\compile_hlsl_to_spirv.py $(ShadersDir) $(ProjectOutputDir)shaders</Command>
     </PreBuildEvent>
   </ItemDefinitionGroup>
   <ItemGroup>

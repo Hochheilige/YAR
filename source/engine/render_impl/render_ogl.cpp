@@ -11,8 +11,6 @@
 #include <fstream>
 
 #include <Windows.h>
-#include <atlbase.h>
-#include <dxcapi.h>
 #include <vector>
 #include <string>
 #include <codecvt>
@@ -130,28 +128,6 @@ static std::wstring util_stage_to_target_profile(ShaderStage stage)
     }
 }
 
-static std::string_view util_get_file_ext(std::string_view path)
-{
-    size_t dot_pos = path.find_last_of('.');
-    if (dot_pos == std::string_view::npos)
-        return {};
-
-    return path.substr(dot_pos + 1);
-}
-
-// Helper function to convert std::wstring to LPCWSTR
-static LPCWSTR util_to_LPCWSTR(const std::wstring& s) 
-{
-    return s.c_str();
-}
-
-static std::wstring util_convert_to_wstring(std::string_view str_view)
- {
-    std::wstring_convert<std::codecvt_utf8<wchar_t>> converter;
-    std::string str(str_view);
-    return converter.from_bytes(str);
-}
-
 struct SpirvHeader {
     uint32_t magicNumber;
     uint32_t version;
@@ -160,62 +136,29 @@ struct SpirvHeader {
     uint32_t instructionOffset;
 };
 
-static bool util_compile_hlsl_to_spirv(ShaderStageLoadDesc* load_desc, std::vector<uint8_t>& spirv) {
-    // Initialize the Dxc compiler and utils
-    CComPtr<IDxcCompiler> compiler;
-    CComPtr<IDxcLibrary> library;
-    CComPtr<IDxcBlobEncoding> sourceBlob;
-    CComPtr<IDxcOperationResult> result;
+static bool util_load_spirv(ShaderStageLoadDesc* load_desc, std::vector<uint8_t>& spirv) 
+{
+    // Probably can escape it and store bytecode just in header files
+    std::filesystem::path path = load_desc->file_name + ".spv";
 
-    HRESULT hr;
-
-    // Initialize the DXC components
-    if (FAILED(hr = DxcCreateInstance(CLSID_DxcCompiler, IID_PPV_ARGS(&compiler))))
+    std::ifstream byte_code(path, std::ios::binary | std::ios::ate);
+    if (!byte_code.is_open()) {
+        std::cerr << "Failed to open SPIR-V file: " << path << std::endl;
         return false;
-
-    if (FAILED(hr = DxcCreateInstance(CLSID_DxcLibrary, IID_PPV_ARGS(&library))))
-        return false;
-
-    std::wstring shader_path = util_convert_to_wstring(load_desc->file_name.data());
-    std::wstring entry_point = util_convert_to_wstring(load_desc->entry_point.data());
-    std::wstring target_profile = util_stage_to_target_profile(load_desc->stage);
-    // Load the HLSL shader source code
+    }
     
-    if (FAILED(hr = library->CreateBlobFromFile(shader_path.c_str(), nullptr, &sourceBlob)))
-        return false;
-
-    // Prepare the arguments for the compilation
-    LPCWSTR arguments[] = {
-        L"-spirv",            // Output format to SPIR-V
-    };
-
-    // Compile the shader
-    compiler->Compile(
-        sourceBlob,            // Source blob
-        shader_path.c_str(), // Source file name (used for error reporting)
-        entry_point.c_str(),    // Entry point function
-        target_profile.c_str(), // Target profile
-        arguments, _countof(arguments), // Compilation arguments
-        nullptr, 0,            // No defines
-        nullptr,               // No include handler
-        &result                // Compilation result
-    );
-
-    // Check the result of the compilation
-    result->GetStatus(&hr);
-    if (FAILED(hr)) {
-        CComPtr<IDxcBlobEncoding> errors;
-        result->GetErrorBuffer(&errors);
-        std::cerr << "Compilation failed with errors:\n" << (const char*)errors->GetBufferPointer() << std::endl;
+    std::streamsize size = byte_code.tellg();
+    if (size <= 0) {
+        std::cerr << "SPIR-V file is empty or invalid: " << path << std::endl;
         return false;
     }
 
-    // Retrieve the compiled SPIR-V code
-    CComPtr<IDxcBlob> spirvBlob;
-    result->GetResult(&spirvBlob);
-
-    spirv.resize(spirvBlob->GetBufferSize());
-    memcpy(spirv.data(), spirvBlob->GetBufferPointer(), spirvBlob->GetBufferSize());
+    spirv.resize(static_cast<size_t>(size));
+    byte_code.seekg(0, std::ios::beg);
+    if (!byte_code.read(reinterpret_cast<char*>(spirv.data()), size)) {
+        std::cerr << "Failed to read SPIR-V file: " << path << std::endl;
+        return false;
+    }
 
     return true;
 }
@@ -245,7 +188,7 @@ static void util_load_shader_binary(ShaderStage stage, ShaderStageLoadDesc* load
     }
 
     std::vector<uint8_t> buffer;
-    util_compile_hlsl_to_spirv(load_desc, buffer);
+    util_load_spirv(load_desc, buffer);
 
     if (buffer.size() % 4 != 0) {
         throw std::runtime_error("Wrong byte-code size");

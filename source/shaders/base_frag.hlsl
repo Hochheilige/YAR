@@ -1,3 +1,5 @@
+#include "common.hlsli"
+
 struct PSInput {
     float4 position : SV_POSITION;
     float3 frag_pos : POSITION0;
@@ -8,75 +10,6 @@ struct PSInput {
 Texture2D<float4> diffuse_map : register(t0, space0);
 Texture2D<float4> specular_map : register(t1, space0);
 SamplerState samplerState : register(s0, space0);
-
-struct MVP
-{
-    float4x4 view;
-    float4x4 proj;
-    float4x4 model[11];
-};
-
-struct Material
-{
-    float shinines;
-};
-
-#define DIR_LIGHT_COUNT 1
-#define POINT_LIGHT_COUNT 1
-#define SPOT_LIGHT_COUNT 1
-#define LS_COUNT DIR_LIGHT_COUNT + POINT_LIGHT_COUNT + SPOT_LIGHT_COUNT
-#define MAT_COUNT 11
-
-struct DirLight 
-{
-    float4 direction[DIR_LIGHT_COUNT];
-};
-
-struct PointLight
-{
-    float4 position[POINT_LIGHT_COUNT];
-    float4 attenuation[POINT_LIGHT_COUNT];
-};
-
-struct SpotLight
-{
-    float4 position[SPOT_LIGHT_COUNT];
-    float4 direction[SPOT_LIGHT_COUNT];
-    float4 cutoff[SPOT_LIGHT_COUNT];
-    float4 attenuation[SPOT_LIGHT_COUNT];
-};
-
-struct LightParams
-{
-    float4 ambient[LS_COUNT];
-    float4 diffuse[LS_COUNT];
-    float4 specular[LS_COUNT];
-};
-
-struct Camera
-{
-    float4 pos;
-};
-
-cbuffer push_constant : register(b0, space2)
-{
-    uint index;
-};
-
-cbuffer ubo : register(b1, space1)
-{
-    MVP mvp;
-    DirLight dir_light;
-    PointLight point_light;
-    SpotLight spot_light;
-    LightParams light_params;
-    Camera cam;
-};
-
-cbuffer mat : register(b2, space0)
-{
-    Material material[MAT_COUNT];
-};
 
 struct LightCalculationParams
 {
