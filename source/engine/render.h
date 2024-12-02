@@ -339,7 +339,7 @@ struct DescriptorInfo
     };
 
     std::string name;
-    std::variant<Buffer*, Sampler*, CombinedTextureSample> descriptor;
+    std::variant<Buffer*, Sampler*, CombinedTextureSample, Texture*> descriptor;
 };
 
 struct UpdateDescriptorSetDesc
@@ -474,6 +474,7 @@ DECLARE_YAR_RENDER_FUNC(void, cmd_bind_index_buffer, CmdBuffer* cmd, Buffer* buf
 DECLARE_YAR_RENDER_FUNC(void, cmd_bind_push_constant, CmdBuffer* cmd, void* data);
 DECLARE_YAR_RENDER_FUNC(void, cmd_draw, CmdBuffer* cmd, uint32_t first_vertex, uint32_t count);
 DECLARE_YAR_RENDER_FUNC(void, cmd_draw_indexed, CmdBuffer* cmd, uint32_t index_count, uint32_t first_index, uint32_t first_vertex);
+DECLARE_YAR_RENDER_FUNC(void, cmd_dispatch, CmdBuffer* cmd, uint32_t num_groups_x, uint32_t num_groups_y, uint32_t num_groups_z);
 DECLARE_YAR_RENDER_FUNC(void, cmd_update_buffer, CmdBuffer* cmd, Buffer* buffer, size_t offset, size_t size, void* data);
 DECLARE_YAR_RENDER_FUNC(void, queue_submit, CmdQueue* queue);
 

@@ -7,6 +7,8 @@ Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "Application", "Application.
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "Engine", "Engine.vcxproj", "{18A19EC8-E3FD-4035-8BB9-A02ACD5A32BA}"
 EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "Raytracing", "Raytracing.vcxproj", "{2E8939AD-8BD5-4EB4-B0E6-218B4ABA5B1C}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|x64 = Debug|x64
@@ -21,6 +23,10 @@ Global
 		{18A19EC8-E3FD-4035-8BB9-A02ACD5A32BA}.Debug|x64.Build.0 = Debug|x64
 		{18A19EC8-E3FD-4035-8BB9-A02ACD5A32BA}.Release|x64.ActiveCfg = Release|x64
 		{18A19EC8-E3FD-4035-8BB9-A02ACD5A32BA}.Release|x64.Build.0 = Release|x64
+		{2E8939AD-8BD5-4EB4-B0E6-218B4ABA5B1C}.Debug|x64.ActiveCfg = Debug|x64
+		{2E8939AD-8BD5-4EB4-B0E6-218B4ABA5B1C}.Debug|x64.Build.0 = Debug|x64
+		{2E8939AD-8BD5-4EB4-B0E6-218B4ABA5B1C}.Release|x64.ActiveCfg = Release|x64
+		{2E8939AD-8BD5-4EB4-B0E6-218B4ABA5B1C}.Release|x64.Build.0 = Release|x64
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

@@ -1049,6 +1049,23 @@ void gl_cmdBindDescriptorSet(CmdBuffer* cmd, DescriptorSet* set, uint32_t index)
                     // alert we have no texture with this name
                 }
             }
+
+            // TODO: properly set up UAV
+            if (descriptor.type & kResourceTypeUAV)
+            {
+                const auto& info_iter = std::find_if(infos.begin(), infos.end(),
+                    [&](const DescriptorInfo& info)
+                    {
+                        return std::holds_alternative<Texture*>(info.descriptor);
+                    }
+                );
+
+                if (info_iter != infos.end())
+                {
+                    const Texture* uav = std::get<Texture*>(info_iter->descriptor);
+                    glBindImageTexture(0, uav->id, 0, GL_FALSE, 0, GL_WRITE_ONLY, GL_RGBA32F);
+                }
+            }
         }
     });
 }
@@ -1091,7 +1108,8 @@ void gl_cmdDraw(CmdBuffer* cmd, uint32_t first_vertex, uint32_t count)
     cmd->commands.push_back([=]() {
         glBindVertexArray(vao);
         // need to add topology somewhere
-        glDrawArrays(GL_TRIANGLES, first_vertex, count);
+        // FIXME: MOVE TOPOLOGY
+        glDrawArrays(GL_TRIANGLE_STRIP, first_vertex, count);
     });
 }
 
@@ -1106,6 +1124,16 @@ void gl_cmdDrawIndexed(CmdBuffer* cmd, uint32_t index_count,
 
         glDrawElements(GL_TRIANGLES, index_count, GL_UNSIGNED_INT, 0);
     });
+}
+
+void gl_cmdDispatch(CmdBuffer* cmd, uint32_t num_group_x, uint32_t num_group_y, uint32_t num_group_z)
+{
+    cmd->commands.push_back([=]() {
+        glDispatchCompute(num_group_x, num_group_y, num_group_z);
+        // TODO: there is probably should be separate function for barriers
+        glMemoryBarrier(GL_SHADER_IMAGE_ACCESS_BARRIER_BIT | GL_TEXTURE_FETCH_BARRIER_BIT);
+        }
+    );
 }
 
 void gl_cmdUpdateBuffer(CmdBuffer* cmd, Buffer* buffer, size_t offset, size_t size, void* data)
@@ -1157,6 +1185,7 @@ bool gl_init_render()
     cmd_bind_push_constant  = gl_cmdBindPushConstant;
     cmd_draw                = gl_cmdDraw;
     cmd_draw_indexed        = gl_cmdDrawIndexed;
+    cmd_dispatch            = gl_cmdDispatch;
     cmd_update_buffer       = gl_cmdUpdateBuffer;
     queue_submit            = gl_queueSubmit;
 

@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project DefaultTargets="Build" ToolsVersion="15.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <PropertyGroup Label="Globals">
+    <ProjectGuid>{2e8939ad-8bd5-4eb4-b0e6-218b4aba5b1c}</ProjectGuid>
+  </PropertyGroup>
+  <PropertyGroup Label="Configuration">
+    <ConfigurationType>Application</ConfigurationType>
+  </PropertyGroup>
+  <Import Project="props\ProjectConfigurations.props" />
+  <Import Project="props\CommonProjectSetup.props" />
+  <ItemDefinitionGroup>
+    <ClCompile>
+      <AdditionalIncludeDirectories>$(SrcDir)engine\;$(ExternalDir)glad\include\;$(ExternalDir)glfw\include\;$(ExternalDir)imgui\;$(ExternalDir)dxc\inc\;$(ExternalDir)stb\;$(ExternalDir)glm\;$(ExternalDir)assimp\include\%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <RuntimeLibrary Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">MultiThreadedDebugDLL</RuntimeLibrary>
+      <LanguageStandard>stdcpp20</LanguageStandard>
+    </ClCompile>
+    <Link>
+      <AdditionalLibraryDirectories>$(LibraryOutputDir);%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
+      <AdditionalDependencies>Engine.lib;%(AdditionalDependencies)</AdditionalDependencies>
+    </Link>
+    <PreBuildEvent>
+      <Command Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">py scripts\compile_hlsl_to_spirv.py $(ShadersDir)\raytracing $(ProjectOutputDir)shaders</Command>
+    </PreBuildEvent>
+  </ItemDefinitionGroup>
+  <ItemGroup>
+    <ClCompile Include="$(SrcDir)application\raytracing_app.cpp" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="Engine.vcxproj">
+      <Project>{18a19ec8-e3fd-4035-8bb9-a02acd5a32ba}</Project>
+    </ProjectReference>
+  </ItemGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
+</Project>

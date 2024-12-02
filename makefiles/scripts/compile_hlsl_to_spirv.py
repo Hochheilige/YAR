@@ -9,6 +9,8 @@ def compile_shader(shader_path, target_path):
         target_profile = "vs_6_0"
     elif "frag" in shader_name:
         target_profile = "ps_6_0"
+    elif "comp" in shader_name:
+        target_profile = "cs_6_0"
     else:
         print(f"Warning: Skipping {shader_name} (unknown shader type)")
         return

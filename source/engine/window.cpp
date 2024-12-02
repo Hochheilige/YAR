@@ -4,7 +4,8 @@
 #include <glad/glad.h>
 #include <GLFW/glfw3.h>
 
-GLFWwindow* window;
+GLFWwindow* window{ nullptr };
+WindowDimensions dims;
 
 void framebuffer_size_callback(GLFWwindow* window, int width, int height);
 void mouse_callback(GLFWwindow* window, double xpos, double ypos);
@@ -34,6 +35,9 @@ bool init_window()
         return false;
     }
 
+    dims.width = mode->width;
+    dims.height = mode->height;
+    glfwSetWindowUserPointer(window, &dims);
     glfwMakeContextCurrent(window);
 
     glfwSetFramebufferSizeCallback(window, framebuffer_size_callback);
@@ -70,4 +74,9 @@ swap_buffers get_swap_buffers_func()
 void* get_window()
 {
     return static_cast<void*>(window);
+}
+
+const WindowDimensions& get_window_dims()
+{
+    return dims;
 }
