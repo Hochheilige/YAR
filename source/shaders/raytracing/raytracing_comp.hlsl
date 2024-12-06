@@ -20,14 +20,14 @@ float3 ray_at(const ray r, const float t)
 float hit_sphere(const float3 center, float radius, const ray r) {
     float3 oc = center - r.origin;
     float a = dot(r.direction, r.direction);
-    float b = -2.0 * dot(r.direction, oc);
+    float h = dot(r.direction, oc);
     float c = dot(oc, oc) - radius*radius;
-    float discriminant = b*b - 4*a*c;
+    float discriminant = h * h - a * c;
 
     if (discriminant < 0)
         return -1.0f;
     else
-        return (-b - sqrt(discriminant)) / (2.0f * a);
+        return (h - sqrt(discriminant)) / a;
 }
 
 float3 ray_color(const ray r)
