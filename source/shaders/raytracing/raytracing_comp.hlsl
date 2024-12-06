@@ -35,7 +35,7 @@ float3 ray_color(const ray r)
 
     float3 unit_direction = unit_vector(r.direction);
     float a = 0.5*(unit_direction.y + 1.0);
-    return (1.0-a)*float3(1.0, 1.0, 1.0) + a*float3(0.5, 0.7, 1.0);
+    return lerp(a, float3(1.0f, 1.0f, 1.0f), float3(0.5f, 0.7f, 1.0f));
 }
 
 [numthreads(16, 16, 1)]
