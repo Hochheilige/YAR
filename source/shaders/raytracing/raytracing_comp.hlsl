@@ -14,6 +14,27 @@ float degrees_to_radians(float degrees)
     return degrees * PI / 180;
 }
 
+struct Interval
+{
+    float min_;
+    float max_;
+};
+
+float interval_size(const Interval i)
+{
+    return i.max_ - i.min_;
+}
+
+bool interval_contains(const Interval i, const float x)
+{
+    return i.min_ <= x && x <= i.max_;
+}
+
+bool interval_surrounds(const Interval i, const float x)
+{
+    return i.min_ < x && x < i.max_;
+}
+
 struct Ray
 {
     float3 origin;
@@ -45,7 +66,7 @@ float3 ray_at(const Ray r, const float t)
     return r.origin + t * r.direction;
 }
 
-bool hit_sphere(const Ray r, const Sphere s, float ray_tmin, const float ray_tmax, out HitRecord rec)
+bool hit_sphere(const Ray r, const Sphere s, const Interval ray_t, out HitRecord rec)
 {
     float3 oc = s.center - r.origin;
     float a = dot(r.direction, r.direction);
@@ -58,10 +79,10 @@ bool hit_sphere(const Ray r, const Sphere s, float ray_tmin, const float ray_tma
 
     float sqrtd = sqrt(discriminant);
     float root = (h - sqrtd) / a;
-    if (root <= ray_tmin || ray_tmax <= root)
+    if (!interval_surrounds(ray_t, root))
     {
         root = (h + sqrtd) / a;
-        if (root <= ray_tmin || ray_tmax <= root)
+        if (!interval_surrounds(ray_t, root))
             return false;
     } 
 
@@ -73,15 +94,18 @@ bool hit_sphere(const Ray r, const Sphere s, float ray_tmin, const float ray_tma
     return true;
 }
 
-bool hit(const Ray r, float ray_tmin, float ray_tmax, Sphere spheres[2], out HitRecord rec)
+bool hit(const Ray r, Interval ray_t, Sphere spheres[2], out HitRecord rec)
 {
     HitRecord temp_rec;
     bool hit_anything = false;
-    float closest_to_far = ray_tmax;
+    float closest_to_far = ray_t.max_;
 
     for (uint i = 0; i < 2; ++i)
     {
-        if (hit_sphere(r, spheres[i], ray_tmin, closest_to_far, temp_rec))
+        Interval interval;
+        interval.min_ = ray_t.min_;
+        interval.max_ = closest_to_far;
+        if (hit_sphere(r, spheres[i], interval, temp_rec))
         {
             hit_anything = true;
             closest_to_far = temp_rec.t;
@@ -94,8 +118,11 @@ bool hit(const Ray r, float ray_tmin, float ray_tmax, Sphere spheres[2], out Hit
 
 float3 ray_color(const Ray r, Sphere spheres[2])
 {
+    Interval interval;
+    interval.min_ = 0.0f;
+    interval.max_ = INF;
     HitRecord rec;
-    if (hit(r, 0.0f, INF, spheres, rec))
+    if (hit(r, interval, spheres, rec))
     {
         return 0.5f * (rec.normal + 1);
     }
@@ -108,6 +135,14 @@ float3 ray_color(const Ray r, Sphere spheres[2])
 [numthreads(16, 16, 1)]
 void main(uint3 dispatchThreadID : SV_DispatchThreadID, uint3 groupThreadID : SV_GroupThreadID)
 {
+
+    Interval empty;
+    empty.min_ = INF;
+    empty.max_ = -INF;
+    Interval universe;
+    universe.min_ = -INF;
+    universe.max_ = INF;
+
     uint width;
     uint height;
     quad_tex.GetDimensions(width, height);
