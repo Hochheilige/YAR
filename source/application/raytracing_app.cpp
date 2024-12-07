@@ -15,10 +15,20 @@ void process_input(GLFWwindow* window);
 float deltaTime = 0.0f;
 float lastFrame = 0.0f;
 
+struct Sphere
+{
+	glm::vec3 center;
+	float radius;
+};
+
+constexpr uint32_t kSpheresCount = 2u;
+
 struct UBO
 {
 	glm::mat4 invViewProj;
 	glm::vec4 cameraPos;
+	Sphere spheres[kSpheresCount];
+	int32_t samples_per_pixel[4];
 }ubo;
 
 struct Camera
@@ -205,6 +215,12 @@ auto main() -> int
 	CmdBuffer* cmd;
 	add_cmd(&cmd_desc, &cmd);
 
+	camera.pos = glm::vec3(0.0f, 0.0f, 0.0f);
+
+	ubo.spheres[0] = { Sphere(glm::vec3(0.0f, 0.0f, -1.0f), 0.5f) };
+	ubo.spheres[1] = { Sphere(glm::vec3(0.0f, -100.5f, -1.0f), 100.0f) };
+
+
 	while (update_window())
 	{
 		float currentFrame = static_cast<float>(glfwGetTime());
@@ -219,7 +235,8 @@ auto main() -> int
 		glm::mat4 projectionMatrix = glm::perspective(glm::radians(90.0f), dims.width / (float)dims.height, 0.1f, 100.0f);
 		glm::mat4 viewMatrix = glm::lookAt(glm::vec3(ubo.cameraPos), glm::vec3(0.0f, 0.0f, -1.0f), glm::vec3(0.0f, 1.0f, 0.0f));
 		ubo.invViewProj = glm::inverse(projectionMatrix * viewMatrix);
-		
+		ubo.samples_per_pixel[0] = gSamplesPerPixel;
+
 		BufferUpdateDesc update;
 		update.buffer = ubo_buf[frame_index];
 		update.size = sizeof(ubo);

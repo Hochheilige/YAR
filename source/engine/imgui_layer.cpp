@@ -6,6 +6,7 @@
 #include <chrono>
 
 float gBackGroundColor[3] = { 1.0f, 1.0f, 1.0f};
+int32_t gSamplesPerPixel = 1u;
 
 float get_fps() {
 	static int frame_count = 0;
@@ -58,6 +59,10 @@ void imgui_render()
 
 	ImGui::Begin("Performance");
 	ImGui::Text("FPS: %.1f", get_fps());
+	ImGui::End();
+
+	ImGui::Begin("Raytracer settings");
+	ImGui::SliderInt("Samples Per Pixel", &gSamplesPerPixel, 1, 1000);
 	ImGui::End();
 }
 

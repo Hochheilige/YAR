@@ -1,17 +1,28 @@
+struct Sphere
+{
+    float3 center;
+    float radius;
+};
+#define SPHERES_COUNT 2
+
 RWTexture2D<float4> quad_tex : register(u0, space0);
 
 cbuffer ubo : register(b0, space1)
 {
     float4x4 invViewProj;
-    float4 camera_pos;   
+    float4 camera_pos;
+    Sphere spheres[SPHERES_COUNT];
+    int samples_per_pixel;   
 };
 
 #define INF 1.0f / 0.0f
 #define PI 3.14159265358979323846f
 
-float degrees_to_radians(float degrees)
+float rand(float3 p)
 {
-    return degrees * PI / 180;
+    float3 temp = float3(12.9898, 78.233, 45.164);
+    float dotProduct = dot(p, temp);
+    return frac(sin(dotProduct) * 43758.5453);
 }
 
 struct Interval
@@ -39,12 +50,6 @@ struct Ray
 {
     float3 origin;
     float3 direction;
-};
-
-struct Sphere
-{
-    float3 center;
-    float radius;
 };
 
 struct HitRecord
@@ -94,7 +99,7 @@ bool hit_sphere(const Ray r, const Sphere s, const Interval ray_t, out HitRecord
     return true;
 }
 
-bool hit(const Ray r, Interval ray_t, Sphere spheres[2], out HitRecord rec)
+bool hit(const Ray r, Interval ray_t, Sphere spheres[SPHERES_COUNT], out HitRecord rec)
 {
     HitRecord temp_rec;
     bool hit_anything = false;
@@ -116,7 +121,7 @@ bool hit(const Ray r, Interval ray_t, Sphere spheres[2], out HitRecord rec)
     return hit_anything;
 }
 
-float3 ray_color(const Ray r, Sphere spheres[2])
+float3 ray_color(const Ray r, Sphere spheres[SPHERES_COUNT])
 {
     Interval interval;
     interval.min_ = 0.0f;
@@ -132,10 +137,14 @@ float3 ray_color(const Ray r, Sphere spheres[2])
     return lerp(a, float3(1.0f, 1.0f, 1.0f), float3(0.5f, 0.7f, 1.0f));
 }
 
+float2 sample_square(const float3 seed)
+{
+    return float2(rand(seed) - 0.5f, rand(seed.zyx) - 0.5f); 
+}
+
 [numthreads(16, 16, 1)]
 void main(uint3 dispatchThreadID : SV_DispatchThreadID, uint3 groupThreadID : SV_GroupThreadID)
 {
-
     Interval empty;
     empty.min_ = INF;
     empty.max_ = -INF;
@@ -147,24 +156,26 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID, uint3 groupThreadID : SV
     uint height;
     quad_tex.GetDimensions(width, height);
 
-    float2 ndc = (float2(dispatchThreadID.xy) / float2(width, height)) * 2.0f - 1.0f; 
-    float4 clipSpace = float4(ndc, 0.0f, 1.0f);
+    const float2 ndc = (float2(dispatchThreadID.xy) / float2(width, height)) * 2.0f - 1.0f; 
+    float3 final_color = float3(0.0f, 0.0f, 0.0f);
+    for (uint s = 0; s < samples_per_pixel; ++s)
+    {
+        float2 offset = sample_square(float3(dispatchThreadID.xy, s));
+        float2 jittered_ndc = ndc + offset / float2(width, height);
 
-    float4 worldSpace = mul(invViewProj, clipSpace);
-    worldSpace /= worldSpace.w;
-    float3 rayDir = normalize(worldSpace.xyz - camera_pos.xyz);
-    Ray r;
-    r.direction = rayDir;
-    r.origin = camera_pos.xyz;
+        float4 clipSpace = float4(jittered_ndc, 0.0f, 1.0f);
+        float4 worldSpace = mul(invViewProj, clipSpace);
+        worldSpace /= worldSpace.w;
+        float3 rayDir = normalize(worldSpace.xyz - camera_pos.xyz);
 
-    // temp add 2 spheres here
-    // better to add it through ubo
-    Sphere spheres[2];
-    spheres[0].center = float3(0.0f, 0.0f, -1.0f);
-    spheres[0].radius = 0.5f;
-    spheres[1].center = float3(0.0f, -100.5f, -1.0f);
-    spheres[1].radius = 100;
+        Ray r;
+        r.direction = rayDir;
+        r.origin = camera_pos.xyz;
 
-    float3 rayColor = ray_color(r, spheres);
-    quad_tex[dispatchThreadID.xy] = float4(rayColor, 1.0f);
+        final_color += ray_color(r, spheres);
+    }
+
+    final_color /= samples_per_pixel;
+
+    quad_tex[dispatchThreadID.xy] = float4(final_color, 1.0f);
 }
