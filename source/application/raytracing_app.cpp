@@ -244,6 +244,9 @@ auto main() -> int
 	ubo.spheres[0] = { Sphere(glm::vec3(0.0f, 0.0f, -1.0f), 0.5f) };
 	ubo.spheres[1] = { Sphere(glm::vec3(0.0f, -100.5f, -1.0f), 100.0f) };
 
+	uint32_t group_x = (dims.width + 15) / 16;
+	uint32_t group_y = (dims.height + 15) / 16;
+
 	while (update_window())
 	{
 		float currentFrame = static_cast<float>(glfwGetTime());
@@ -275,7 +278,7 @@ auto main() -> int
 		glUseProgram(compute_shader->program);
 		cmd_bind_descriptor_set(cmd, uav_set, 0);
 		cmd_bind_descriptor_set(cmd, ubo_desc, frame_index);
-		cmd_dispatch(cmd, dims.width / 16, dims.height / 16, 1);
+		cmd_dispatch(cmd, group_x, group_y, 1);
 
 		glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
 		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
