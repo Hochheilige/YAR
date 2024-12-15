@@ -184,7 +184,7 @@ float3 ray_color(inout uint state, Ray r)
         {
             r.origin = rec.p;
             r.direction = rec.normal + random_vector_on_sphere(state);
-            color *= 0.5f;
+            color *= 0.1f;
         }
         else
         {
@@ -200,6 +200,14 @@ float3 ray_color(inout uint state, Ray r)
 float2 sample_square(inout uint state)
 {
     return 2.0f * float2(Random01(state), Random01(state)) - 1.0f; 
+}
+
+float linear_to_gamma(float linear_color)
+{
+    if (linear_color > 0)
+        return sqrt(linear_color);
+
+    return 0.0f;
 }
 
 [numthreads(16, 16, 1)]
@@ -238,6 +246,9 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID, uint3 groupThreadID : SV
     }
 
     final_color /= samples_per_pixel;
+    final_color.x = linear_to_gamma(final_color.x);
+    final_color.y = linear_to_gamma(final_color.y);
+    final_color.z = linear_to_gamma(final_color.z);
 
     quad_tex[dispatchThreadID.xy] = float4(final_color, 1.0f);
 }
