@@ -10,6 +10,15 @@
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/type_ptr.hpp>
 
+#include <random>
+
+inline uint32_t random_uint() 
+{
+	static std::uniform_int_distribution<uint32_t> distribution(0, UINT32_MAX);
+	static std::mt19937 generator(std::random_device{}());
+	return distribution(generator);
+}
+
 void process_input(GLFWwindow* window);
 
 float deltaTime = 0.0f;
@@ -28,7 +37,8 @@ struct UBO
 	glm::mat4 invViewProj;
 	glm::vec4 cameraPos;
 	Sphere spheres[kSpheresCount];
-	int32_t samples_per_pixel[4];
+	int32_t samples_per_pixel;
+	uint32_t seed[3];
 }ubo;
 
 struct Camera
@@ -235,7 +245,9 @@ auto main() -> int
 		glm::mat4 projectionMatrix = glm::perspective(glm::radians(90.0f), dims.width / (float)dims.height, 0.1f, 100.0f);
 		glm::mat4 viewMatrix = glm::lookAt(glm::vec3(ubo.cameraPos), glm::vec3(0.0f, 0.0f, -1.0f), glm::vec3(0.0f, 1.0f, 0.0f));
 		ubo.invViewProj = glm::inverse(projectionMatrix * viewMatrix);
-		ubo.samples_per_pixel[0] = gSamplesPerPixel;
+		ubo.samples_per_pixel = gSamplesPerPixel;
+		// Not sure that I really need to pass random number every frame here
+		ubo.seed[0] = 42u;// random_uint();
 
 		BufferUpdateDesc update;
 		update.buffer = ubo_buf[frame_index];

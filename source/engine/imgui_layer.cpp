@@ -62,7 +62,7 @@ void imgui_render()
 	ImGui::End();
 
 	ImGui::Begin("Raytracer settings");
-	ImGui::SliderInt("Samples Per Pixel", &gSamplesPerPixel, 1, 1000);
+	ImGui::SliderInt("Samples Per Pixel", &gSamplesPerPixel, 1, 100);
 	ImGui::End();
 }
 

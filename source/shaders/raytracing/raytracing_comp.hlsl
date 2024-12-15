@@ -12,17 +12,48 @@ cbuffer ubo : register(b0, space1)
     float4x4 invViewProj;
     float4 camera_pos;
     Sphere spheres[SPHERES_COUNT];
-    int samples_per_pixel;   
+    int samples_per_pixel;
+    float seed;   
 };
 
 #define INF 1.0f / 0.0f
 #define PI 3.14159265358979323846f
 
-float rand(float3 p)
+// Create an initial random number for this thread
+uint SeedThread(uint seed)
 {
-    float3 temp = float3(12.9898, 78.233, 45.164);
-    float dotProduct = dot(p, temp);
-    return frac(sin(dotProduct) * 43758.5453);
+    // Thomas Wang hash 
+    // Ref: http://www.burtleburtle.net/bob/hash/integer.html
+    seed = (seed ^ 61) ^ (seed >> 16);
+    seed *= 9;
+    seed = seed ^ (seed >> 4);
+    seed *= 0x27d4eb2d;
+    seed = seed ^ (seed >> 15);
+    return seed;
+}
+// Generate a random 32-bit integer
+uint Random(inout uint state)
+{
+    // Xorshift algorithm from George Marsaglia's paper.
+    state ^= (state << 13);
+    state ^= (state >> 17);
+    state ^= (state << 5);
+    return state;
+}
+// Generate a random float in the range [0.0f, 1.0f)
+float Random01(inout uint state)
+{
+    return asfloat(0x3f800000 | Random(state) >> 9) - 1.0;
+}
+// Generate a random float in the range [0.0f, 1.0f]
+float Random01inclusive(inout uint state)
+{
+    return Random(state) / float(0xffffffff);
+}
+// Generate a random integer in the range [lower, upper]
+uint Random(inout uint state, uint lower, uint upper)
+{
+    return lower + uint(float(upper - lower + 1) * Random01(state));
 }
 
 struct Interval
@@ -137,9 +168,9 @@ float3 ray_color(const Ray r, Sphere spheres[SPHERES_COUNT])
     return lerp(a, float3(1.0f, 1.0f, 1.0f), float3(0.5f, 0.7f, 1.0f));
 }
 
-float2 sample_square(const float3 seed)
+float2 sample_square(inout uint state)
 {
-    return float2(rand(seed) - 0.5f, rand(seed.zyx) - 0.5f); 
+    return float2(Random01(state) * 2.0f - 1.0f, Random01(state) * 2.0f - 1.0f); 
 }
 
 [numthreads(16, 16, 1)]
@@ -158,14 +189,16 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID, uint3 groupThreadID : SV
 
     const float2 ndc = (float2(dispatchThreadID.xy) / float2(width, height)) * 2.0f - 1.0f; 
     float3 final_color = float3(0.0f, 0.0f, 0.0f);
-    for (uint s = 0; s < samples_per_pixel; ++s)
+    uint state = SeedThread(seed);
+    for (uint s = 0; s < samples_per_pixel; ++s)    
     {
-        float2 offset = sample_square(float3(dispatchThreadID.xy, s));
+        float2 offset = sample_square(state);
         float2 jittered_ndc = ndc + offset / float2(width, height);
 
         float4 clipSpace = float4(jittered_ndc, 0.0f, 1.0f);
         float4 worldSpace = mul(invViewProj, clipSpace);
         worldSpace /= worldSpace.w;
+
         float3 rayDir = normalize(worldSpace.xyz - camera_pos.xyz);
 
         Ray r;
