@@ -182,12 +182,9 @@ float3 ray_color(inout uint state, Ray r)
     {
         if (hit(r, interval, rec))
         {
-            float3 direction = random_vector_on_hemisphere(state, rec.normal);
-            Ray sr;
-            sr.origin = rec.p;
-            sr.direction = direction;
+            r.origin = rec.p;
+            r.direction = rec.normal + random_vector_on_sphere(state);
             color *= 0.5f;
-            r = sr;
         }
         else
         {
@@ -202,7 +199,7 @@ float3 ray_color(inout uint state, Ray r)
 
 float2 sample_square(inout uint state)
 {
-    return float2(Random01(state) * 2.0f - 1.0f, Random01(state) * 2.0f - 1.0f); 
+    return 2.0f * float2(Random01(state), Random01(state)) - 1.0f; 
 }
 
 [numthreads(16, 16, 1)]
