@@ -1,17 +1,27 @@
+#define LAMBERTIAN 0
+#define METAL      1
+#define SPHERES_COUNT 4
+
+struct Material
+{
+    float3 albedo;
+    uint type;
+};
+
 struct Sphere
 {
     float3 center;
     float radius;
 };
-#define SPHERES_COUNT 2
 
 RWTexture2D<float4> quad_tex : register(u0, space0);
 
-cbuffer ubo : register(b0, space1)
+cbuffer ubo : register(b1, space1)
 {
     float4x4 invViewProj;
     float4 camera_pos;
     Sphere spheres[SPHERES_COUNT];
+    Material mats[SPHERES_COUNT];
     int samples_per_pixel;
     int max_ray_depth;
     float seed;   
@@ -105,9 +115,44 @@ struct HitRecord
 {
     float3 p;
     float3 normal;
+    Material mat;
     float t;
     bool front_face;
 };
+
+bool near_zero(float3 v) {
+    float s = 1e-8;
+    return (abs(v.x) < s) && (abs(v.y) < s) && (abs(v.z) < s);
+}
+
+float3 reflect(const float3 v, const float3 n)
+{
+    return v - 2.0f * dot(v, n) * n;
+}
+
+bool scatter(inout uint state, Ray r_in, inout HitRecord rec, out float3 attenuation, out Ray scattered)
+{
+    scattered.origin = rec.p;
+    attenuation = rec.mat.albedo;
+
+    if (rec.mat.type == LAMBERTIAN)
+    {
+        float3 scatter_direction = rec.normal + random_vector_on_sphere(state);
+
+        if (near_zero(scatter_direction))
+            scatter_direction = rec.normal;
+
+        scattered.direction = scatter_direction;
+    }
+
+    if (rec.mat.type == METAL)
+    {
+        float3 reflected = reflect(r_in.direction, rec.normal);
+        scattered.direction = reflected;    
+    }
+
+    return true;
+}
 
 void set_face_normal(const Ray r, float3 outward_normal, out HitRecord rec)
 {
@@ -164,6 +209,7 @@ bool hit(const Ray r, Interval ray_t, out HitRecord rec)
             hit_anything = true;
             closest_to_far = temp_rec.t;
             rec = temp_rec;
+            rec.mat = mats[i];
         }
     }
 
@@ -182,9 +228,17 @@ float3 ray_color(inout uint state, Ray r)
     {
         if (hit(r, interval, rec))
         {
-            r.origin = rec.p;
-            r.direction = rec.normal + random_vector_on_sphere(state);
-            color *= 0.1f;
+            Ray scattered;
+            float3 attenuation;
+            if (scatter(state, r, rec, attenuation, scattered))
+            {
+                color *= attenuation;
+                r = scattered;
+            }
+            else 
+            {
+                return float3(0.0f, 0.0f, 0.0f);
+            }
         }
         else
         {

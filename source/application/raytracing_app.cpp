@@ -24,19 +24,32 @@ void process_input(GLFWwindow* window);
 float deltaTime = 0.0f;
 float lastFrame = 0.0f;
 
+enum MaterialType : uint32_t
+{
+	kLambertian = 0,
+	kMetal
+};
+
+struct Material
+{
+	glm::vec3 albedo;
+	MaterialType type;
+};
+
 struct Sphere
 {
 	glm::vec3 center;
 	float radius;
 };
 
-constexpr uint32_t kSpheresCount = 2u;
+constexpr uint32_t kSpheresCount = 4u;
 
 struct UBO
 {
 	glm::mat4 invViewProj;
 	glm::vec4 cameraPos;
 	Sphere spheres[kSpheresCount];
+	Material mats[kSpheresCount];
 	int32_t samples_per_pixel;
 	int32_t max_ray_depth;
 	uint32_t seed[2];
@@ -157,6 +170,7 @@ auto main() -> int
 	DescriptorSet* uav_set;
 	add_descriptor_set(&set_desc, &uav_set);
 
+
 	DescriptorSet* srv_set;
 	set_desc.shader = shader;
 	add_descriptor_set(&set_desc, &srv_set);
@@ -197,7 +211,6 @@ auto main() -> int
 	set_desc.update_freq = kUpdateFreqPerFrame;
 	DescriptorSet* ubo_desc;
 	add_descriptor_set(&set_desc, &ubo_desc);
-
 
 	update_set_desc = {};
 	for (uint32_t i = 0; i < image_count; ++i)
@@ -241,8 +254,19 @@ auto main() -> int
 
 	camera.pos = glm::vec3(0.0f, 0.0f, 0.0f);
 
+
+	Material mat_ground = { glm::vec3(0.8f, 0.8f, 0.0f), kLambertian, };
+	Material mat_center = { glm::vec3(0.1f, 0.2f, 0.5f), kLambertian, };
+	Material mat_left =  { glm::vec3(0.8f, 0.8f, 0.8f), kMetal };
+	Material mat_right = { glm::vec3(0.8f, 0.6f, 0.2f), kMetal };
 	ubo.spheres[0] = { Sphere(glm::vec3(0.0f, 0.0f, -1.0f), 0.5f) };
 	ubo.spheres[1] = { Sphere(glm::vec3(0.0f, -100.5f, -1.0f), 100.0f) };
+	ubo.spheres[2] = { Sphere(glm::vec3(-1.0f, 0.0f, -1.0f), 0.5f) };
+	ubo.spheres[3] = { Sphere(glm::vec3(1.0f, 0.0f, -1.0f), 0.5f) };
+	ubo.mats[0] = mat_center;
+	ubo.mats[1] = mat_ground;
+	ubo.mats[2] = mat_left;
+	ubo.mats[3] = mat_right;
 
 	uint32_t group_x = (dims.width + 15) / 16;
 	uint32_t group_y = (dims.height + 15) / 16;
