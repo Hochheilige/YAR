@@ -1,12 +1,14 @@
 #pragma once
 #include <cstdint>
+#include <functional>
+
 struct WindowDimensions
 {
     uint32_t width;
     uint32_t height;
 };
 
-bool init_window();
+bool init_window(const std::function<void()>& imgui_layer = nullptr);
 bool update_window();
 void terminate_window();
 

@@ -4,11 +4,23 @@
 #include <GLFW/glfw3.h>
 
 #include <chrono>
+#include <functional>
 
 float gBackGroundColor[3] = { 1.0f, 1.0f, 1.0f};
-int32_t gSamplesPerPixel = 1u;
 
-float get_fps() {
+float get_fps();
+
+static std::function<void()> default_layer = [&]()
+	{
+		ImGui::Begin("Performance");
+		ImGui::Text("FPS: %.1f", get_fps());
+		ImGui::End();
+	};
+
+static std::function<void()> app_layer{ nullptr };
+
+float get_fps()
+{
 	static int frame_count = 0;
 	static float fps = 0.0f;
 	static auto last_time = std::chrono::high_resolution_clock::now(); 
@@ -27,9 +39,11 @@ float get_fps() {
 	return fps;
 }
 
-void imgui_init(void* window)
+void imgui_init(void* window, const std::function<void()>& layer)
 {
 	GLFWwindow* wnd = static_cast<GLFWwindow*>(window);
+	if (layer)
+		app_layer = layer;
 
 	ImGui::CreateContext();
 	ImGuiIO& io = ImGui::GetIO();
@@ -53,17 +67,9 @@ void imgui_begin_frame()
 
 void imgui_render()
 {
-	ImGui::Begin("Color Picker");
-	ImGui::ColorEdit3("Choose background color", gBackGroundColor);
-	ImGui::End();
-
-	ImGui::Begin("Performance");
-	ImGui::Text("FPS: %.1f", get_fps());
-	ImGui::End();
-
-	ImGui::Begin("Raytracer settings");
-	ImGui::SliderInt("Samples Per Pixel", &gSamplesPerPixel, 1, 100);
-	ImGui::End();
+	default_layer();
+	if (app_layer)
+		app_layer();
 }
 
 void imgui_end_frame()

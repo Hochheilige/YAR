@@ -38,7 +38,8 @@ struct UBO
 	glm::vec4 cameraPos;
 	Sphere spheres[kSpheresCount];
 	int32_t samples_per_pixel;
-	uint32_t seed[3];
+	int32_t max_ray_depth;
+	uint32_t seed[2];
 }ubo;
 
 struct Camera
@@ -71,7 +72,19 @@ Texture* create_texture(const uint32_t width, const uint32_t height)
 
 auto main() -> int
 {
-	init_window();
+	int32_t samples_per_pixel = 1u;
+	int32_t max_ray_depth = 1u;
+	
+	const auto imgui_layer = [&]()
+		{
+			ImGui::Begin("Raytracer settings");
+			ImGui::SliderInt("Samples Per Pixel", &samples_per_pixel, 1, 100);
+			ImGui::SliderInt("Max Ray Depth", &max_ray_depth, 1, 100);
+			ImGui::End();
+		};
+
+
+	init_window(imgui_layer);
 	init_render();
 
 	SwapChain* swapchain;
@@ -185,6 +198,7 @@ auto main() -> int
 	DescriptorSet* ubo_desc;
 	add_descriptor_set(&set_desc, &ubo_desc);
 
+
 	update_set_desc = {};
 	for (uint32_t i = 0; i < image_count; ++i)
 	{
@@ -230,7 +244,6 @@ auto main() -> int
 	ubo.spheres[0] = { Sphere(glm::vec3(0.0f, 0.0f, -1.0f), 0.5f) };
 	ubo.spheres[1] = { Sphere(glm::vec3(0.0f, -100.5f, -1.0f), 100.0f) };
 
-
 	while (update_window())
 	{
 		float currentFrame = static_cast<float>(glfwGetTime());
@@ -245,9 +258,11 @@ auto main() -> int
 		glm::mat4 projectionMatrix = glm::perspective(glm::radians(90.0f), dims.width / (float)dims.height, 0.1f, 100.0f);
 		glm::mat4 viewMatrix = glm::lookAt(glm::vec3(ubo.cameraPos), glm::vec3(0.0f, 0.0f, -1.0f), glm::vec3(0.0f, 1.0f, 0.0f));
 		ubo.invViewProj = glm::inverse(projectionMatrix * viewMatrix);
-		ubo.samples_per_pixel = gSamplesPerPixel;
+		ubo.samples_per_pixel = samples_per_pixel;
+		ubo.max_ray_depth = max_ray_depth;
 		// Not sure that I really need to pass random number every frame here
 		ubo.seed[0] = 42u;// random_uint();
+
 
 		BufferUpdateDesc update;
 		update.buffer = ubo_buf[frame_index];
@@ -262,7 +277,7 @@ auto main() -> int
 		cmd_bind_descriptor_set(cmd, ubo_desc, frame_index);
 		cmd_dispatch(cmd, dims.width / 16, dims.height / 16, 1);
 
-		glClearColor(gBackGroundColor[0], gBackGroundColor[1], gBackGroundColor[2], 1.0f);
+		glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
 		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
 		cmd_bind_pipeline(cmd, graphics_pipeline);

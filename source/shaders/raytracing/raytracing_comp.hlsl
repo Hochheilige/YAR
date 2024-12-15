@@ -13,6 +13,7 @@ cbuffer ubo : register(b0, space1)
     float4 camera_pos;
     Sphere spheres[SPHERES_COUNT];
     int samples_per_pixel;
+    int max_ray_depth;
     float seed;   
 };
 
@@ -59,7 +60,7 @@ uint Random(inout uint state, uint lower, uint upper)
 float3 random_vector_on_sphere(inout uint state)
 {
     float y = 2.0f * Random01inclusive(state) - 1.0f;
-    float r = sqrt(1 - y * y);
+    float r = sqrt(1.0f - y * y);
     float l = 2.0f * PI * Random01inclusive(state) - PI;
     return float3(r * sin(l), y, r * cos(l));
 }
@@ -147,7 +148,7 @@ bool hit_sphere(const Ray r, const Sphere s, const Interval ray_t, out HitRecord
     return true;
 }
 
-bool hit(const Ray r, Interval ray_t, Sphere spheres[SPHERES_COUNT], out HitRecord rec)
+bool hit(const Ray r, Interval ray_t, out HitRecord rec)
 {
     HitRecord temp_rec;
     bool hit_anything = false;
@@ -169,18 +170,17 @@ bool hit(const Ray r, Interval ray_t, Sphere spheres[SPHERES_COUNT], out HitReco
     return hit_anything;
 }
 
-float3 ray_color(inout uint state, Ray r, Sphere spheres[SPHERES_COUNT])
+float3 ray_color(inout uint state, Ray r)
 {
     Interval interval;
     interval.min_ = 0.001f;
     interval.max_ = INF;
     HitRecord rec;
 
-    const uint max_bounces = 10;
     float3 color = float3(1.0f, 1.0f, 1.0f);
-    for (uint i = 0; i < max_bounces; ++i)
+    for (uint i = 0; i < max_ray_depth; ++i)
     {
-        if (hit(r, interval, spheres, rec))
+        if (hit(r, interval, rec))
         {
             float3 direction = random_vector_on_hemisphere(state, rec.normal);
             Ray sr;
@@ -237,7 +237,7 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID, uint3 groupThreadID : SV
         r.direction = rayDir;
         r.origin = camera_pos.xyz;
 
-        final_color += ray_color(state, r, spheres);
+        final_color += ray_color(state, r);
     }
 
     final_color /= samples_per_pixel;

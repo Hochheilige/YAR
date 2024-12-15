@@ -12,7 +12,7 @@ void mouse_callback(GLFWwindow* window, double xpos, double ypos);
 void scroll_callback(GLFWwindow* window, double xoffset, double yoffset);
 void process_input(GLFWwindow* window);
 
-bool init_window()
+bool init_window(const std::function<void()>& imgui_layer)
 {
 #if _DEBUG
     glfwInitHint(GLFW_OPENGL_DEBUG_CONTEXT, GL_TRUE);
@@ -47,7 +47,7 @@ bool init_window()
 
     glfwSwapInterval(0);
 
-    imgui_init(window);
+    imgui_init(window, imgui_layer);
 
     return true;
 }

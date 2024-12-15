@@ -1,9 +1,10 @@
 #pragma once
 
-extern float gBackGroundColor[3];
-extern int32_t gSamplesPerPixel;
+#include <functional>
 
-void imgui_init(void* window);
+extern float gBackGroundColor[3];
+
+void imgui_init(void* window, const std::function<void()>& layer = nullptr);
 void imgui_begin_frame();
 void imgui_render();
 void imgui_end_frame();
