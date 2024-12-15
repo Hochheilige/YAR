@@ -56,6 +56,23 @@ uint Random(inout uint state, uint lower, uint upper)
     return lower + uint(float(upper - lower + 1) * Random01(state));
 }
 
+float3 random_vector_on_sphere(inout uint state)
+{
+    float y = 2.0f * Random01inclusive(state) - 1.0f;
+    float r = sqrt(1 - y * y);
+    float l = 2.0f * PI * Random01inclusive(state) - PI;
+    return float3(r * sin(l), y, r * cos(l));
+}
+
+float3 random_vector_on_hemisphere(inout uint state, const float3 normal)
+{
+    float3 on_unit_sphere = random_vector_on_sphere(state);
+    if (dot(on_unit_sphere, normal) > 0.0f)
+        return on_unit_sphere;
+    
+    return -on_unit_sphere;
+}
+
 struct Interval
 {
     float min_;
@@ -136,7 +153,7 @@ bool hit(const Ray r, Interval ray_t, Sphere spheres[SPHERES_COUNT], out HitReco
     bool hit_anything = false;
     float closest_to_far = ray_t.max_;
 
-    for (uint i = 0; i < 2; ++i)
+    for (uint i = 0; i < SPHERES_COUNT; ++i)
     {
         Interval interval;
         interval.min_ = ray_t.min_;
@@ -152,20 +169,35 @@ bool hit(const Ray r, Interval ray_t, Sphere spheres[SPHERES_COUNT], out HitReco
     return hit_anything;
 }
 
-float3 ray_color(const Ray r, Sphere spheres[SPHERES_COUNT])
+float3 ray_color(inout uint state, Ray r, Sphere spheres[SPHERES_COUNT])
 {
     Interval interval;
-    interval.min_ = 0.0f;
+    interval.min_ = 0.001f;
     interval.max_ = INF;
     HitRecord rec;
-    if (hit(r, interval, spheres, rec))
+
+    const uint max_bounces = 10;
+    float3 color = float3(1.0f, 1.0f, 1.0f);
+    for (uint i = 0; i < max_bounces; ++i)
     {
-        return 0.5f * (rec.normal + 1);
+        if (hit(r, interval, spheres, rec))
+        {
+            float3 direction = random_vector_on_hemisphere(state, rec.normal);
+            Ray sr;
+            sr.origin = rec.p;
+            sr.direction = direction;
+            color *= 0.5f;
+            r = sr;
+        }
+        else
+        {
+            break;
+        }
     }
 
     float3 unit_direction = normalize(r.direction);
     float a = 0.5*(unit_direction.y + 1.0);
-    return lerp(a, float3(1.0f, 1.0f, 1.0f), float3(0.5f, 0.7f, 1.0f));
+    return lerp(a, float3(1.0f, 1.0f, 1.0f), float3(0.5f, 0.7f, 1.0f)) * color;
 }
 
 float2 sample_square(inout uint state)
@@ -205,7 +237,7 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID, uint3 groupThreadID : SV
         r.direction = rayDir;
         r.origin = camera_pos.xyz;
 
-        final_color += ray_color(r, spheres);
+        final_color += ray_color(state, r, spheres);
     }
 
     final_color /= samples_per_pixel;
