@@ -287,16 +287,19 @@ auto main() -> int
 
 	Lambertian ground(glm::vec3(0.8f, 0.8f, 0.0f));
 	Lambertian center(glm::vec3(0.1f, 0.2f, 0.5f));
-	Metal left(glm::vec3(0.8f, 0.8f, 0.8f), 0.3f);
 	Metal right(glm::vec3(0.8f, 0.6f, 0.2f), 1.0f);
-	Dielectric d_left(1.5f);
+	float air_refraction_index = 1.0f;
+	float water_refraction_index = 1.33f;
+	// pretend that we are under water and Dielectric sphere is an air bubble
+	float refraction_index = air_refraction_index / water_refraction_index;
+	Dielectric left(refraction_index);
 	ubo.spheres[0] = { Sphere(glm::vec3(0.0f, 0.0f, -1.0f), 0.5f) };
 	ubo.spheres[1] = { Sphere(glm::vec3(0.0f, -100.5f, -1.0f), 100.0f) };
 	ubo.spheres[2] = { Sphere(glm::vec3(-1.0f, 0.0f, -1.0f), 0.5f) };
 	ubo.spheres[3] = { Sphere(glm::vec3(1.0f, 0.0f, -1.0f), 0.5f) };
 	ubo.mats[0] = center.mat;
 	ubo.mats[1] = ground.mat;
-	ubo.mats[2] = d_left.mat;
+	ubo.mats[2] = left.mat;
 	ubo.mats[3] = right.mat;
 
 	uint32_t group_x = (dims.width + 15) / 16;
