@@ -27,21 +27,23 @@ float lastFrame = 0.0f;
 enum MaterialType : uint32_t
 {
 	kLambertian = 0,
-	kMetal
+	kMetal, 
+	kDielectric
 };
 
 struct Material
 {
 	glm::vec3 albedo;
-	float fuzz;
+	float fuzz; // only for metals
+	float refraction_index; // for dielectircs
 	MaterialType type;
-	uint32_t pad[3] = {};
+	uint32_t pad[2] = {};
 };
 
 struct Lambertian
 {
 	Lambertian(glm::vec3 albedo)
-		: mat({ albedo, 0.0f, kLambertian }) {
+		: mat({ albedo, 0.0f, 0.0f, kLambertian }) {
 	}
 
 	Material mat;
@@ -50,7 +52,16 @@ struct Lambertian
 struct Metal
 {
 	Metal(glm::vec3 albedo, float fuzz)
-		: mat({ albedo, fuzz, kMetal }) {
+		: mat({ albedo, fuzz, 0.0f, kMetal }) {
+	}
+
+	Material mat;
+};
+
+struct Dielectric
+{
+	Dielectric(float refraction_index)
+		: mat({ glm::vec3{}, 0.0f, refraction_index, kDielectric }) {
 	}
 
 	Material mat;
@@ -278,13 +289,14 @@ auto main() -> int
 	Lambertian center(glm::vec3(0.1f, 0.2f, 0.5f));
 	Metal left(glm::vec3(0.8f, 0.8f, 0.8f), 0.3f);
 	Metal right(glm::vec3(0.8f, 0.6f, 0.2f), 1.0f);
+	Dielectric d_left(1.5f);
 	ubo.spheres[0] = { Sphere(glm::vec3(0.0f, 0.0f, -1.0f), 0.5f) };
 	ubo.spheres[1] = { Sphere(glm::vec3(0.0f, -100.5f, -1.0f), 100.0f) };
 	ubo.spheres[2] = { Sphere(glm::vec3(-1.0f, 0.0f, -1.0f), 0.5f) };
 	ubo.spheres[3] = { Sphere(glm::vec3(1.0f, 0.0f, -1.0f), 0.5f) };
 	ubo.mats[0] = center.mat;
 	ubo.mats[1] = ground.mat;
-	ubo.mats[2] = left.mat;
+	ubo.mats[2] = d_left.mat;
 	ubo.mats[3] = right.mat;
 
 	uint32_t group_x = (dims.width + 15) / 16;

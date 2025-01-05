@@ -1,11 +1,13 @@
 #define LAMBERTIAN 0
 #define METAL      1
+#define DIELECTRIC 2
 #define SPHERES_COUNT 4
 
 struct Material
 {
     float3 albedo;
-    float fuzz; // probably only for Metal
+    float fuzz; // only for Metals
+    float refraction_index; // only for Dielectrics
     uint type;
 };
 
@@ -131,6 +133,15 @@ float3 reflect(const float3 v, const float3 n)
     return v - 2.0f * dot(v, n) * n;
 }
 
+float3 refract(const float3 r, const float3 n, const float eta_over_etap)
+{
+    float cos_theta = min(dot(r, n), 1.0f);
+    float3 r_perp = eta_over_etap * (r + cos_theta * n);
+    float r_perp_len = length(r_perp);
+    float3 r_parallel = -sqrt(abs(1.0f - r_perp_len * r_perp_len)) * n;
+    return r_perp + r_parallel;
+}
+
 bool scatter(inout uint state, Ray r_in, inout HitRecord rec, out float3 attenuation, out Ray scattered)
 {
     scattered.origin = rec.p;
@@ -152,6 +163,17 @@ bool scatter(inout uint state, Ray r_in, inout HitRecord rec, out float3 attenua
         reflected = normalize(reflected) + (rec.mat.fuzz * random_vector_on_sphere(state));
         scattered.direction = reflected;
         return dot(scattered.direction, rec.normal) > 0;    
+    }
+
+    if (rec.mat.type == DIELECTRIC)
+    {
+        attenuation = float3(1.0f, 1.0f, 1.0f);
+        float ri = rec.front_face ? (1.0f / rec.mat.refraction_index) : rec.mat.refraction_index;
+
+        float3 unit_dir = normalize(r_in.direction);
+        float3 refracted = refract(unit_dir, rec.normal, ri);
+
+        scattered.direction = refracted;
     }
 
     return true;
