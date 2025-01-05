@@ -133,14 +133,22 @@ float3 reflect(const float3 v, const float3 n)
     return v - 2.0f * dot(v, n) * n;
 }
 
+// Based on Snell's Law
 float3 refract(const float3 r, const float3 n, const float eta_over_etap)
 {
-    // Based on Snell's Law
     float cos_theta = min(dot(-r, n), 1.0f);
     float3 r_perp = eta_over_etap * (r + cos_theta * n);
     float r_perp_len = length(r_perp);
     float3 r_parallel = -sqrt(abs(1.0f - r_perp_len * r_perp_len)) * n;
     return r_perp + r_parallel;
+}
+
+float reflectance(float cosine, float refraction_index)
+{
+    // Use Schlick's approximation for reflectance
+    float r0 = (1 - refraction_index) / (1 + refraction_index);
+    r0 = r0 * r0;
+    return r0 + (1 - r0) * pow((1 - cosine), 5.0f);
 }
 
 bool scatter(inout uint state, Ray r_in, inout HitRecord rec, out float3 attenuation, out Ray scattered)
@@ -178,7 +186,7 @@ bool scatter(inout uint state, Ray r_in, inout HitRecord rec, out float3 attenua
         bool cannot_refract = ri * sin_theta > 1.0f;
 
         float3 direction;
-        if (cannot_refract)
+        if (cannot_refract || reflectance(cos_theta, ri) > Random01inclusive(state))
             direction = reflect(unit_dir, rec.normal);
         else
             direction = refract(unit_dir, rec.normal, ri);
