@@ -5,6 +5,7 @@
 struct Material
 {
     float3 albedo;
+    float fuzz; // probably only for Metal
     uint type;
 };
 
@@ -148,7 +149,9 @@ bool scatter(inout uint state, Ray r_in, inout HitRecord rec, out float3 attenua
     if (rec.mat.type == METAL)
     {
         float3 reflected = reflect(r_in.direction, rec.normal);
-        scattered.direction = reflected;    
+        reflected = normalize(reflected) + (rec.mat.fuzz * random_vector_on_sphere(state));
+        scattered.direction = reflected;
+        return dot(scattered.direction, rec.normal) > 0;    
     }
 
     return true;

@@ -33,7 +33,27 @@ enum MaterialType : uint32_t
 struct Material
 {
 	glm::vec3 albedo;
+	float fuzz;
 	MaterialType type;
+	uint32_t pad[3] = {};
+};
+
+struct Lambertian
+{
+	Lambertian(glm::vec3 albedo)
+		: mat({ albedo, 0.0f, kLambertian }) {
+	}
+
+	Material mat;
+};
+
+struct Metal
+{
+	Metal(glm::vec3 albedo, float fuzz)
+		: mat({ albedo, fuzz, kMetal }) {
+	}
+
+	Material mat;
 };
 
 struct Sphere
@@ -52,7 +72,8 @@ struct UBO
 	Material mats[kSpheresCount];
 	int32_t samples_per_pixel;
 	int32_t max_ray_depth;
-	uint32_t seed[2];
+	uint32_t seed;
+	uint32_t pad;
 }ubo;
 
 struct Camera
@@ -170,7 +191,6 @@ auto main() -> int
 	DescriptorSet* uav_set;
 	add_descriptor_set(&set_desc, &uav_set);
 
-
 	DescriptorSet* srv_set;
 	set_desc.shader = shader;
 	add_descriptor_set(&set_desc, &srv_set);
@@ -254,19 +274,18 @@ auto main() -> int
 
 	camera.pos = glm::vec3(0.0f, 0.0f, 0.0f);
 
-
-	Material mat_ground = { glm::vec3(0.8f, 0.8f, 0.0f), kLambertian, };
-	Material mat_center = { glm::vec3(0.1f, 0.2f, 0.5f), kLambertian, };
-	Material mat_left =  { glm::vec3(0.8f, 0.8f, 0.8f), kMetal };
-	Material mat_right = { glm::vec3(0.8f, 0.6f, 0.2f), kMetal };
+	Lambertian ground(glm::vec3(0.8f, 0.8f, 0.0f));
+	Lambertian center(glm::vec3(0.1f, 0.2f, 0.5f));
+	Metal left(glm::vec3(0.8f, 0.8f, 0.8f), 0.3f);
+	Metal right(glm::vec3(0.8f, 0.6f, 0.2f), 1.0f);
 	ubo.spheres[0] = { Sphere(glm::vec3(0.0f, 0.0f, -1.0f), 0.5f) };
 	ubo.spheres[1] = { Sphere(glm::vec3(0.0f, -100.5f, -1.0f), 100.0f) };
 	ubo.spheres[2] = { Sphere(glm::vec3(-1.0f, 0.0f, -1.0f), 0.5f) };
 	ubo.spheres[3] = { Sphere(glm::vec3(1.0f, 0.0f, -1.0f), 0.5f) };
-	ubo.mats[0] = mat_center;
-	ubo.mats[1] = mat_ground;
-	ubo.mats[2] = mat_left;
-	ubo.mats[3] = mat_right;
+	ubo.mats[0] = center.mat;
+	ubo.mats[1] = ground.mat;
+	ubo.mats[2] = left.mat;
+	ubo.mats[3] = right.mat;
 
 	uint32_t group_x = (dims.width + 15) / 16;
 	uint32_t group_y = (dims.height + 15) / 16;
@@ -288,7 +307,7 @@ auto main() -> int
 		ubo.samples_per_pixel = samples_per_pixel;
 		ubo.max_ray_depth = max_ray_depth;
 		// Not sure that I really need to pass random number every frame here
-		ubo.seed[0] = 42u;// random_uint();
+		ubo.seed = 42u;// random_uint();
 
 
 		BufferUpdateDesc update;
