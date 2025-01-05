@@ -687,7 +687,6 @@ struct UBO
 	glm::vec4 view_pos;
 }ubo;
 
-bool firstMouse = true;
 float yaw = -90.0f;	
 float pitch = 0.0f;
 float lastX = 1920.0f / 2.0;
@@ -1214,30 +1213,32 @@ void framebuffer_size_callback(GLFWwindow* window, int width, int height)
 	glViewport(0, 0, width, height);
 }
 
+bool isRightMouseButtonPressed = false;
+
 void mouse_callback(GLFWwindow* window, double xposIn, double yposIn)
 {
-	if (ImGui::GetIO().WantCaptureMouse || 
-		glfwGetMouseButton(window, GLFW_MOUSE_BUTTON_RIGHT) != GLFW_PRESS)
+	if (ImGui::GetIO().WantCaptureMouse || glfwGetMouseButton(window, GLFW_MOUSE_BUTTON_RIGHT) != GLFW_PRESS)
 	{
+		isRightMouseButtonPressed = false;
 		return;
+	}
+
+	if (!isRightMouseButtonPressed)
+	{
+		lastX = static_cast<float>(xposIn);
+		lastY = static_cast<float>(yposIn);
+		isRightMouseButtonPressed = true;
 	}
 
 	float xpos = static_cast<float>(xposIn);
 	float ypos = static_cast<float>(yposIn);
 
-	if (firstMouse)
-	{
-		lastX = xpos;
-		lastY = ypos;
-		firstMouse = false;
-	}
-
 	float xoffset = xpos - lastX;
-	float yoffset = lastY - ypos; 
+	float yoffset = lastY - ypos;
 	lastX = xpos;
 	lastY = ypos;
 
-	float sensitivity = 0.1f; 
+	float sensitivity = 0.1f;
 	xoffset *= sensitivity;
 	yoffset *= sensitivity;
 

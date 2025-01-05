@@ -73,7 +73,7 @@ struct Sphere
 	float radius;
 };
 
-constexpr uint32_t kSpheresCount = 4u;
+constexpr uint32_t kSpheresCount = 5u;
 
 struct UBO
 {
@@ -94,7 +94,6 @@ struct Camera
 	glm::vec3 up = glm::vec3(0.0f, 1.0f, 0.0f);
 } camera;
 
-bool firstMouse = true;
 float yaw = -90.0f;
 float pitch = 0.0f;
 float lastX = 1920.0f / 2.0;
@@ -287,20 +286,22 @@ auto main() -> int
 
 	Lambertian ground(glm::vec3(0.8f, 0.8f, 0.0f));
 	Lambertian center(glm::vec3(0.1f, 0.2f, 0.5f));
-	Metal right(glm::vec3(0.8f, 0.6f, 0.2f), 1.0f);
-	float air_refraction_index = 1.0f;
-	float water_refraction_index = 1.33f;
-	// pretend that we are under water and Dielectric sphere is an air bubble
-	float refraction_index = air_refraction_index / water_refraction_index;
-	Dielectric left(refraction_index);
-	ubo.spheres[0] = { Sphere(glm::vec3(0.0f, 0.0f, -1.0f), 0.5f) };
-	ubo.spheres[1] = { Sphere(glm::vec3(0.0f, -100.5f, -1.0f), 100.0f) };
-	ubo.spheres[2] = { Sphere(glm::vec3(-1.0f, 0.0f, -1.0f), 0.5f) };
-	ubo.spheres[3] = { Sphere(glm::vec3(1.0f, 0.0f, -1.0f), 0.5f) };
+	Metal right(glm::vec3(0.8f, 0.6f, 0.2f), 0.7f);
+
+	float left_refraction_index = 1.5f;
+	Dielectric left(left_refraction_index);
+	Dielectric inner_bubble(1.0f / left_refraction_index);
+
+	ubo.spheres[0] = Sphere(glm::vec3(0.0f, 0.0f, -1.0f), 0.5f);
+	ubo.spheres[1] = Sphere(glm::vec3(0.0f, -100.5f, -1.0f), 100.0f);
+	ubo.spheres[2] = Sphere(glm::vec3(-1.0f, 0.0f, -1.0f), 0.5f);
+	ubo.spheres[3] = Sphere(glm::vec3(1.0f, 0.0f, -1.0f), 0.5f);
+	ubo.spheres[4] = Sphere(glm::vec3(-1.0f, 0.0f, -1.0f), 0.4f);
 	ubo.mats[0] = center.mat;
 	ubo.mats[1] = ground.mat;
 	ubo.mats[2] = left.mat;
 	ubo.mats[3] = right.mat;
+	ubo.mats[4] = inner_bubble.mat;
 
 	uint32_t group_x = (dims.width + 15) / 16;
 	uint32_t group_y = (dims.height + 15) / 16;
@@ -317,7 +318,7 @@ auto main() -> int
 
 		ubo.cameraPos = glm::vec4(camera.pos, 0.0f);
 		glm::mat4 projectionMatrix = glm::perspective(glm::radians(90.0f), dims.width / (float)dims.height, 0.1f, 100.0f);
-		glm::mat4 viewMatrix = glm::lookAt(glm::vec3(ubo.cameraPos), glm::vec3(0.0f, 0.0f, -1.0f), glm::vec3(0.0f, 1.0f, 0.0f));
+		glm::mat4 viewMatrix = glm::lookAt(camera.pos, camera.pos + camera.front, camera.up);
 		ubo.invViewProj = glm::inverse(projectionMatrix * viewMatrix);
 		ubo.samples_per_pixel = samples_per_pixel;
 		ubo.max_ray_depth = max_ray_depth;
@@ -371,26 +372,28 @@ void framebuffer_size_callback(GLFWwindow* window, int width, int height)
 	dims->height = height;
 }
 
+bool isRightMouseButtonPressed = false;
+
 void mouse_callback(GLFWwindow* window, double xposIn, double yposIn)
 {
-	if (ImGui::GetIO().WantCaptureMouse ||
-		glfwGetMouseButton(window, GLFW_MOUSE_BUTTON_RIGHT) != GLFW_PRESS)
+	if (ImGui::GetIO().WantCaptureMouse || glfwGetMouseButton(window, GLFW_MOUSE_BUTTON_RIGHT) != GLFW_PRESS)
 	{
+		isRightMouseButtonPressed = false;
 		return;
+	}
+
+	if (!isRightMouseButtonPressed)
+	{
+		lastX = static_cast<float>(xposIn);
+		lastY = static_cast<float>(yposIn);
+		isRightMouseButtonPressed = true; 
 	}
 
 	float xpos = static_cast<float>(xposIn);
 	float ypos = static_cast<float>(yposIn);
 
-	if (firstMouse)
-	{
-		lastX = xpos;
-		lastY = ypos;
-		firstMouse = false;
-	}
-
 	float xoffset = xpos - lastX;
-	float yoffset = lastY - ypos;
+	float yoffset = lastY - ypos;  
 	lastX = xpos;
 	lastY = ypos;
 

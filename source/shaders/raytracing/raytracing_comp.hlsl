@@ -1,7 +1,7 @@
 #define LAMBERTIAN 0
 #define METAL      1
 #define DIELECTRIC 2
-#define SPHERES_COUNT 4
+#define SPHERES_COUNT 5
 
 struct Material
 {
