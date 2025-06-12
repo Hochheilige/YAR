@@ -402,6 +402,6 @@ FodyWeavers.xsd
 # JetBrains Rider
 *.sln.iml
 *.sln
-/makefiles/*.vcxproj
-/makefiles/*.vcxproj.filters
-/makefiles/*.vcxproj.user
+*.vcxproj
+*.vcxproj.filters
+*.vcxproj.user
