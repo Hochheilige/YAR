@@ -19,14 +19,14 @@ def run_command_with_progress(command, estimated_time=30, description="Running c
             progress_bar.update(progress - progress_bar.n)
             time.sleep(0.001)
 
-        process.communicate()
+        stdout, stderr = process.communicate()
         progress_bar.update(100 - progress_bar.n)
 
     if process.returncode == 0:
         print(f"command completed successfully: {description}")
     else:
         print(f"command failed with return code {process.returncode}: {description}")
-        print(process.stderr.read().decode())
+        print(stderr.strip())
 
 def add_git_submodule(repo_url, submodule_path):
     if not os.path.isdir('.git'):
