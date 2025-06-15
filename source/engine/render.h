@@ -237,6 +237,18 @@ enum VertexAttribFormat : uint8_t
     kAttribFormatFloat = 0,
 };
 
+enum DepthComp : uint8_t
+{
+    kDepthCompAlways = 0,
+    kDepthCompNever,      
+    kDepthCompLess,       
+    kDepthCompEqual,      
+    kDepthCompLessEqual,  
+    kDepthCompGreater,   
+    kDepthCompNotEqual,   
+    kDepthCompGreatEqual 
+};
+
 struct ShaderResource
 {
     std::string name;
@@ -299,6 +311,12 @@ struct VertexLayout
 {
     uint32_t attrib_count;
     VertexAttrib attribs[kMaxVertexAttribCount];
+};
+
+struct DepthStencilState
+{
+    bool enable;
+    DepthComp comp;
 };
 
 // Tried to add RootSignature abstraction 
@@ -382,6 +400,7 @@ struct PipelineDesc
 {
     Shader* shader;
     VertexLayout* vertex_layout;
+    DepthStencilState* depth_stencil;
     /*
     has to contain:
         * Shaders (probably shader reflection as well)

@@ -793,8 +793,8 @@ auto main() -> int {
 
 	// Dir Light
 	ubo.dir_light.direction[0] = glm::vec4(0.0f, 0.0f, 3.0f, 0.0f);
-	ubo.light_params.ambient[0] = glm::vec4(0.0f, 0.2f, 0.0f, 0.0f);
-	ubo.light_params.diffuse[0] = glm::vec4(0.0f, 0.4f, 0.0f, 0.0f);
+	ubo.light_params.ambient[0] = glm::vec4(1.0f, 1.0f, 1.0f, 0.0f);
+	ubo.light_params.diffuse[0] = glm::vec4(1.0f, 1.0f, 1.0f, 0.0f);
 	ubo.light_params.specular[0] = glm::vec4(0.0f, 1.0f, 0.0f, 0.0f);
 
 	// Point Light
@@ -981,9 +981,12 @@ auto main() -> int {
 		end_update_resource(resource_update_desc);		
 	}
 
-	VertexLayout layout = {0};
+	VertexLayout layout{};
+	DepthStencilState depth_stencil{};
 	//test_mesh.setup_vertex_layout(layout);
 	mdl.setup_vertex_layout(layout);
+	depth_stencil.enable = true;
+	depth_stencil.comp = kDepthCompLess;
 
 	DescriptorSetDesc set_desc;
 	set_desc.max_sets = image_count;
@@ -1057,6 +1060,7 @@ auto main() -> int {
 	PipelineDesc pipeline_desc = { 0 };
 	pipeline_desc.shader = shader;
 	pipeline_desc.vertex_layout = &layout;
+	pipeline_desc.depth_stencil = &depth_stencil;
 
 	Pipeline* graphics_pipeline;
 	add_pipeline(&pipeline_desc, &graphics_pipeline);

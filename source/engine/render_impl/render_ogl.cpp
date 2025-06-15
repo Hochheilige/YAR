@@ -437,6 +437,27 @@ static GLenum util_get_gl_attrib_format(VertexAttribFormat format)
     }
 }
 
+static GLenum util_get_gl_depth_func(DepthComp comp)
+{
+    switch (comp)
+    {
+    case kDepthCompAlways:
+        return GL_ALWAYS;
+    case kDepthCompNever:
+        return GL_NEVER;
+    case kDepthCompEqual:
+        return GL_EQUAL;
+    case kDepthCompLessEqual:
+        return GL_LEQUAL;
+    case kDepthCompGreater:
+        return GL_GREATER;
+    case kDepthCompNotEqual:
+        return GL_NOTEQUAL;
+    case kDepthCompGreatEqual:
+        return GL_GEQUAL;
+    }
+}
+
 // ======================================= //
 //            Load Functions               //
 // ======================================= //
@@ -882,6 +903,12 @@ void gl_addPipeline(PipelineDesc* desc, Pipeline** pipeline)
         GLuint binding = desc->vertex_layout->attribs[i].binding;
         glVertexArrayAttribFormat(vao, i, size, format, GL_FALSE, offset);
         glVertexArrayAttribBinding(vao, i, binding);
+    }
+
+    if (desc->depth_stencil->enable)
+    {
+        glEnable(GL_DEPTH_TEST);
+        glDepthFunc(util_get_gl_depth_func(desc->depth_stencil->comp));
     }
     
     *pipeline = new_pipeline;
