@@ -115,13 +115,15 @@ project "Application"
     filter "configurations:Debug"
         symbols "On"
         runtime "Debug"
+        prebuildcommands {
+            "py \"%{prj.location}/scripts/compile_hlsl_to_spirv.py\" \"%{prj.location}/../source/shaders\" \"%{cfg.targetdir}/shaders\""
+        }
 
     filter "configurations:Release"
         optimize "On"
         runtime "Release"
-
-    prebuildcommands {
-        "py \"%{prj.location}/scripts/compile_hlsl_to_spirv.py\" \"%{prj.location}/../source/shaders\" \"%{cfg.targetdir}/shaders\""
-    }
+        prebuildcommands {
+            "py \"%{prj.location}/scripts/compile_hlsl_to_spirv.py\" \"%{prj.location}/../source/shaders\" \"%{cfg.targetdir}/shaders\""
+        }
 
         
