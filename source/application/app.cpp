@@ -793,8 +793,8 @@ auto main() -> int {
 
 	// Dir Light
 	ubo.dir_light.direction[0] = glm::vec4(0.0f, 0.0f, 3.0f, 0.0f);
-	ubo.light_params.ambient[0] = glm::vec4(1.0f, 1.0f, 1.0f, 0.0f);
-	ubo.light_params.diffuse[0] = glm::vec4(1.0f, 1.0f, 1.0f, 0.0f);
+	ubo.light_params.ambient[0] = glm::vec4(0.0f, 0.2f, 0.0f, 0.0f);
+	ubo.light_params.diffuse[0] = glm::vec4(0.0f, 0.4f, 0.0f, 0.0f);
 	ubo.light_params.specular[0] = glm::vec4(0.0f, 1.0f, 0.0f, 0.0f);
 
 	// Point Light
