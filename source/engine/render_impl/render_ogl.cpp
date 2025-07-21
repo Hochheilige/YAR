@@ -29,7 +29,7 @@ static GLuint current_vao = 0u;
 //            Load Variables               //
 // ======================================= //
 
-// Need to make something to check that current staging buffer
+// TODO: Need to make something to check that current staging buffer
 // doesn't use right now and can be used to map and update resource
 static Buffer* staging_buffer = nullptr;
 static Buffer* pixel_buffer   = nullptr;
@@ -437,23 +437,23 @@ static GLenum util_get_gl_attrib_format(VertexAttribFormat format)
     }
 }
 
-static GLenum util_get_gl_depth_func(DepthComp comp)
+static GLenum util_get_gl_depth_stencil_func(DepthStencilFunc func)
 {
-    switch (comp)
+    switch (func)
     {
-    case kDepthCompAlways:
+    case kDepthStencilFuncAlways:
         return GL_ALWAYS;
-    case kDepthCompNever:
+    case kDepthStencilFuncNever:
         return GL_NEVER;
-    case kDepthCompEqual:
+    case kDepthStencilFuncEqual:
         return GL_EQUAL;
-    case kDepthCompLessEqual:
+    case kDepthStencilFuncLessEqual:
         return GL_LEQUAL;
-    case kDepthCompGreater:
+    case kDepthStencilFuncGreater:
         return GL_GREATER;
-    case kDepthCompNotEqual:
+    case kDepthStencilFuncNotEqual:
         return GL_NOTEQUAL;
-    case kDepthCompGreatEqual:
+    case kDepthStencilFuncGreatEqual:
         return GL_GEQUAL;
     }
 }
@@ -905,10 +905,18 @@ void gl_addPipeline(PipelineDesc* desc, Pipeline** pipeline)
         glVertexArrayAttribBinding(vao, i, binding);
     }
 
-    if (desc->depth_stencil->enable)
+    if (desc->depth_stencil->depth_enable)
     {
         glEnable(GL_DEPTH_TEST);
-        glDepthFunc(util_get_gl_depth_func(desc->depth_stencil->comp));
+        glDepthFunc(util_get_gl_depth_stencil_func(desc->depth_stencil->depth_func));
+    }
+
+    if (desc->depth_stencil->stencil_enable)
+    {
+        glEnable(GL_STENCIL_TEST);
+        // TODO: set up ref and mask for for glStencilFunc
+        glStencilFunc(util_get_gl_depth_stencil_func(desc->depth_stencil->stencil_func), 1, 0xFF);
+        glStencilOp(desc->depth_stencil->sfail, desc->depth_stencil->dpfail, desc->depth_stencil->dppass);
     }
     
     *pipeline = new_pipeline;

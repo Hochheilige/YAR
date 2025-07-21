@@ -1094,8 +1094,9 @@ auto main() -> int {
 
 		imgui_begin_frame();
 
+		// TODO: it's better to move this calls somewhere to swapchain swap buffers
 		glClearColor(gBackGroundColor[0], gBackGroundColor[1], gBackGroundColor[2], 1.0f);
-		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT);
 
 		ubo.point_light.position[0] = *light_pos; // update point light pos
 		ubo.view_pos = glm::vec4(camera.pos, 0.0f);

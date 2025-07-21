@@ -237,16 +237,28 @@ enum VertexAttribFormat : uint8_t
     kAttribFormatFloat = 0,
 };
 
-enum DepthComp : uint8_t
+enum DepthStencilFunc : uint8_t
 {
-    kDepthCompAlways = 0,
-    kDepthCompNever,      
-    kDepthCompLess,       
-    kDepthCompEqual,      
-    kDepthCompLessEqual,  
-    kDepthCompGreater,   
-    kDepthCompNotEqual,   
-    kDepthCompGreatEqual 
+    kDepthStencilFuncAlways = 0,
+    kDepthStencilFuncNever,      
+    kDepthStencilFuncLess,       
+    kDepthStencilFuncEqual,      
+    kDepthStencilFuncLessEqual,  
+    kDepthStencilFuncGreater,   
+    kDepthStencilFuncNotEqual,   
+    kDepthStencilFuncGreatEqual 
+};
+
+enum StencilOp : uint8_t
+{
+    kStencilOpKeep = 0,
+    kStencilOpZero,
+    kStencilOpReplace,
+    kStencilOpIncr,
+    kStencilOpIncrWrap,
+    kStencilOpDecr,
+    kStencilOpDecrWrap,
+    kStencilOpInvert
 };
 
 struct ShaderResource
@@ -315,8 +327,13 @@ struct VertexLayout
 
 struct DepthStencilState
 {
-    bool enable;
-    DepthComp comp;
+    bool depth_enable;
+    bool stencil_enable;
+    DepthStencilFunc depth_func;
+    DepthStencilFunc stencil_func;
+    StencilOp sfail;
+    StencilOp dpfail;
+    StencilOp dppass;
 };
 
 // Tried to add RootSignature abstraction 
