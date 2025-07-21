@@ -985,8 +985,8 @@ auto main() -> int {
 	DepthStencilState depth_stencil{};
 	//test_mesh.setup_vertex_layout(layout);
 	mdl.setup_vertex_layout(layout);
-	depth_stencil.enable = true;
-	depth_stencil.comp = kDepthCompLess;
+	depth_stencil.depth_enable = true;
+	depth_stencil.depth_func = kDepthStencilFuncLess;
 
 	DescriptorSetDesc set_desc;
 	set_desc.max_sets = image_count;
