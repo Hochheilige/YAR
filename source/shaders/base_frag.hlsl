@@ -118,6 +118,8 @@ float4 calculate_spot_light(float4 position, float4 direction, float4 cutoff, fl
 float4 main(PSInput input) : SV_TARGET {
     LightCalculationParams lcp;
     lcp.diffuse_map_color  = diffuse_map.Sample(samplerState, input.tex_coord);
+    if (lcp.diffuse_map_color.a < 0.1f)
+        discard;
     lcp.specular_map_color = specular_map.Sample(samplerState, input.tex_coord);
     lcp.norm               = normal_map.Sample(samplerState, input.tex_coord);
     lcp.norm               = normalize(lcp.norm * 2.0f - 1.0f);
