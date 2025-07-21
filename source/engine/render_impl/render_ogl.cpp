@@ -458,6 +458,50 @@ static GLenum util_get_gl_depth_stencil_func(DepthStencilFunc func)
     }
 }
 
+static GLenum util_get_gl_blend_factor(yar_blend_factor factor)
+{
+    switch (factor)
+    {
+    case yar_blend_factor_zero:
+        return GL_ZERO;
+    case yar_blend_factor_one:
+        return GL_ONE;
+    case yar_blend_factor_src_color:
+        return GL_SRC_COLOR;
+    case yar_blend_factor_one_minus_src_color:
+        return GL_ONE_MINUS_SRC_COLOR;
+    case yar_blend_factor_dst_color:
+        return GL_DST_COLOR;
+    case yar_blend_factor_one_minus_dst_color:
+        return GL_ONE_MINUS_DST_COLOR;
+    case yar_blend_factor_src_alpha:
+        return GL_SRC_ALPHA;
+    case yar_blend_factor_one_minus_src_alpha:
+        return GL_ONE_MINUS_SRC_ALPHA;
+    case yar_blend_factor_dst_alpha:
+        return GL_DST_ALPHA;
+    case yar_blned_factor_one_minus_dst_alpha:
+        return GL_ONE_MINUS_DST_ALPHA;
+    }
+}
+
+static GLenum util_get_gl_blend_equation(yar_blend_op op)
+{
+    switch (op)
+    {
+    case yar_blend_op_add:
+        return GL_FUNC_ADD;
+    case yar_blend_op_subtract:
+        return GL_FUNC_SUBTRACT;
+    case yar_blend_op_reverse_subtract:
+        return GL_FUNC_REVERSE_SUBTRACT;
+    case yar_blend_op_min:
+        return GL_MIN;
+    case yar_blend_op_max:
+        return GL_MAX;
+    }
+}
+
 // ======================================= //
 //            Load Functions               //
 // ======================================= //
@@ -885,38 +929,53 @@ void gl_addDescriptorSet(DescriptorSetDesc* desc, DescriptorSet** set)
     *set = new_set;
 }
 
-void gl_addPipeline(PipelineDesc* desc, Pipeline** pipeline)
+void gl_addPipeline(const PipelineDesc* desc, Pipeline** pipeline)
 {
     Pipeline* new_pipeline = (Pipeline*)std::malloc(sizeof(Pipeline));
     if (new_pipeline == nullptr)
         return;
 
-    new_pipeline->shader = desc->shader;
+    new_pipeline->shader = &desc->shader;
     GLuint& vao = new_pipeline->vao;
 
     glCreateVertexArrays(1, &vao);
-    for (int i = 0; i < desc->vertex_layout->attrib_count; ++i)
+    for (int i = 0; i < desc->vertex_layout.attrib_count; ++i)
     {
-        GLint size     = desc->vertex_layout->attribs[i].size;
-        GLenum format  = util_get_gl_attrib_format(desc->vertex_layout->attribs[i].format);
-        GLuint offset  = desc->vertex_layout->attribs[i].offset;
-        GLuint binding = desc->vertex_layout->attribs[i].binding;
+        GLint size     = desc->vertex_layout.attribs[i].size;
+        GLenum format  = util_get_gl_attrib_format(desc->vertex_layout.attribs[i].format);
+        GLuint offset  = desc->vertex_layout.attribs[i].offset;
+        GLuint binding = desc->vertex_layout.attribs[i].binding;
         glVertexArrayAttribFormat(vao, i, size, format, GL_FALSE, offset);
         glVertexArrayAttribBinding(vao, i, binding);
     }
 
-    if (desc->depth_stencil->depth_enable)
+    // TODO: all glEnable functions have to be moved to bind pipeline somehow
+    if (desc->depth_stencil_state.depth_enable)
     {
         glEnable(GL_DEPTH_TEST);
-        glDepthFunc(util_get_gl_depth_stencil_func(desc->depth_stencil->depth_func));
+        glDepthFunc(util_get_gl_depth_stencil_func(desc->depth_stencil_state.depth_func));
     }
 
-    if (desc->depth_stencil->stencil_enable)
+    if (desc->depth_stencil_state.stencil_enable)
     {
         glEnable(GL_STENCIL_TEST);
         // TODO: set up ref and mask for for glStencilFunc
-        glStencilFunc(util_get_gl_depth_stencil_func(desc->depth_stencil->stencil_func), 1, 0xFF);
-        glStencilOp(desc->depth_stencil->sfail, desc->depth_stencil->dpfail, desc->depth_stencil->dppass);
+        glStencilFunc(util_get_gl_depth_stencil_func(desc->depth_stencil_state.stencil_func), 1, 0xFF);
+        glStencilOp(desc->depth_stencil_state.sfail, desc->depth_stencil_state.dpfail, desc->depth_stencil_state.dppass);
+    }
+
+    if (desc->blend_state.blend_enable)
+    {
+        glEnable(GL_BLEND);
+        GLenum src_factor = util_get_gl_blend_factor(desc->blend_state.src_factor);
+        GLenum dst_factor = util_get_gl_blend_factor(desc->blend_state.dst_factor);
+        GLenum src_alpha_factor = util_get_gl_blend_factor(desc->blend_state.src_alpha_factor);
+        GLenum dst_alpha_factor = util_get_gl_blend_factor(desc->blend_state.dst_alpha_factor);
+        glBlendFuncSeparate(src_factor, dst_factor, src_alpha_factor, dst_alpha_factor);
+
+        GLenum rgb_equation = util_get_gl_blend_equation(desc->blend_state.op);
+        GLenum alpha_equation = util_get_gl_blend_equation(desc->blend_state.alpha_op);
+        glBlendEquationSeparate(rgb_equation, alpha_equation);
     }
     
     *pipeline = new_pipeline;

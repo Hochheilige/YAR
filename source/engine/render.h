@@ -261,6 +261,29 @@ enum StencilOp : uint8_t
     kStencilOpInvert
 };
 
+enum yar_blend_op : uint8_t
+{
+    yar_blend_op_add = 0,
+    yar_blend_op_subtract,
+    yar_blend_op_reverse_subtract,
+    yar_blend_op_min,
+    yar_blend_op_max
+};
+
+enum yar_blend_factor : uint8_t
+{
+    yar_blend_factor_zero = 0,
+    yar_blend_factor_one,
+    yar_blend_factor_src_color,
+    yar_blend_factor_one_minus_src_color,
+    yar_blend_factor_dst_color,
+    yar_blend_factor_one_minus_dst_color,
+    yar_blend_factor_src_alpha,
+    yar_blend_factor_one_minus_src_alpha,
+    yar_blend_factor_dst_alpha,
+    yar_blned_factor_one_minus_dst_alpha
+};
+
 struct ShaderResource
 {
     std::string name;
@@ -334,6 +357,17 @@ struct DepthStencilState
     StencilOp sfail;
     StencilOp dpfail;
     StencilOp dppass;
+};
+
+struct yar_blend_state
+{
+    bool blend_enable;
+    yar_blend_factor src_factor;
+    yar_blend_factor dst_factor;
+    yar_blend_factor src_alpha_factor;
+    yar_blend_factor dst_alpha_factor;
+    yar_blend_op op;
+    yar_blend_op alpha_op;
 };
 
 // Tried to add RootSignature abstraction 
@@ -415,9 +449,10 @@ struct PushConstant
 
 struct PipelineDesc
 {
-    Shader* shader;
-    VertexLayout* vertex_layout;
-    DepthStencilState* depth_stencil;
+    Shader shader;
+    VertexLayout vertex_layout;
+    DepthStencilState depth_stencil_state;
+    yar_blend_state blend_state;
     /*
     has to contain:
         * Shaders (probably shader reflection as well)
@@ -439,7 +474,7 @@ struct Pipeline
 {
     // it probably should be something graphics API specific
     // but for now it will be OpenGL specific
-    Shader* shader;
+    const Shader* shader;
     uint32_t vao;
 };
 
@@ -498,7 +533,7 @@ DECLARE_YAR_RENDER_FUNC(void, add_sampler, SamplerDesc* desc, Sampler** sampler)
 DECLARE_YAR_RENDER_FUNC(void, add_shader, ShaderDesc* desc, Shader** shader);
 DECLARE_YAR_RENDER_FUNC(void, add_descriptor_set, DescriptorSetDesc* desc, DescriptorSet** shader);
 //DECLARE_YAR_RENDER_FUNC(void, add_root_signature, RootSignatureDesc* desc, RootSignature** root_signature);
-DECLARE_YAR_RENDER_FUNC(void, add_pipeline, PipelineDesc* desc, Pipeline** pipeline);
+DECLARE_YAR_RENDER_FUNC(void, add_pipeline, const PipelineDesc* desc, Pipeline** pipeline);
 DECLARE_YAR_RENDER_FUNC(void, add_queue, CmdQueueDesc* desc, CmdQueue** queue);
 DECLARE_YAR_RENDER_FUNC(void, add_cmd, CmdBufferDesc* desc, CmdBuffer** cmd);
 DECLARE_YAR_RENDER_FUNC(void, remove_buffer, Buffer* buffer);
