@@ -445,6 +445,8 @@ static GLenum util_get_gl_depth_stencil_func(DepthStencilFunc func)
         return GL_ALWAYS;
     case kDepthStencilFuncNever:
         return GL_NEVER;
+    case kDepthStencilFuncLess:
+        return GL_LESS;
     case kDepthStencilFuncEqual:
         return GL_EQUAL;
     case kDepthStencilFuncLessEqual:
