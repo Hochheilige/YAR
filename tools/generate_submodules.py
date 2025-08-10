@@ -31,17 +31,20 @@ def run_command_with_progress(command, estimated_time=30, description="Running c
 def add_git_submodule(repo_url, submodule_path):
     if not os.path.isdir('.git'):
         raise RuntimeError("this directory is not a git repository")
+    
+    estimated_time_update = 60
+    update_command = ['git', 'submodule', 'update', '--init', '--recursive', '--remote']
 
     if os.path.isdir(submodule_path):
         print(f"path '{submodule_path}' are already exists")
-        return
-
+        print(f"Try to update {submodule_path} submodule")
+        run_command_with_progress(update_command, estimated_time=estimated_time_update, description="updating submodule")
+        return 
+    
     print(f"adding submodule '{repo_url}' to '{submodule_path}'...")
-    add_command = ['git', 'submodule', 'add', repo_url, submodule_path]
-    update_command = ['git', 'submodule', 'update', '--init', '--recursive']
 
     estimated_time_add = 15
-    estimated_time_update = 15
+    add_command = ['git', 'submodule', 'add', repo_url, submodule_path]
 
     run_command_with_progress(add_command, estimated_time=estimated_time_add, description="adding submodule")
     run_command_with_progress(update_command, estimated_time=estimated_time_update, description="updating submodule")
@@ -55,6 +58,8 @@ def build_project(project_path, project_name, cmake_additional_commands):
         "cmake",
         "-S", project_path,
         "-B", build_dir, 
+        "-DCMAKE_C_COMPILER=clang-cl",
+        "-DCMAKE_CXX_COMPILER=clang-cl",
         f"-DCMAKE_ARCHIVE_OUTPUT_DIRECTORY_DEBUG={root_dir}/external/lib/Debug",
         f"-DCMAKE_ARCHIVE_OUTPUT_DIRECTORY_RELEASE={root_dir}/external/lib/Release",
     ]
