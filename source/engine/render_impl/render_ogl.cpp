@@ -1,5 +1,6 @@
 #include "../render.h"
 #include "../window.h"
+#include "../render_internal.h"
 
 #include <glad/glad.h>
 #include <GLFW/glfw3.h>
@@ -596,8 +597,7 @@ void gl_beginUpdateTexture(TextureUpdateDesc* desc)
 void gl_endUpdateTexture(TextureUpdateDesc* desc)
 {
     unmap_buffer(pixel_buffer);
-
-    GLenum target = desc->texture->target;
+    
     GLsizei width = desc->texture->width;
     GLsizei height = desc->texture->height;
     GLenum format = desc->texture->gl_format;
@@ -726,7 +726,6 @@ void gl_addTexture(TextureDesc* desc, Texture** texture)
         break;
     }
 
-    new_texture->target = gl_target;
     new_texture->internal_format = gl_internal_format;
     new_texture->gl_format = util_get_gl_format(desc->format);
     new_texture->gl_type = util_get_gl_tetxure_data_type(desc->format);
@@ -1255,38 +1254,38 @@ void gl_queueSubmit(CmdQueue* queue)
 }
 
 // Maybe need to add some params to this function in future
-bool gl_init_render()
+bool gl_init_render(yar_device* device)
 {
-    load_shader             = gl_loadShader;
-    begin_update_resource   = gl_beginUpdateResource;
-    end_update_resource     = gl_endUpdateResource;
-
-    add_swapchain           = gl_addSwapChain;
-    add_buffer              = gl_addBuffer;
-    add_texture             = gl_addTexture;
-    add_sampler             = gl_addSampler;
-    add_shader              = gl_addShader;
-    add_descriptor_set      = gl_addDescriptorSet;
-    add_pipeline            = gl_addPipeline;
-    add_queue               = gl_addQueue;
-    add_cmd                 = gl_addCmd;
-    remove_buffer           = gl_removeBuffer;
-    map_buffer              = gl_mapBuffer;
-    unmap_buffer            = gl_unmapBuffer;
-    update_descriptor_set   = gl_updateDescriptorSet;
-    cmd_bind_pipeline       = gl_cmdBindPipeline;
-    cmd_bind_descriptor_set = gl_cmdBindDescriptorSet;
-    cmd_bind_vertex_buffer  = gl_cmdBindVertexBuffer;
-    cmd_bind_index_buffer   = gl_cmdBindIndexBuffer;
-    cmd_bind_push_constant  = gl_cmdBindPushConstant;
-    cmd_draw                = gl_cmdDraw;
-    cmd_draw_indexed        = gl_cmdDrawIndexed;
-    cmd_dispatch            = gl_cmdDispatch;
-    cmd_update_buffer       = gl_cmdUpdateBuffer;
-    queue_submit            = gl_queueSubmit;
-
     if (!gladLoadGLLoader((GLADloadproc)glfwGetProcAddress))
         return false;
+
+    device->load_shader             = gl_loadShader;
+    device->begin_update_resource   = gl_beginUpdateResource;
+    device->end_update_resource     = gl_endUpdateResource;
+
+    device->add_swapchain           = gl_addSwapChain;
+    device->add_buffer              = gl_addBuffer;
+    device->add_texture             = gl_addTexture;
+    device->add_sampler             = gl_addSampler;
+    device->add_shader              = gl_addShader;
+    device->add_descriptor_set      = gl_addDescriptorSet;
+    device->add_pipeline            = gl_addPipeline;
+    device->add_queue               = gl_addQueue;
+    device->add_cmd                 = gl_addCmd;
+    device->remove_buffer           = gl_removeBuffer;
+    device->map_buffer              = gl_mapBuffer;
+    device->unmap_buffer            = gl_unmapBuffer;
+    device->update_descriptor_set   = gl_updateDescriptorSet;
+    device->cmd_bind_pipeline       = gl_cmdBindPipeline;
+    device->cmd_bind_descriptor_set = gl_cmdBindDescriptorSet;
+    device->cmd_bind_vertex_buffer  = gl_cmdBindVertexBuffer;
+    device->cmd_bind_index_buffer   = gl_cmdBindIndexBuffer;
+    device->cmd_bind_push_constant  = gl_cmdBindPushConstant;
+    device->cmd_draw                = gl_cmdDraw;
+    device->cmd_draw_indexed        = gl_cmdDrawIndexed;
+    device->cmd_dispatch            = gl_cmdDispatch;
+    device->cmd_update_buffer       = gl_cmdUpdateBuffer;
+    device->queue_submit            = gl_queueSubmit;
 
 #if _DEBUG
     glEnable(GL_DEBUG_OUTPUT);

@@ -31,7 +31,6 @@ struct TextureUpdateDesc
     Texture* texture;
     uint64_t size;
     uint8_t* data;
-    // It is not working now
     void* mapped_data;
 };
 
@@ -508,8 +507,7 @@ struct CmdBuffer
 // ======================================= //
 
 #define DECLARE_YAR_LOAD_FUNC(ret, name, ...) \
-using name##_fn = ret(*)(__VA_ARGS__);        \
-extern name##_fn name;                        \
+ret name(__VA_ARGS__)                         \
 
 DECLARE_YAR_LOAD_FUNC(void, load_shader, ShaderLoadDesc* desc, ShaderDesc** out);
 DECLARE_YAR_LOAD_FUNC(void, begin_update_resource, ResourceUpdateDesc& desc);
@@ -523,8 +521,7 @@ DECLARE_YAR_LOAD_FUNC(void, unmap_buffer, Buffer* buffer);
 // ======================================= //
 
 #define DECLARE_YAR_RENDER_FUNC(ret, name, ...) \
-using name##_fn = ret(*)(__VA_ARGS__);          \
-extern name##_fn name;                          \
+ret name(__VA_ARGS__)                           \
 
 DECLARE_YAR_RENDER_FUNC(void, add_swapchain, bool vsync, SwapChain** swapchain);
 DECLARE_YAR_RENDER_FUNC(void, add_buffer, BufferDesc* desc, Buffer** buffer);
