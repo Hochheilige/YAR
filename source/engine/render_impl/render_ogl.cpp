@@ -35,6 +35,17 @@ static GLuint current_vao = 0u;
 static Buffer* staging_buffer = nullptr;
 static Buffer* pixel_buffer   = nullptr;
 
+// ======================================= //
+//            OpenGL Structs               //
+// ======================================= //
+struct yar_gl_texture
+{
+    Texture common;
+    uint32_t id;
+    uint32_t internal_format;
+    uint32_t gl_format;
+    uint32_t gl_type;
+};
 
 // ======================================= //
 //            Utils Functions              //
@@ -598,14 +609,16 @@ void gl_endUpdateTexture(TextureUpdateDesc* desc)
 {
     unmap_buffer(pixel_buffer);
     
-    GLsizei width = desc->texture->width;
-    GLsizei height = desc->texture->height;
-    GLenum format = desc->texture->gl_format;
-    GLenum type = desc->texture->gl_type;
+    yar_gl_texture* texture = reinterpret_cast<yar_gl_texture*>(desc->texture);
+
+    GLsizei width = texture->common.width;
+    GLsizei height = texture->common.height;
+    GLenum format = texture->gl_format;
+    GLenum type = texture->gl_type;
 
     glBindBuffer(GL_PIXEL_UNPACK_BUFFER, pixel_buffer->id); 
-    glBindTexture(GL_TEXTURE_2D, desc->texture->id);
-    glTextureSubImage2D(desc->texture->id, 0, 0, 0, width, height, format, type, nullptr);
+    glBindTexture(GL_TEXTURE_2D, texture->id);
+    glTextureSubImage2D(texture->id, 0, 0, 0, width, height, format, type, nullptr);
     glBindBuffer(GL_PIXEL_UNPACK_BUFFER, 0); 
 }
 
@@ -688,9 +701,10 @@ void gl_addBuffer(BufferDesc* desc, Buffer** buffer)
 
 void gl_addTexture(TextureDesc* desc, Texture** texture)
 {
-    Texture* new_texture = (Texture*)std::malloc(sizeof(Texture));
-    if (!new_texture)
-        return;
+    yar_gl_texture* new_texture = static_cast<yar_gl_texture*>(
+        std::calloc(1, sizeof(yar_gl_texture))
+    );
+    *texture = &new_texture->common;
 
     GLuint gl_target = util_get_gl_texture_target(desc->type);
     GLenum gl_internal_format = util_get_gl_internal_format(desc->format);
@@ -729,15 +743,13 @@ void gl_addTexture(TextureDesc* desc, Texture** texture)
     new_texture->internal_format = gl_internal_format;
     new_texture->gl_format = util_get_gl_format(desc->format);
     new_texture->gl_type = util_get_gl_tetxure_data_type(desc->format);
-    new_texture->type = desc->type;
-    new_texture->format = desc->format;
-    new_texture->width = width;
-    new_texture->height = height;
-    new_texture->depth = depth;
-    new_texture->array_size = array_size;
-    new_texture->mip_levels = mip_levels;
-
-    *texture = new_texture;
+    new_texture->common.type = desc->type;
+    new_texture->common.format = desc->format;
+    new_texture->common.width = width;
+    new_texture->common.height = height;
+    new_texture->common.depth = depth;
+    new_texture->common.array_size = array_size;
+    new_texture->common.mip_levels = mip_levels;
 }
 
 void gl_addSampler(SamplerDesc* desc, Sampler** sampler)
@@ -1129,7 +1141,8 @@ void gl_cmdBindDescriptorSet(CmdBuffer* cmd, DescriptorSet* set, uint32_t index)
                     if (sampler_iter != infos.end())
                     {
                         const Sampler* sampler = std::get<Sampler*>(sampler_iter->descriptor);
-                        glBindTextureUnit(descriptor.binding, comb.texture->id);
+                        const yar_gl_texture* texture = reinterpret_cast<yar_gl_texture*>(comb.texture);
+                        glBindTextureUnit(descriptor.binding, texture->id);
                         // In OpenGL in case of it use CombinedTextureSampler
                         // binding point for sampler should be equal to texture binding point
                         glBindSampler(descriptor.binding, sampler->id);
@@ -1157,7 +1170,9 @@ void gl_cmdBindDescriptorSet(CmdBuffer* cmd, DescriptorSet* set, uint32_t index)
 
                 if (info_iter != infos.end())
                 {
-                    const Texture* uav = std::get<Texture*>(info_iter->descriptor);
+                    const yar_gl_texture* uav = reinterpret_cast<yar_gl_texture*>(
+                        std::get<Texture*>(info_iter->descriptor)
+                    );
                     glBindImageTexture(0, uav->id, 0, GL_FALSE, 0, GL_WRITE_ONLY, GL_RGBA32F);
                 }
             }

@@ -164,12 +164,6 @@ struct TextureDesc
 
 struct Texture
 {
-    uint32_t id;
-    uint32_t target;
-    uint32_t internal_format;
-    uint32_t gl_format;
-    uint32_t gl_type;
-
     TextureType type;
     TextureFormat format;
     uint32_t width;
