@@ -1057,10 +1057,10 @@ auto main() -> int {
 
 	mdl.setup_descriptor_set(shader, kUpdateFreqNone, sampler);
 
-	PipelineDesc pipeline_desc = { 0 };
-	pipeline_desc.shader = shader;
-	pipeline_desc.vertex_layout = &layout;
-	pipeline_desc.depth_stencil = &depth_stencil;
+	PipelineDesc pipeline_desc{};
+	pipeline_desc.shader = *shader;
+	pipeline_desc.vertex_layout = layout;
+	pipeline_desc.depth_stencil_state = depth_stencil;
 
 	Pipeline* graphics_pipeline;
 	add_pipeline(&pipeline_desc, &graphics_pipeline);
