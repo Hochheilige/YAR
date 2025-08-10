@@ -10,7 +10,7 @@ float gBackGroundColor[3] = { 1.0f, 1.0f, 1.0f};
 
 float get_fps();
 
-static std::function<void()> default_layer = [&]()
+static std::function<void()> default_layer = []()
 	{
 		ImGui::Begin("Performance");
 		ImGui::Text("FPS: %.1f", get_fps());
