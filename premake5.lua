@@ -1,4 +1,4 @@
-workspace "Yet Another Renderer"
+workspace "Yet_Another_Renderer"
     architecture "x64"
     configurations { "Debug", "Release" }
     startproject "Application"
@@ -9,9 +9,11 @@ project "Engine"
     location "makefiles"
     kind "StaticLib"
     language "C++"
-    cppdialect "C++20"
+    compileas "C++"
+    cppdialect "C++23"
     staticruntime "off"
-    
+    toolset "clang"
+
     targetdir ("build/%{cfg.architecture}/%{cfg.buildcfg}/lib")
     objdir ("build/%{cfg.architecture}/%{cfg.buildcfg}/intermediate")
 
@@ -82,11 +84,13 @@ project "Application"
     location "makefiles"
     kind "ConsoleApp"
     language "C++"
-    cppdialect "C++20"
+    cppdialect "C++23"
     staticruntime "off"
+    toolset "clang"
 
     targetdir (outputdir)
     objdir ("build/%{cfg.architecture}/%{cfg.buildcfg}/intermediate")
+    targetname "Application"
 
     files {
         "source/application/app.cpp"
