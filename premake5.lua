@@ -1,3 +1,23 @@
+-- For some reason visual studio can't compile or link .lib file on newest windows SDK
+-- And as far as I want to compile with clang I'm gonna use this old sdk
+-- If there is no this sdk on PC msvc will be used
+local desired_sdk = "10.0.19041.0"
+local base_path = "C:/Program Files (x86)/Windows Kits/10/Include/"
+
+local sdk_found = os.isdir(base_path .. desired_sdk)
+
+if sdk_found then
+    print("Found desired Windows SDK: " .. desired_sdk)
+    toolset "clang"
+    filter { "system:windows", "kind:StaticLib" }
+        systemversion (desired_sdk)
+else
+    print("Didn't find desired Windows SDK, will compile with latest and MSVC")
+    toolset "msc"
+    filter { "system:windows", "kind:StaticLib" }
+        systemversion "latest"
+end
+
 workspace "Yet_Another_Renderer"
     architecture "x64"
     configurations { "Debug", "Release" }
@@ -12,8 +32,8 @@ project "Engine"
     compileas "C++"
     cppdialect "C++23"
     staticruntime "off"
-    toolset "clang"
 
+    debugdir (outputdir)
     targetdir ("build/%{cfg.architecture}/%{cfg.buildcfg}/lib")
     objdir ("build/%{cfg.architecture}/%{cfg.buildcfg}/intermediate")
 
@@ -49,7 +69,7 @@ project "Engine"
         "external/assimp/build/include"
     }
 
-    filter "configurations:Debug"
+    filter { "configurations:Debug" }
         libdirs {
             "external/lib/Debug"
         }
@@ -63,7 +83,7 @@ project "Engine"
         symbols "On"
         runtime "Debug"
 
-    filter "configurations:Release"
+    filter { "configurations:Release" }
         libdirs {
             "external/lib/Release"
         }
@@ -77,18 +97,15 @@ project "Engine"
         optimize "On"
         runtime "Release"
 
-    filter "system:windows"
-        systemversion "latest"
-
 project "Application"
     location "makefiles"
     kind "ConsoleApp"
     language "C++"
     cppdialect "C++23"
     staticruntime "off"
-    toolset "clang"
 
     targetdir (outputdir)
+    debugdir (outputdir)
     objdir ("build/%{cfg.architecture}/%{cfg.buildcfg}/intermediate")
     targetname "Application"
 
@@ -113,17 +130,14 @@ project "Application"
         "Engine",
     }
 
-    filter "system:windows"
-        systemversion "latest"
-
-    filter "configurations:Debug"
+    filter { "configurations:Debug" }
         symbols "On"
         runtime "Debug"
         prebuildcommands {
             "py \"%{prj.location}/scripts/compile_hlsl_to_spirv.py\" \"%{prj.location}/../source/shaders\" \"%{cfg.targetdir}/shaders\""
         }
 
-    filter "configurations:Release"
+    filter { "configurations:Release" }
         optimize "On"
         runtime "Release"
         prebuildcommands {
