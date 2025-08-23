@@ -14,27 +14,27 @@
 //            Load Structures              //
 // ======================================= //
 
-struct Buffer;
-struct Texture;
+struct yar_buffer;
+struct yar_texture;
 
-struct BufferUpdateDesc
+struct yar_buffer_update_desc
 {
-    Buffer* buffer;
+    yar_buffer* buffer;
     uint64_t size;
     // also can add offset if need to update part of a buffer
     // or buffer from some point
     void* mapped_data;
 };
 
-struct TextureUpdateDesc
+struct yar_texture_update_desc
 {
-    Texture* texture;
+    yar_texture* texture;
     uint64_t size;
     uint8_t* data;
     void* mapped_data;
 };
 
-using ResourceUpdateDesc = std::variant<BufferUpdateDesc*, TextureUpdateDesc*>;
+using yar_resource_update_desc = std::variant<yar_buffer_update_desc*, yar_texture_update_desc*>;
 
 // ======================================= //
 //            Render Structures            //
@@ -45,7 +45,7 @@ using ResourceUpdateDesc = std::variant<BufferUpdateDesc*, TextureUpdateDesc*>;
     render api, or just add defines to separate parts of this structs
 
     Plans to add:
-        - Render Pipeline that should include:
+        - Render yar_pipeline that should include:
             - Blend state
             - Rasterization state
             - Depth|Stencil state
@@ -53,19 +53,20 @@ using ResourceUpdateDesc = std::variant<BufferUpdateDesc*, TextureUpdateDesc*>;
             - Vertex Input
             - Viewport|Scissor
             - Multisampling (?)
-        - Shader Reflection
+        - yar_shader Reflection
             - Need to add spirv dependency to make it
             - want to use it 
         - Buffers and Textures
             - If we speak about uniforms there probably should be
-                a thing like DescriptorSet
+                a thing like yar_descriptor_set
             - Another thing - Vertex and Index buffers
         - Command Queue 
             - as far as OpenGL render immediately 
 */
 
-using Command = std::function<void()>;
-using DescriptorIndexMap = std::unordered_map<std::string, uint32_t>;
+// TODO: Command probably have to be a struct for other rander API
+using yar_command = std::function<void()>;
+using yar_descriptor_index_map = std::unordered_map<std::string, uint32_t>;
 
 // Interesting thing got it from The-Forge
 #define MAKE_ENUM_FLAG(TYPE, ENUM_TYPE)                                                                        \
@@ -76,7 +77,7 @@ using DescriptorIndexMap = std::unordered_map<std::string, uint32_t>;
 
 constexpr uint8_t kMaxVertexAttribCount = 16;
 
-struct SwapChain
+struct yar_swapchain
 {
     // this implementation is probably good only for OpenGL
     bool vsync;
@@ -84,77 +85,77 @@ struct SwapChain
     void(*swap_buffers)(void*);
 };
 
-enum BufferUsage : uint8_t
+enum yar_buffer_usage : uint8_t
 {
-    kBufferUsageNone          = 0,
-    kBufferUsageTransferSrc   = 0x00000001,
-    kBufferUsageTransferDst   = 0x00000002,
-    kBufferUsageUniformBuffer = 0x00000004,
-    kBufferUsageStorageBuffer = 0x00000008,
-    kBufferUsageIndexBuffer   = 0x00000010,
-    kBufferUsageVertexBuffer  = 0x00000020,
+    yar_buffer_usage_none          = 0,
+    yar_buffer_usage_transfer_src   = 0x00000001,
+    yar_buffer_usage_transfer_dst   = 0x00000002,
+    yar_buffer_usage_uniform_buffer = 0x00000004,
+    yar_buffer_usage_storage_buffer = 0x00000008,
+    yar_buffer_usage_index_buffer   = 0x00000010,
+    yar_buffer_usage_vertex_buffer  = 0x00000020,
     // there are more types but I use only this now
-    kBufferUsageMax           = 6
+    yar_buffe_usage_max           = 6
 };
 
-enum BufferFlag : uint8_t
+enum yar_buffer_flag : uint8_t
 {
-    kBufferFlagNone          = 0, 
-    kBufferFlagGPUOnly       = 0x00000001,
-    kBufferFlagDynamic       = 0x00000002,
-    kBufferFlagMapRead       = 0x00000004,
-    kBufferFlagMapWrite      = 0x00000008,
-    kBufferFlagMapReadWrite  = 0x00000010,
-    kBufferFlagMapPersistent = 0x00000020,
-    kBufferFlagMapCoherent   = 0x00000040,
-    kBufferFlagClientStorage = 0x00000080,
-    kBufferFlagMax           = 7
+    yar_buffer_flag_none          = 0, 
+    yar_buffer_flag_gpu_only       = 0x00000001,
+    yar_buffer_flag_dynamic       = 0x00000002,
+    yar_buffer_flag_map_read       = 0x00000004,
+    yar_buffer_flag_map_write      = 0x00000008,
+    yar_buffer_flag_map_read_write  = 0x00000010,
+    yar_buffer_flag_map_persistent = 0x00000020,
+    yar_buffer_flag_map_coherent   = 0x00000040,
+    yar_buffer_flag_client_storage = 0x00000080,
+    yar_buffer_flag_max           = 7
 };
-MAKE_ENUM_FLAG(uint8_t, BufferFlag);
+MAKE_ENUM_FLAG(uint8_t, yar_buffer_flag);
 
-struct BufferDesc
+struct yar_buffer_desc
 {
     uint32_t size;
-    BufferUsage usage;
-    BufferFlag flags;
+    yar_buffer_usage usage;
+    yar_buffer_flag flags;
 };
 
-struct Buffer
+struct yar_buffer
 {
     uint32_t id;
-    BufferFlag flags;
+    yar_buffer_flag flags;
 };
 
-enum TextureType
+enum yar_texture_type
 {
-    kTextureTypeNone = 0,
-    kTextureType1D,
-    kTextureType2D,
-    kTextureType3D,
-    kTextureType1DArray,
-    kTextureType2DArray,
-    kTextureTypeCubeMap
+    yar_texture_type_none = 0,
+    yar_texture_type_1d,
+    yar_texture_type_2d,
+    yar_texture_type_3d,
+    yar_texture_type_1d_array,
+    yar_texture_type_2d_array,
+    yar_texture_type_cube_map
 };
 
-enum TextureFormat : uint8_t
+enum yar_texture_format : uint8_t
 {
-    kTextureFormatNone = 0,
-    kTextureFormatR8,
-    kTextureFormatRGB8,
-    kTextureFormatRGBA8,
-    kTextureFormatRGB16F,
-    kTextureFormatRGBA16F,
-    kTextureFormatRGBA32F,
-    kTextureFormatDepth16,
-    kTextureFormatDepth24,
-    kTextureFormatDepth32F,
-    kTextureFormatDepth24Stencil8,
+    yar_texture_format_none = 0,
+    yar_texture_format_r8,
+    yar_texture_format_rgb8,
+    yar_texture_format_rgba8,
+    yar_texture_format_rgb16f,
+    yar_texture_format_rgba16f,
+    yar_texture_format_rgba32f,
+    yar_texture_format_depth16,
+    yar_texture_format_depth24,
+    yar_texture_format_depth32f,
+    yar_texture_format_depth24_stencil8,
 };
 
-struct TextureDesc
+struct yar_texture_desc
 {
-    TextureType type;
-    TextureFormat format;
+    yar_texture_type type;
+    yar_texture_format format;
     uint32_t width;
     uint32_t height;
     uint32_t depth;
@@ -162,10 +163,10 @@ struct TextureDesc
     uint32_t mip_levels;
 };
 
-struct Texture
+struct yar_texture
 {
-    TextureType type;
-    TextureFormat format;
+    yar_texture_type type;
+    yar_texture_format format;
     uint32_t width;
     uint32_t height;
     uint32_t depth;
@@ -173,85 +174,85 @@ struct Texture
     uint32_t mip_levels;
 };
 
-enum FilterType
+enum yar_filter_type
 {
-    kFilterTypeNone = 0,
-    kFilterTypeNearest,
-    kFilterTypeLinear,
+    yar_filter_type_none = 0,
+    yar_filter_type_nearest,
+    yar_filter_type_linear,
 };
 
-enum WrapMode
+enum yar_wrap_mode
 {
-    kWrapModeRepeat,
-    kWrapModeMirrored,
-    kWrapModeClampToEdge,
-    KWrapModeClampToBorder
+    yar_wrap_mode_repeat,
+    yar_wrap_mode_mirrored,
+    yar_wrap_mode_clamp_edge,
+    yar_wrap_mode_clamp_border
 };
 
-struct SamplerDesc
+struct yar_sampler_desc
 {
-    FilterType min_filter;
-    FilterType mag_filter;
-    FilterType mip_map_filter;
-    WrapMode wrap_u;
-    WrapMode wrap_v;
-    WrapMode wrap_w;
+    yar_filter_type min_filter;
+    yar_filter_type mag_filter;
+    yar_filter_type mip_map_filter;
+    yar_wrap_mode wrap_u;
+    yar_wrap_mode wrap_v;
+    yar_wrap_mode wrap_w;
 };
 
-struct Sampler
+struct yar_sampler
 {
     uint32_t id;
 };
 
-enum ShaderStage : uint8_t
+enum yar_shader_stage : uint8_t
 {
-    kShaderStageNone = 0,
-    kShaderStageVert = 0x00000001,
-    kShaderStageFrag = 0x00000002,
-    kShaderStageGeom = 0x00000004,
-    kShaderStageComp = 0x00000008,
-    kShaderStageTese = 0x00000010,
-    kShaderStageMax = 5
+    yar_shader_stage_none = 0,
+    yar_shader_stage_vert = 0x00000001,
+    yar_shader_stage_frag = 0x00000002,
+    yar_shader_stage_geom = 0x00000004,
+    yar_shader_stage_comp = 0x00000008,
+    yar_shader_stage_tese = 0x00000010,
+    yar_shader_stage_max = 5
 };
-MAKE_ENUM_FLAG(uint8_t, ShaderStage);
+MAKE_ENUM_FLAG(uint8_t, yar_shader_stage);
 
-enum ResourceType : uint8_t
+enum yar_resource_type : uint8_t
 {
-    kResourceTypeUndefined = 0x00000000,
-    kResourceTypeCBV = 0x00000001,
-    kResourceTypeSRV = 0x00000002,
-    kResourceTypeUAV = 0x00000004,
-    kResourceTypeSampler = 0x00000008,
+    yar_resource_type_undefined = 0x00000000,
+    yar_resource_type_cbv = 0x00000001,
+    yar_resource_type_srv = 0x00000002,
+    yar_resource_type_uav = 0x00000004,
+    yar_resource_type_sampler = 0x00000008,
 };
-MAKE_ENUM_FLAG(uint8_t, ResourceType);
+MAKE_ENUM_FLAG(uint8_t, yar_resource_type);
 
-enum VertexAttribFormat : uint8_t
+enum yar_vertex_attrib_format : uint8_t
 {
-    kAttribFormatFloat = 0,
-};
-
-enum DepthStencilFunc : uint8_t
-{
-    kDepthStencilFuncAlways = 0,
-    kDepthStencilFuncNever,      
-    kDepthStencilFuncLess,       
-    kDepthStencilFuncEqual,      
-    kDepthStencilFuncLessEqual,  
-    kDepthStencilFuncGreater,   
-    kDepthStencilFuncNotEqual,   
-    kDepthStencilFuncGreatEqual 
+    yar_attrib_format_float = 0,
 };
 
-enum StencilOp : uint8_t
+enum yar_depth_stencil_func : uint8_t
 {
-    kStencilOpKeep = 0,
-    kStencilOpZero,
-    kStencilOpReplace,
-    kStencilOpIncr,
-    kStencilOpIncrWrap,
-    kStencilOpDecr,
-    kStencilOpDecrWrap,
-    kStencilOpInvert
+    yar_depth_stencil_func_always = 0,
+    yar_depth_stencil_func_never,      
+    yar_depth_stencil_func_less,       
+    yar_depth_stencil_func_equal,      
+    yar_depth_stencil_func_less_equal,  
+    yar_depth_stencil_func_greater,   
+    yar_depth_stencil_func_not_equal,   
+    yar_depth_stencil_func_great_equal 
+};
+
+enum yar_stencil_op : uint8_t
+{
+    yar_stencil_op_keep = 0,
+    yar_stencil_op_zero,
+    yar_stencil_op_replace,
+    yar_stencil_op_incr,
+    yar_stencil_op_incr_wrap,
+    yar_stencil_op_decr,
+    yar_stencil_op_decr_wrap,
+    yar_stencil_op_invert
 };
 
 enum yar_blend_op : uint8_t
@@ -277,79 +278,79 @@ enum yar_blend_factor : uint8_t
     yar_blned_factor_one_minus_dst_alpha
 };
 
-struct ShaderResource
+struct yar_shader_resource
 {
     std::string name;
-    ResourceType type;
+    yar_resource_type type;
     uint32_t binding;
     uint32_t set;
     // maybe also need to add texture specific things
 
-    bool operator<(const ShaderResource& other) const {
+    bool operator<(const yar_shader_resource& other) const {
         if (type == other.type)
             return name < other.name;
         return type < other.type;
     }
 };
 
-struct ShaderStageLoadDesc
+struct yar_shader_stage_load_desc
 {
     std::string file_name;
     std::string entry_point;
-    ShaderStage stage;
+    yar_shader_stage stage;
     // maybe need to add some shader macros support here
 };
 
-struct ShaderLoadDesc
+struct yar_shader_load_desc
 {
-    std::array<ShaderStageLoadDesc, ShaderStage::kShaderStageMax> stages;
+    std::array<yar_shader_stage_load_desc, yar_shader_stage::yar_shader_stage_max> stages;
 };
 
-struct ShaderStageDesc
+struct yar_shader_stage_desc
 {
     std::vector<uint8_t> byte_code;
     std::string_view entry_point;
 };
 
-struct ShaderDesc
+struct yar_shader_desc
 {
-    ShaderStage stages;
-    ShaderStageDesc vert;
-    ShaderStageDesc frag;
-    ShaderStageDesc geom;
-    ShaderStageDesc comp;
+    yar_shader_stage stages;
+    yar_shader_stage_desc vert;
+    yar_shader_stage_desc frag;
+    yar_shader_stage_desc geom;
+    yar_shader_stage_desc comp;
 };
 
-struct Shader
+struct yar_shader
 {
-    ShaderStage stages;
+    yar_shader_stage stages;
     uint32_t program;
-    std::vector<ShaderResource> resources;
+    std::vector<yar_shader_resource> resources;
 };
 
-struct VertexAttrib
+struct yar_vertex_attrib
 {
     uint32_t size;
-    VertexAttribFormat format;
+    yar_vertex_attrib_format format;
     uint32_t binding;
     uint32_t offset;    
 };
 
-struct VertexLayout
+struct yar_vertex_layout
 {
     uint32_t attrib_count;
-    VertexAttrib attribs[kMaxVertexAttribCount];
+    yar_vertex_attrib attribs[kMaxVertexAttribCount];
 };
 
-struct DepthStencilState
+struct yar_depth_stencil_state
 {
     bool depth_enable;
     bool stencil_enable;
-    DepthStencilFunc depth_func;
-    DepthStencilFunc stencil_func;
-    StencilOp sfail;
-    StencilOp dpfail;
-    StencilOp dppass;
+    yar_depth_stencil_func depth_func;
+    yar_depth_stencil_func stencil_func;
+    yar_stencil_op sfail;
+    yar_stencil_op dpfail;
+    yar_stencil_op dppass;
 };
 
 struct yar_blend_state
@@ -368,7 +369,7 @@ struct yar_blend_state
 
 //struct RootSignatureDesc
 //{
-//    std::vector<Shader*> shaders;
+//    std::vector<yar_shader*> shaders;
 //};
 //
 //struct RootSignature
@@ -377,74 +378,75 @@ struct yar_blend_state
 //    DescriptorIndexMap name_to_index;
 //};
 
-enum DescriptorSetUpdateFrequency : uint8_t
+enum yar_descriptor_set_update_frequency : uint8_t
 {
-    kUpdateFreqNone     = 0,
-    kUpdateFreqPerFrame = 1,
-    kUpdateFreqPerDraw  = 2,
-    kUpdateFreqMax      = 3
+    yar_update_freq_none     = 0,
+    yar_update_freq_per_frame = 1,
+    yar_update_freq_per_draw  = 2,
+    yar_update_freq_max      = 3
 };
 
-struct DescriptorSetDesc
+struct yar_descriptor_set_desc
 {
-    DescriptorSetUpdateFrequency update_freq;
+    yar_descriptor_set_update_frequency update_freq;
     uint32_t max_sets;
-    Shader* shader;
+    yar_shader* shader;
 };
 
-struct DescriptorInfo
+struct yar_descriptor_info
 {
-    struct CombinedTextureSample
+    // probably need only for ogl
+    struct yar_combined_texture_sample
     {
-        Texture* texture;
+        yar_texture* texture;
         std::string sampler_name;
     };
 
     std::string name;
-    std::variant<Buffer*, Sampler*, CombinedTextureSample, Texture*> descriptor;
+    std::variant<yar_buffer*, yar_sampler*, yar_combined_texture_sample, yar_texture*> descriptor;
 };
 
-struct UpdateDescriptorSetDesc
+struct yar_update_descriptor_set_desc
 {
     uint32_t index;
-    std::vector<DescriptorInfo> infos;
+    std::vector<yar_descriptor_info> infos;
 };
 
 // Idea of Descriptor Set doesn't look really useful in OpenGL
 // but I want to make this abstraction in case of using
 // modern Graphics API like Vulkan in future
-struct DescriptorSet
+struct yar_descriptor_set
 {
     // I don't want to have uniform buffer directly in pipeline object
     // so it is better to use Descriptor Set that is linked with current
     // buffer to bind buffer with current context
-    DescriptorSetUpdateFrequency update_freq;
+    yar_descriptor_set_update_frequency update_freq;
     uint32_t max_set;
     uint32_t program; // only for gl
-    std::set<ShaderResource> descriptors;
-    std::vector<std::vector<DescriptorInfo>> infos;
+    std::set<yar_shader_resource> descriptors;
+    std::vector<std::vector<yar_descriptor_info>> infos;
 };
 
-struct PushConstantDesc
+struct yar_push_constant_desc
 {
-    Shader* shader;
+    yar_shader* shader;
     std::string name;
     uint32_t size;
 };
 
-struct PushConstant
+struct yar_push_constant
 {
-    Buffer* buffer;
+    yar_buffer* buffer;
     uint32_t size;
     uint32_t binding;
     uint32_t shader_program;
 };
 
-struct PipelineDesc
+struct yar_pipeline_desc
 {
-    Shader shader;
-    VertexLayout vertex_layout;
-    DepthStencilState depth_stencil_state;
+    yar_shader shader;
+    yar_vertex_layout vertex_layout;
+    yar_depth_stencil_state depth_stencil_state;
     yar_blend_state blend_state;
     /*
     has to contain:
@@ -463,37 +465,37 @@ struct PipelineDesc
 */
 };
 
-struct Pipeline
+struct yar_pipeline
 {
     // it probably should be something graphics API specific
     // but for now it will be OpenGL specific
-    const Shader* shader;
+    const yar_shader* shader;
     uint32_t vao;
 };
 
-struct CmdQueueDesc
+struct yar_cmd_queue_desc
 {
     uint8_t dummy;
 };
 
-struct CmdBuffer;
+struct yar_cmd_buffer;
 
-struct CmdQueue
+struct yar_cmd_queue
 {
-    std::vector<CmdBuffer*> queue;
+    std::vector<yar_cmd_buffer*> queue;
 };
 
-struct CmdBufferDesc
+struct yar_cmd_buffer_desc
 {
-    CmdQueue* current_queue;
+    yar_cmd_queue* current_queue;
     bool use_push_constant;
-    PushConstantDesc* pc_desc;
+    yar_push_constant_desc* pc_desc;
 };
 
-struct CmdBuffer
+struct yar_cmd_buffer
 {
-    std::vector<Command> commands;
-    PushConstant* push_constant;
+    std::vector<yar_command> commands;
+    yar_push_constant* push_constant;
 };
 
 // ======================================= //
@@ -503,12 +505,12 @@ struct CmdBuffer
 #define DECLARE_YAR_LOAD_FUNC(ret, name, ...) \
 ret name(__VA_ARGS__)                         \
 
-DECLARE_YAR_LOAD_FUNC(void, load_shader, ShaderLoadDesc* desc, ShaderDesc** out);
-DECLARE_YAR_LOAD_FUNC(void, begin_update_resource, ResourceUpdateDesc& desc);
-DECLARE_YAR_LOAD_FUNC(void, end_update_resource, ResourceUpdateDesc& desc);
-DECLARE_YAR_LOAD_FUNC(void, update_texture, TextureUpdateDesc* desc);
-DECLARE_YAR_LOAD_FUNC(void*, map_buffer, Buffer* buffer);
-DECLARE_YAR_LOAD_FUNC(void, unmap_buffer, Buffer* buffer);
+DECLARE_YAR_LOAD_FUNC(void, load_shader, yar_shader_load_desc* desc, yar_shader_desc** out);
+DECLARE_YAR_LOAD_FUNC(void, begin_update_resource, yar_resource_update_desc& desc);
+DECLARE_YAR_LOAD_FUNC(void, end_update_resource, yar_resource_update_desc& desc);
+DECLARE_YAR_LOAD_FUNC(void, update_texture, yar_texture_update_desc* desc);
+DECLARE_YAR_LOAD_FUNC(void*, map_buffer, yar_buffer* buffer);
+DECLARE_YAR_LOAD_FUNC(void, unmap_buffer, yar_buffer* buffer);
 
 // ======================================= //
 //            Render Functions             //
@@ -517,27 +519,27 @@ DECLARE_YAR_LOAD_FUNC(void, unmap_buffer, Buffer* buffer);
 #define DECLARE_YAR_RENDER_FUNC(ret, name, ...) \
 ret name(__VA_ARGS__)                           \
 
-DECLARE_YAR_RENDER_FUNC(void, add_swapchain, bool vsync, SwapChain** swapchain);
-DECLARE_YAR_RENDER_FUNC(void, add_buffer, BufferDesc* desc, Buffer** buffer);
-DECLARE_YAR_RENDER_FUNC(void, add_texture, TextureDesc* desc, Texture** texture);
-DECLARE_YAR_RENDER_FUNC(void, add_sampler, SamplerDesc* desc, Sampler** sampler);
-DECLARE_YAR_RENDER_FUNC(void, add_shader, ShaderDesc* desc, Shader** shader);
-DECLARE_YAR_RENDER_FUNC(void, add_descriptor_set, DescriptorSetDesc* desc, DescriptorSet** shader);
+DECLARE_YAR_RENDER_FUNC(void, add_swapchain, bool vsync, yar_swapchain** swapchain);
+DECLARE_YAR_RENDER_FUNC(void, add_buffer, yar_buffer_desc* desc, yar_buffer** buffer);
+DECLARE_YAR_RENDER_FUNC(void, add_texture, yar_texture_desc* desc, yar_texture** texture);
+DECLARE_YAR_RENDER_FUNC(void, add_sampler, yar_sampler_desc* desc, yar_sampler** sampler);
+DECLARE_YAR_RENDER_FUNC(void, add_shader, yar_shader_desc* desc, yar_shader** shader);
+DECLARE_YAR_RENDER_FUNC(void, add_descriptor_set, yar_descriptor_set_desc* desc, yar_descriptor_set** set);
 //DECLARE_YAR_RENDER_FUNC(void, add_root_signature, RootSignatureDesc* desc, RootSignature** root_signature);
-DECLARE_YAR_RENDER_FUNC(void, add_pipeline, const PipelineDesc* desc, Pipeline** pipeline);
-DECLARE_YAR_RENDER_FUNC(void, add_queue, CmdQueueDesc* desc, CmdQueue** queue);
-DECLARE_YAR_RENDER_FUNC(void, add_cmd, CmdBufferDesc* desc, CmdBuffer** cmd);
-DECLARE_YAR_RENDER_FUNC(void, remove_buffer, Buffer* buffer);
-DECLARE_YAR_RENDER_FUNC(void, update_descriptor_set, UpdateDescriptorSetDesc* desc, DescriptorSet* set);
-DECLARE_YAR_RENDER_FUNC(void, cmd_bind_pipeline, CmdBuffer* cmd, Pipeline* pipeline);
-DECLARE_YAR_RENDER_FUNC(void, cmd_bind_descriptor_set, CmdBuffer* cmd, DescriptorSet* set, uint32_t index);
-DECLARE_YAR_RENDER_FUNC(void, cmd_bind_vertex_buffer, CmdBuffer* cmd, Buffer* buffer, uint32_t count, uint32_t offset, uint32_t stride);
-DECLARE_YAR_RENDER_FUNC(void, cmd_bind_index_buffer, CmdBuffer* cmd, Buffer* buffer); // maybe for other render api there should be more params
-DECLARE_YAR_RENDER_FUNC(void, cmd_bind_push_constant, CmdBuffer* cmd, void* data);
-DECLARE_YAR_RENDER_FUNC(void, cmd_draw, CmdBuffer* cmd, uint32_t first_vertex, uint32_t count);
-DECLARE_YAR_RENDER_FUNC(void, cmd_draw_indexed, CmdBuffer* cmd, uint32_t index_count, uint32_t first_index, uint32_t first_vertex);
-DECLARE_YAR_RENDER_FUNC(void, cmd_dispatch, CmdBuffer* cmd, uint32_t num_groups_x, uint32_t num_groups_y, uint32_t num_groups_z);
-DECLARE_YAR_RENDER_FUNC(void, cmd_update_buffer, CmdBuffer* cmd, Buffer* buffer, size_t offset, size_t size, void* data);
-DECLARE_YAR_RENDER_FUNC(void, queue_submit, CmdQueue* queue);
+DECLARE_YAR_RENDER_FUNC(void, add_pipeline, const yar_pipeline_desc* desc, yar_pipeline** pipeline);
+DECLARE_YAR_RENDER_FUNC(void, add_queue, yar_cmd_queue_desc* desc, yar_cmd_queue** queue);
+DECLARE_YAR_RENDER_FUNC(void, add_cmd, yar_cmd_buffer_desc* desc, yar_cmd_buffer** cmd);
+DECLARE_YAR_RENDER_FUNC(void, remove_buffer, yar_buffer* buffer);
+DECLARE_YAR_RENDER_FUNC(void, update_descriptor_set, yar_update_descriptor_set_desc* desc, yar_descriptor_set* set);
+DECLARE_YAR_RENDER_FUNC(void, cmd_bind_pipeline, yar_cmd_buffer* cmd, yar_pipeline* pipeline);
+DECLARE_YAR_RENDER_FUNC(void, cmd_bind_descriptor_set, yar_cmd_buffer* cmd, yar_descriptor_set* set, uint32_t index);
+DECLARE_YAR_RENDER_FUNC(void, cmd_bind_vertex_buffer, yar_cmd_buffer* cmd, yar_buffer* buffer, uint32_t count, uint32_t offset, uint32_t stride);
+DECLARE_YAR_RENDER_FUNC(void, cmd_bind_index_buffer, yar_cmd_buffer* cmd, yar_buffer* buffer); // maybe for other render api there should be more params
+DECLARE_YAR_RENDER_FUNC(void, cmd_bind_push_constant, yar_cmd_buffer* cmd, void* data);
+DECLARE_YAR_RENDER_FUNC(void, cmd_draw, yar_cmd_buffer* cmd, uint32_t first_vertex, uint32_t count);
+DECLARE_YAR_RENDER_FUNC(void, cmd_draw_indexed, yar_cmd_buffer* cmd, uint32_t index_count, uint32_t first_index, uint32_t first_vertex);
+DECLARE_YAR_RENDER_FUNC(void, cmd_dispatch, yar_cmd_buffer* cmd, uint32_t num_groups_x, uint32_t num_groups_y, uint32_t num_groups_z);
+DECLARE_YAR_RENDER_FUNC(void, cmd_update_buffer, yar_cmd_buffer* cmd, yar_buffer* buffer, size_t offset, size_t size, void* data);
+DECLARE_YAR_RENDER_FUNC(void, queue_submit, yar_cmd_queue* queue);
 
 void init_render();

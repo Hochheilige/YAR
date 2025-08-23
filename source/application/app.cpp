@@ -20,23 +20,23 @@
 #include <iostream>
 #include <optional>
 
-Texture* load_white_texture()
+yar_texture* load_white_texture()
 {
 	int32_t channels = 4;
 	size_t size = channels;
 	std::vector<uint8_t> white_data(size, 255);
 
-	Texture* tex;
-	TextureDesc texture_desc{};
+	yar_texture* tex;
+	yar_texture_desc texture_desc{};
 	texture_desc.width = 1;
 	texture_desc.height = 1;
 	texture_desc.mip_levels = 1;
-	texture_desc.type = kTextureType2D;
-	texture_desc.format = kTextureFormatRGBA8;
+	texture_desc.type = yar_texture_type_2d;
+	texture_desc.format = yar_texture_format_rgb8;
 	add_texture(&texture_desc, &tex);
 
-	ResourceUpdateDesc resource_update_desc;
-	TextureUpdateDesc tex_update_desc{};
+	yar_resource_update_desc resource_update_desc;
+	yar_texture_update_desc tex_update_desc{};
 	resource_update_desc = &tex_update_desc;
 	tex_update_desc.size = size;
 	tex_update_desc.texture = tex;
@@ -48,34 +48,34 @@ Texture* load_white_texture()
 	return tex;
 }
 
-Texture* load_texture(const std::string_view& name)
+yar_texture* load_texture(const std::string_view& name)
 {
-	Texture* tex;
+	yar_texture* tex;
 
 	int32_t width, height, channels;
 	stbi_set_flip_vertically_on_load(false);
 	uint8_t* buf = stbi_load(name.data(), &width, &height, &channels, 0);
 
-	TextureFormat format;
+	yar_texture_format format;
 	if (channels == 1)
-		format = kTextureFormatR8;
+		format = yar_texture_format_r8;
 	if (channels == 3)
-		format = kTextureFormatRGB8;
+		format = yar_texture_format_rgb8;
 	if (channels == 4)
-		format = kTextureFormatRGBA8;
+		format = yar_texture_format_rgba8;
 
 	if (buf)
 	{
-		TextureDesc texture_desc{};
+		yar_texture_desc texture_desc{};
 		texture_desc.width = width;
 		texture_desc.height = height;
 		texture_desc.mip_levels = 1;
-		texture_desc.type = kTextureType2D;
+		texture_desc.type = yar_texture_type_2d;
 		texture_desc.format = format;
 		add_texture(&texture_desc, &tex);
 
-		ResourceUpdateDesc resource_update_desc;
-		TextureUpdateDesc tex_update_desc{};
+		yar_resource_update_desc resource_update_desc;
+		yar_texture_update_desc tex_update_desc{};
 		resource_update_desc = &tex_update_desc;
 		tex_update_desc.size = width * height * channels;
 		tex_update_desc.texture = tex;
@@ -244,28 +244,28 @@ private:
 class Mesh
 {
 public:
-	Mesh(const VertexBuffer& buffer, const std::vector<uint32_t>& indices, const std::vector<Texture*> textures) :
+	Mesh(const VertexBuffer& buffer, const std::vector<uint32_t>& indices, const std::vector<yar_texture*> textures) :
 		buffer(buffer), indices(indices), textures(textures),
 		gpu_vertex_buffer(nullptr), gpu_index_buffer(nullptr)
 	{
 		upload_buffers();
 	}
 
-	void setup_vertex_layout(VertexLayout& layout)
+	void setup_vertex_layout(yar_vertex_layout& layout)
 	{
 		layout.attrib_count = buffer.attrib_count();
 		layout.attribs[0].size = buffer.attribute_size("position");
-		layout.attribs[0].format = kAttribFormatFloat;
+		layout.attribs[0].format = yar_attrib_format_float;
 		layout.attribs[0].offset = buffer.offsetof_by_name("position");
 		layout.attribs[1].size = buffer.attribute_size("normal");
-		layout.attribs[1].format = kAttribFormatFloat;
+		layout.attribs[1].format = yar_attrib_format_float;
 		layout.attribs[1].offset = buffer.offsetof_by_name("normal");
 		layout.attribs[2].size = buffer.attribute_size("tex_coords");
-		layout.attribs[2].format = kAttribFormatFloat;
+		layout.attribs[2].format = yar_attrib_format_float;
 		layout.attribs[2].offset = buffer.offsetof_by_name("tex_coords");
 	}
 
-	void draw(CmdBuffer* cmd)
+	void draw(yar_cmd_buffer* cmd)
 	{
 		cmd_bind_vertex_buffer(cmd, gpu_vertex_buffer, buffer.attrib_count(), 0, buffer.vertex_size());
 		cmd_bind_index_buffer(cmd, gpu_index_buffer);
@@ -277,7 +277,7 @@ public:
 		return buffer;
 	}
 
-	Texture* get_texture(uint32_t index) const
+	yar_texture* get_texture(uint32_t index) const
 	{
 		if (index >= textures.size())
 			return nullptr;
@@ -287,18 +287,18 @@ public:
 private:
 	void upload_buffers()
 	{
-		BufferDesc buffer_desc;
+		yar_buffer_desc buffer_desc;
 		buffer_desc.size = buffer.get_size();
-		buffer_desc.flags = kBufferFlagGPUOnly;
+		buffer_desc.flags = yar_buffer_flag_gpu_only;
 		add_buffer(&buffer_desc, &gpu_vertex_buffer);
 
 		uint64_t indexes_size = indices.size() * sizeof(uint32_t);
 		buffer_desc.size = indexes_size;
 		add_buffer(&buffer_desc, &gpu_index_buffer);
 
-		ResourceUpdateDesc resource_update_desc;
+		yar_resource_update_desc resource_update_desc;
 		{ // update buffers data
-			BufferUpdateDesc update_desc{};
+			yar_buffer_update_desc update_desc{};
 			resource_update_desc = &update_desc;
 			update_desc.buffer = gpu_vertex_buffer;
 			update_desc.size = buffer.get_size();
@@ -317,10 +317,10 @@ private:
 private:
 	VertexBuffer buffer;
 	std::vector<uint32_t> indices;
-	std::vector<Texture*> textures;
+	std::vector<yar_texture*> textures;
 
-	Buffer* gpu_vertex_buffer;
-	Buffer* gpu_index_buffer;
+	yar_buffer* gpu_vertex_buffer;
+	yar_buffer* gpu_index_buffer;
 };
 
 class Model
@@ -341,9 +341,9 @@ public:
 		process_node(scene->mRootNode, scene);
 	}
 
-	void setup_descriptor_set(Shader* shader, DescriptorSetUpdateFrequency update_freq, Sampler* sampler)
+	void setup_descriptor_set(yar_shader* shader, yar_descriptor_set_update_frequency update_freq, yar_sampler* sampler)
 	{
-		DescriptorSetDesc set_desc;
+		yar_descriptor_set_desc set_desc;
 		set_desc.max_sets = meshes.size();
 		set_desc.shader = shader;
 		set_desc.update_freq = update_freq;
@@ -356,11 +356,11 @@ public:
 			// 0th texture is diffuse_map,
 			// 1st texture is specular_map, etc
 			// TODO: store info about textures inside Mesh
-			std::vector<DescriptorInfo> infos{
+			std::vector<yar_descriptor_info> infos{
 				{
 					.name = "diffuse_map",
 					.descriptor =
-					DescriptorInfo::CombinedTextureSample{
+					yar_descriptor_info::yar_combined_texture_sample{
 						mesh.get_texture(0),
 						"samplerState",
 					}
@@ -368,7 +368,7 @@ public:
 				{
 					.name = "specular_map",
 					.descriptor =
-					DescriptorInfo::CombinedTextureSample{
+					yar_descriptor_info::yar_combined_texture_sample{
 						mesh.get_texture(1),
 						"samplerState",
 					}
@@ -376,7 +376,7 @@ public:
 				{
 					.name = "normal_map",
 					.descriptor =
-					DescriptorInfo::CombinedTextureSample{
+					yar_descriptor_info::yar_combined_texture_sample{
 						mesh.get_texture(2),
 						"samplerState",
 					}
@@ -387,7 +387,7 @@ public:
 				},
 			};
 
-			UpdateDescriptorSetDesc update_set_desc = {};
+			yar_update_descriptor_set_desc update_set_desc = {};
 			update_set_desc.index = index;
 			update_set_desc.infos = std::move(infos);
 			update_descriptor_set(&update_set_desc, set);
@@ -395,12 +395,12 @@ public:
 		}
 	}
 
-	void setup_vertex_layout(VertexLayout& layout)
+	void setup_vertex_layout(yar_vertex_layout& layout)
 	{
 		meshes[0].setup_vertex_layout(layout);
 	}
 
-	void draw(CmdBuffer* cmd)
+	void draw(yar_cmd_buffer* cmd)
 	{
 		for (uint32_t i = 0; i < meshes.size(); ++i)
 		{
@@ -430,7 +430,7 @@ private:
 		std::vector<VertexAttributeLayout> layouts;
 		std::vector<Vertex> vertices;
 		std::vector<uint32_t> indices;
-		std::vector<Texture*> textures;
+		std::vector<yar_texture*> textures;
 
 		bool has_pos = false;
 		bool has_norm = false;
@@ -566,13 +566,13 @@ private:
 		if (mesh->mMaterialIndex >= 0)
 		{
 			aiMaterial* material = scene->mMaterials[mesh->mMaterialIndex];
-			std::vector<Texture*> diffuse_maps = load_material_textures(material,
+			std::vector<yar_texture*> diffuse_maps = load_material_textures(material,
 				aiTextureType_DIFFUSE);
 			textures.insert(textures.end(), diffuse_maps.begin(), diffuse_maps.end());
-			std::vector<Texture*> specular_maps = load_material_textures(material,
+			std::vector<yar_texture*> specular_maps = load_material_textures(material,
 				aiTextureType_SPECULAR);
 			textures.insert(textures.end(), specular_maps.begin(), specular_maps.end());
-			std::vector<Texture*> normal_maps = load_material_textures(material,
+			std::vector<yar_texture*> normal_maps = load_material_textures(material,
 				aiTextureType_HEIGHT);
 			textures.insert(textures.end(), normal_maps.begin(), normal_maps.end());
 		}
@@ -580,9 +580,9 @@ private:
 		return Mesh(buffer, indices, textures);
 	}
 
-	std::vector<Texture*> load_material_textures(aiMaterial* mat, aiTextureType type)
+	std::vector<yar_texture*> load_material_textures(aiMaterial* mat, aiTextureType type)
 	{
-		std::vector<Texture*> textures;
+		std::vector<yar_texture*> textures;
 		for (uint32_t i = 0; i < mat->GetTextureCount(type); ++i)
 		{
 			aiString str;
@@ -599,7 +599,7 @@ private:
 
 			if (!skip)
 			{
-				Texture* tex = load_texture(path);
+				yar_texture* tex = load_texture(path);
 				textures.push_back(tex);
 				loaded_textures[path] = tex;
 			}
@@ -617,9 +617,9 @@ private:
 	std::string directory;
 	std::vector<Mesh> meshes;
 
-	DescriptorSet* set;
+	yar_descriptor_set* set;
 
-	std::unordered_map<std::string, Texture*> loaded_textures;
+	std::unordered_map<std::string, yar_texture*> loaded_textures;
 };
 
 class GeometryRenderer
@@ -708,7 +708,7 @@ auto main() -> int {
 	
 	init_render();
 
-	SwapChain* swapchain;
+	yar_swapchain* swapchain;
 	add_swapchain(true, &swapchain);
 
 	VertexBuffer vertex_buffer{
@@ -816,8 +816,8 @@ auto main() -> int {
 	ubo.light_params.specular[2] = glm::vec4(0.0f, 0.0f, 1.0f, 0.0f);
 
 
-	Texture* diffuse_map_tex;
-	Texture* specular_map_tex;
+	yar_texture* diffuse_map_tex;
+	yar_texture* specular_map_tex;
 
 	int32_t width, height, channels;
 	std::string name = "assets/container2.png";
@@ -826,16 +826,16 @@ auto main() -> int {
 
 	if (diffuse_map)
 	{
-		TextureDesc texture_desc{};
+		yar_texture_desc texture_desc{};
 		texture_desc.width = width;
 		texture_desc.height = height;
 		texture_desc.mip_levels = 1;
-		texture_desc.type = kTextureType2D;
-		texture_desc.format = kTextureFormatRGBA8;
+		texture_desc.type = yar_texture_type_2d;
+		texture_desc.format = yar_texture_format_rgba8;
 		add_texture(&texture_desc, &diffuse_map_tex);
 
-		ResourceUpdateDesc resource_update_desc;
-		TextureUpdateDesc tex_update_desc{};
+		yar_resource_update_desc resource_update_desc;
+		yar_texture_update_desc tex_update_desc{};
 		resource_update_desc = &tex_update_desc;
 		tex_update_desc.size = width * height * channels;
 		tex_update_desc.texture = diffuse_map_tex;
@@ -853,16 +853,16 @@ auto main() -> int {
 	uint8_t* specular_map = stbi_load(name.c_str(), &width, &height, &channels, 0);
 	if (specular_map)
 	{
-		TextureDesc texture_desc{};
+		yar_texture_desc texture_desc{};
 		texture_desc.width = width;
 		texture_desc.height = height;
 		texture_desc.mip_levels = 1;
-		texture_desc.type = kTextureType2D;
-		texture_desc.format = kTextureFormatRGBA8;
+		texture_desc.type = yar_texture_type_2d;
+		texture_desc.format = yar_texture_format_rgba8;
 		add_texture(&texture_desc, &specular_map_tex);
 
-		ResourceUpdateDesc resource_update_desc;
-		TextureUpdateDesc tex_update_desc{};
+		yar_resource_update_desc resource_update_desc;
+		yar_texture_update_desc tex_update_desc{};
 		resource_update_desc = &tex_update_desc;
 		tex_update_desc.size = width * height * channels;
 		tex_update_desc.texture = specular_map_tex;
@@ -876,7 +876,7 @@ auto main() -> int {
 		std::cerr << "Failed to load specular_map_tex: " << name << std::endl;
 	}
 
-	std::vector<Texture*> textures = {
+	std::vector<yar_texture*> textures = {
 		diffuse_map_tex,
 		specular_map_tex
 	};
@@ -885,49 +885,49 @@ auto main() -> int {
 	Mesh test_mesh(vertex_buffer, indexes, textures);
 	Model mdl("assets/sponza/sponza.obj");
 
-	Sampler* sampler;
-	SamplerDesc sampler_desc{};
-	sampler_desc.min_filter = kFilterTypeNearest;
-	sampler_desc.mag_filter = kFilterTypeNearest;
-	sampler_desc.wrap_u = kWrapModeRepeat;
-	sampler_desc.wrap_v = kWrapModeRepeat;
+	yar_sampler* sampler;
+	yar_sampler_desc sampler_desc{};
+	sampler_desc.min_filter = yar_filter_type_nearest;
+	sampler_desc.mag_filter = yar_filter_type_nearest;
+	sampler_desc.wrap_u = yar_wrap_mode_repeat;
+	sampler_desc.wrap_v = yar_wrap_mode_repeat;
 	add_sampler(&sampler_desc, &sampler);
 
-	BufferDesc buffer_desc;
+	yar_buffer_desc buffer_desc;
 	buffer_desc.size = vertex_buffer.get_size();
-	buffer_desc.flags = kBufferFlagGPUOnly;
-	Buffer* vbo = nullptr;
+	buffer_desc.flags = yar_buffer_flag_gpu_only;
+	yar_buffer* vbo = nullptr;
 	add_buffer(&buffer_desc, &vbo);
 
 	buffer_desc.size = sizeof(indexes);
-	Buffer* ebo = nullptr;
+	yar_buffer* ebo = nullptr;
 	add_buffer(&buffer_desc, &ebo);
 
 	constexpr uint32_t image_count = 2;
 	uint32_t frame_index = 0;
 
 	buffer_desc.size = sizeof(ubo);
-	buffer_desc.flags = kBufferFlagMapWrite;
-	Buffer* ubo_buf[image_count] = { nullptr, nullptr };
+	buffer_desc.flags = yar_buffer_flag_map_write;
+	yar_buffer* ubo_buf[image_count] = { nullptr, nullptr };
 	for (auto& buf : ubo_buf)
 		add_buffer(&buffer_desc, &buf);
 
 	buffer_desc.size = sizeof(material);
-	Buffer* mat_buf;
+	yar_buffer* mat_buf;
 	add_buffer(&buffer_desc, &mat_buf);
 
 	// Need to make something with shaders path 
-	ShaderLoadDesc shader_load_desc = {};
-	shader_load_desc.stages[0] = { "shaders/base_vert.hlsl", "main", ShaderStage::kShaderStageVert };
-	shader_load_desc.stages[1] = { "shaders/base_frag.hlsl", "main", ShaderStage::kShaderStageFrag };
-	ShaderDesc* shader_desc = nullptr;
+	yar_shader_load_desc shader_load_desc = {};
+	shader_load_desc.stages[0] = { "shaders/base_vert.hlsl", "main", yar_shader_stage::yar_shader_stage_vert };
+	shader_load_desc.stages[1] = { "shaders/base_frag.hlsl", "main", yar_shader_stage::yar_shader_stage_frag };
+	yar_shader_desc* shader_desc = nullptr;
 	load_shader(&shader_load_desc, &shader_desc);
-	Shader* shader;
+	yar_shader* shader;
 	add_shader(shader_desc, &shader);
 
-	ResourceUpdateDesc resource_update_desc;
+	yar_resource_update_desc resource_update_desc;
 	{ // update buffers data
-		BufferUpdateDesc update_desc{};
+		yar_buffer_update_desc update_desc{};
 		resource_update_desc = &update_desc;
 		update_desc.buffer = vbo;
 		update_desc.size = vertex_buffer.get_size();
@@ -981,24 +981,24 @@ auto main() -> int {
 		end_update_resource(resource_update_desc);		
 	}
 
-	VertexLayout layout{};
-	DepthStencilState depth_stencil{};
+	yar_vertex_layout layout{};
+	yar_depth_stencil_state depth_stencil{};
 	//test_mesh.setup_vertex_layout(layout);
 	mdl.setup_vertex_layout(layout);
 	depth_stencil.depth_enable = true;
-	depth_stencil.depth_func = kDepthStencilFuncLess;
+	depth_stencil.depth_func = yar_depth_stencil_func_less;
 
-	DescriptorSetDesc set_desc;
+	yar_descriptor_set_desc set_desc;
 	set_desc.max_sets = image_count;
 	set_desc.shader = shader;
-	set_desc.update_freq = kUpdateFreqPerFrame;
-	DescriptorSet* ubo_desc;
+	set_desc.update_freq = yar_update_freq_per_frame;
+	yar_descriptor_set* ubo_desc;
 	add_descriptor_set(&set_desc, &ubo_desc);
 
-	UpdateDescriptorSetDesc update_set_desc{};
+	yar_update_descriptor_set_desc update_set_desc{};
 	for (uint32_t i = 0; i < image_count; ++i)
 	{
-		std::vector<DescriptorInfo> infos{
+		std::vector<yar_descriptor_info> infos{
 			{
 				.name = "ubo",
 				.descriptor = ubo_buf[i]
@@ -1010,15 +1010,15 @@ auto main() -> int {
 	}
 
 	set_desc.max_sets = 1;
-	set_desc.update_freq = kUpdateFreqNone;
-	DescriptorSet* texture_set;
+	set_desc.update_freq = yar_update_freq_none;
+	yar_descriptor_set* texture_set;
 	add_descriptor_set(&set_desc, &texture_set);
 
-	std::vector<DescriptorInfo> infos{
+	std::vector<yar_descriptor_info> infos{
 		{
 			.name = "diffuse_map",
 			.descriptor =
-			DescriptorInfo::CombinedTextureSample{
+			yar_descriptor_info::yar_combined_texture_sample{
 				diffuse_map_tex,
 				"samplerState",
 			}
@@ -1026,7 +1026,7 @@ auto main() -> int {
 		{
 			.name = "specular_map",
 			.descriptor =
-			DescriptorInfo::CombinedTextureSample{
+			yar_descriptor_info::yar_combined_texture_sample{
 				specular_map_tex,
 				"samplerState",
 			}
@@ -1034,7 +1034,7 @@ auto main() -> int {
 		{
 			.name = "normal_map",
 			.descriptor =
-			DescriptorInfo::CombinedTextureSample{
+			yar_descriptor_info::yar_combined_texture_sample{
 				load_white_texture(),
 				"samplerState",
 			}
@@ -1055,29 +1055,29 @@ auto main() -> int {
 	update_set_desc.infos = std::move(infos);
 	update_descriptor_set(&update_set_desc, texture_set);
 
-	mdl.setup_descriptor_set(shader, kUpdateFreqNone, sampler);
+	mdl.setup_descriptor_set(shader, yar_update_freq_none, sampler);
 
-	PipelineDesc pipeline_desc{};
+	yar_pipeline_desc pipeline_desc{};
 	pipeline_desc.shader = *shader;
 	pipeline_desc.vertex_layout = layout;
 	pipeline_desc.depth_stencil_state = depth_stencil;
 
-	Pipeline* graphics_pipeline;
+	yar_pipeline* graphics_pipeline;
 	add_pipeline(&pipeline_desc, &graphics_pipeline);
 
-	CmdQueueDesc queue_desc;
-	CmdQueue* queue;
+	yar_cmd_queue_desc queue_desc;
+	yar_cmd_queue* queue;
 	add_queue(&queue_desc, &queue);
 
-	PushConstantDesc pc_desc{};
+	yar_push_constant_desc pc_desc{};
 	pc_desc.name = "push_constant";
 	pc_desc.shader = shader;
 	pc_desc.size = sizeof(uint32_t) * 4;
-	CmdBufferDesc cmd_desc;
+	yar_cmd_buffer_desc cmd_desc;
 	cmd_desc.current_queue = queue;
 	cmd_desc.use_push_constant = true;
 	cmd_desc.pc_desc = &pc_desc;
-	CmdBuffer* cmd;
+	yar_cmd_buffer* cmd;
 	add_cmd(&cmd_desc, &cmd);
 
 	glm::mat4 model{};
@@ -1128,7 +1128,7 @@ auto main() -> int {
 		model = glm::scale(model, glm::vec3(0.01f, 0.01f, 0.01f));
 		ubo.model[10] = model;
 
-		BufferUpdateDesc update;
+		yar_buffer_update_desc update;
 		update.buffer = ubo_buf[frame_index];
 		update.size = sizeof(ubo);
 		resource_update_desc = &update;

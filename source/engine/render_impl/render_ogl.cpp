@@ -32,15 +32,15 @@ static GLuint current_vao = 0u;
 
 // TODO: Need to make something to check that current staging buffer
 // doesn't use right now and can be used to map and update resource
-static Buffer* staging_buffer = nullptr;
-static Buffer* pixel_buffer   = nullptr;
+static yar_buffer* staging_buffer = nullptr;
+static yar_buffer* pixel_buffer   = nullptr;
 
 // ======================================= //
 //            OpenGL Structs               //
 // ======================================= //
 struct yar_gl_texture
 {
-    Texture common;
+    yar_texture common;
     uint32_t id;
     uint32_t internal_format;
     uint32_t gl_format;
@@ -60,7 +60,7 @@ void APIENTRY util_debug_message_callback(GLenum source, GLenum type,
     {
     case GL_DEBUG_SOURCE_API:             sourceStr = "API"; break;
     case GL_DEBUG_SOURCE_WINDOW_SYSTEM:   sourceStr = "Window System"; break;
-    case GL_DEBUG_SOURCE_SHADER_COMPILER: sourceStr = "Shader Compiler"; break;
+    case GL_DEBUG_SOURCE_SHADER_COMPILER: sourceStr = "yar_shader Compiler"; break;
     case GL_DEBUG_SOURCE_THIRD_PARTY:     sourceStr = "Third Party"; break;
     case GL_DEBUG_SOURCE_APPLICATION:     sourceStr = "Application"; break;
     case GL_DEBUG_SOURCE_OTHER:           sourceStr = "Other"; break;
@@ -102,39 +102,39 @@ void APIENTRY util_debug_message_callback(GLenum source, GLenum type,
     std::cout << log.str() << std::endl;
 }
 
-static GLenum util_shader_stage_to_gl_stage(ShaderStage stage)
+static GLenum util_shader_stage_to_gl_stage(yar_shader_stage stage)
 {
     switch (stage)
     {
-    case kShaderStageVert:
+    case yar_shader_stage_vert:
         return GL_VERTEX_SHADER;
-    case kShaderStageFrag:
+    case yar_shader_stage_frag:
         return GL_FRAGMENT_SHADER;
-    case kShaderStageGeom:
+    case yar_shader_stage_geom:
         return GL_GEOMETRY_SHADER;
-    case kShaderStageComp:
+    case yar_shader_stage_comp:
         return GL_COMPUTE_SHADER;
-    case kShaderStageNone:
-    case kShaderStageMax:
+    case yar_shader_stage_none:
+    case yar_shader_stage_max:
     default:
         // error
         return ~0u;
     }
 }
 
-static std::wstring util_stage_to_target_profile(ShaderStage stage)
+static std::wstring util_stage_to_target_profile(yar_shader_stage stage)
 {
     switch (stage)
     {
-    case kShaderStageVert:
+    case yar_shader_stage_vert:
         return L"vs_6_0";
-    case kShaderStageFrag:
+    case yar_shader_stage_frag:
         return L"ps_6_0";
-    case kShaderStageGeom:
-    case kShaderStageComp:
-    case kShaderStageTese:
-    case kShaderStageNone:
-    case kShaderStageMax:
+    case yar_shader_stage_geom:
+    case yar_shader_stage_comp:
+    case yar_shader_stage_tese:
+    case yar_shader_stage_none:
+    case yar_shader_stage_max:
     default:
         return {};
     }
@@ -148,7 +148,7 @@ struct SpirvHeader {
     uint32_t instructionOffset;
 };
 
-static bool util_load_spirv(ShaderStageLoadDesc* load_desc, std::vector<uint8_t>& spirv) 
+static bool util_load_spirv(yar_shader_stage_load_desc* load_desc, std::vector<uint8_t>& spirv) 
 {
     // Probably can escape it and store bytecode just in header files
     std::filesystem::path path = load_desc->file_name + ".spv";
@@ -175,25 +175,25 @@ static bool util_load_spirv(ShaderStageLoadDesc* load_desc, std::vector<uint8_t>
     return true;
 }
 
-static void util_load_shader_binary(ShaderStage stage, ShaderStageLoadDesc* load_desc, ShaderDesc* shader_desc)
+static void util_load_shader_binary(yar_shader_stage stage, yar_shader_stage_load_desc* load_desc, yar_shader_desc* shader_desc)
 {
-    ShaderStageDesc* stage_desc = nullptr;
+    yar_shader_stage_desc* stage_desc = nullptr;
     switch (stage)
     {
-    case kShaderStageVert:
+    case yar_shader_stage_vert:
         stage_desc = &shader_desc->vert;
         break;
-    case kShaderStageFrag:
+    case yar_shader_stage_frag:
         stage_desc = &shader_desc->frag;
         break;
-    case kShaderStageGeom:
+    case yar_shader_stage_geom:
         stage_desc = &shader_desc->geom;
         break;
-    case kShaderStageComp:
+    case yar_shader_stage_comp:
         stage_desc = &shader_desc->comp;
         break;
-    case kShaderStageNone:
-    case kShaderStageMax:
+    case yar_shader_stage_none:
+    case yar_shader_stage_max:
     default:
         // error
         break;
@@ -210,78 +210,78 @@ static void util_load_shader_binary(ShaderStage stage, ShaderStageLoadDesc* load
     stage_desc->entry_point = load_desc->entry_point;
 }
 
-static GLbitfield util_buffer_flags_to_gl_storage_flag(BufferFlag flags)
+static GLbitfield util_buffer_flags_to_gl_storage_flag(yar_buffer_flag flags)
 {
-    bool is_map_flag = flags & kBufferFlagMapRead
-        || flags & kBufferFlagMapWrite
-        || flags & kBufferFlagMapReadWrite;
-    if (flags & kBufferFlagMapPersistent && !is_map_flag)
+    bool is_map_flag = flags & yar_buffer_flag_map_read
+        || flags & yar_buffer_flag_map_write
+        || flags & yar_buffer_flag_map_read_write;
+    if (flags & yar_buffer_flag_map_persistent && !is_map_flag)
         // TODO: add assert
         return GL_NONE;
 
     GLbitfield gl_flags = GL_NONE; 
 
     // Using GL_NONE as a flag in OpenGL creates GPU only buffer
-    if (flags & kBufferFlagGPUOnly)       gl_flags = GL_NONE;
+    if (flags & yar_buffer_flag_gpu_only)       gl_flags = GL_NONE;
 
     // Allows to update buffer with glNamedBufferSubData
-    if (flags & kBufferFlagDynamic)       gl_flags |= GL_DYNAMIC_STORAGE_BIT;
+    if (flags & yar_buffer_flag_dynamic)       gl_flags |= GL_DYNAMIC_STORAGE_BIT;
 
     // Allow to map for read and/or write
-    if (flags & kBufferFlagMapRead)       gl_flags |= GL_MAP_READ_BIT;
-    if (flags & kBufferFlagMapWrite)      gl_flags |= GL_MAP_WRITE_BIT;
-    if (flags & kBufferFlagMapReadWrite)  gl_flags |= (GL_MAP_WRITE_BIT | GL_MAP_READ_BIT);
+    if (flags & yar_buffer_flag_map_read)       gl_flags |= GL_MAP_READ_BIT;
+    if (flags & yar_buffer_flag_map_write)      gl_flags |= GL_MAP_WRITE_BIT;
+    if (flags & yar_buffer_flag_map_read_write)  gl_flags |= (GL_MAP_WRITE_BIT | GL_MAP_READ_BIT);
 
     // Allows buffer to be mapped almost infinitely but 
     // all synchronization have to be perfomed by user
-    if (flags & kBufferFlagMapPersistent) gl_flags |= GL_MAP_PERSISTENT_BIT;
+    if (flags & yar_buffer_flag_map_persistent) gl_flags |= GL_MAP_PERSISTENT_BIT;
 
     // Allows perfom read and write to Persistent buffer
     // without thinking about synchronization
     // But still need to use Fence 
-    if (flags & kBufferFlagMapCoherent)   gl_flags |= GL_MAP_COHERENT_BIT;
+    if (flags & yar_buffer_flag_map_coherent)   gl_flags |= GL_MAP_COHERENT_BIT;
 
     // It is CPU only buffer that can be used as a Staging buffer
     // and it is possible to copy from it to GPU only buffer
     // through glCopyBufferSubData 
-    if (flags & kBufferFlagClientStorage) gl_flags |= GL_CLIENT_STORAGE_BIT;
+    if (flags & yar_buffer_flag_client_storage) gl_flags |= GL_CLIENT_STORAGE_BIT;
 
     return gl_flags;
 }
 
-static GLenum util_buffer_flags_to_map_access(BufferFlag flags)
+static GLenum util_buffer_flags_to_map_access(yar_buffer_flag flags)
 {
-    if (flags & kBufferFlagMapRead)
+    if (flags & yar_buffer_flag_map_read)
         return GL_READ_ONLY;
-    if (flags & kBufferFlagMapWrite)
+    if (flags & yar_buffer_flag_map_write)
         return GL_WRITE_ONLY;
-    if (flags & kBufferFlagMapReadWrite)
+    if (flags & yar_buffer_flag_map_read_write)
         return GL_READ_WRITE;
 
     // TODO: add assert
     return GL_NONE;
 }
 
-static ResourceType util_convert_spv_resource_type(SpvReflectResourceType type)
+static yar_resource_type util_convert_spv_resource_type(SpvReflectResourceType type)
 {
     switch (type)
     {
     case SPV_REFLECT_RESOURCE_FLAG_UNDEFINED:
-        return kResourceTypeUndefined;
+        return yar_resource_type_undefined;
     case SPV_REFLECT_RESOURCE_FLAG_SAMPLER:
-        return kResourceTypeSampler;
+        return yar_resource_type_sampler;
     case SPV_REFLECT_RESOURCE_FLAG_CBV:
-        return kResourceTypeCBV;
+        return yar_resource_type_cbv;
     case SPV_REFLECT_RESOURCE_FLAG_SRV:
-        return kResourceTypeSRV;
+        return yar_resource_type_srv;
     case SPV_REFLECT_RESOURCE_FLAG_UAV:
-        return kResourceTypeUAV;
+        return yar_resource_type_uav;
     default:
-        return kResourceTypeUndefined;
+        return yar_resource_type_undefined;
     }
 }
 
-static void util_create_shader_reflection(std::vector<uint8_t>& spirv, std::vector<ShaderResource>& resources)
+static void util_create_shader_reflection(std::vector<uint8_t>& spirv, std::vector<yar_shader_resource>& resources)
 {
     // In case I use spirv_cross to convert sprir-v to glsl
     // maybe there is no needs in spirv_reflect and it is possible to get reflection from spirv cross
@@ -297,7 +297,7 @@ static void util_create_shader_reflection(std::vector<uint8_t>& spirv, std::vect
 
     for (auto& descriptor : descriptors)
     {
-        ShaderResource resource;
+        yar_shader_resource resource;
         resource.name = descriptor->name;
         resource.binding = descriptor->binding;
         resource.set = descriptor->set;
@@ -308,115 +308,115 @@ static void util_create_shader_reflection(std::vector<uint8_t>& spirv, std::vect
     spvReflectDestroyShaderModule(&module);
 }
 
-static GLenum util_get_gl_internal_format(TextureFormat format)
+static GLenum util_get_gl_internal_format(yar_texture_format format)
 {
     switch (format)
     {
-    case kTextureFormatR8:
+    case yar_texture_format_r8:
         return GL_R8;
-    case kTextureFormatRGB8:
+    case yar_texture_format_rgb8:
         return GL_RGB8;
-    case kTextureFormatRGBA8:
+    case yar_texture_format_rgba8:
         return GL_RGBA8;
-    case kTextureFormatRGB16F:
+    case yar_texture_format_rgb16f:
         return GL_RGB16F;
-    case kTextureFormatRGBA16F:
+    case yar_texture_format_rgba16f:
         return GL_RGBA16F;
-    case kTextureFormatRGBA32F:
+    case yar_texture_format_rgba32f:
         return GL_RGBA32F;
-    case kTextureFormatDepth16:
+    case yar_texture_format_depth16:
         return GL_DEPTH_COMPONENT16;
-    case kTextureFormatDepth24:
+    case yar_texture_format_depth24:
         return GL_DEPTH_COMPONENT24;
-    case kTextureFormatDepth32F:
+    case yar_texture_format_depth32f:
         return GL_DEPTH_COMPONENT32F;
-    case kTextureFormatDepth24Stencil8:
+    case yar_texture_format_depth24_stencil8:
         return GL_DEPTH24_STENCIL8;
     default:
         return GL_NONE; // Неизвестный формат
     }
 }
 
-static GLenum util_get_gl_format(TextureFormat format)
+static GLenum util_get_gl_format(yar_texture_format format)
 {
     switch (format)
     {
-    case kTextureFormatR8:
+    case yar_texture_format_r8:
         return GL_RED;
-    case kTextureFormatRGB8:
-    case kTextureFormatRGB16F:
+    case yar_texture_format_rgb8:
+    case yar_texture_format_rgb16f:
         return GL_RGB;
-    case kTextureFormatRGBA8:
-    case kTextureFormatRGBA16F:
-    case kTextureFormatRGBA32F:
+    case yar_texture_format_rgba8:
+    case yar_texture_format_rgba16f:
+    case yar_texture_format_rgba32f:
         return GL_RGBA;
-    case kTextureFormatDepth16:
-    case kTextureFormatDepth24:
-    case kTextureFormatDepth32F:
+    case yar_texture_format_depth16:
+    case yar_texture_format_depth24:
+    case yar_texture_format_depth32f:
         return GL_DEPTH_COMPONENT;
-    case kTextureFormatDepth24Stencil8:
+    case yar_texture_format_depth24_stencil8:
         return GL_DEPTH_STENCIL;
     default:
         return GL_NONE;
     }
 }
 
-static GLenum util_get_gl_tetxure_data_type(TextureFormat format)
+static GLenum util_get_gl_tetxure_data_type(yar_texture_format format)
 {
     switch (format)
     {
-    case kTextureFormatR8:
-    case kTextureFormatRGB8:
-    case kTextureFormatRGBA8:
+    case yar_texture_format_r8:
+    case yar_texture_format_rgb8:
+    case yar_texture_format_rgba8:
         return GL_UNSIGNED_BYTE;
-    case kTextureFormatRGB16F:
-    case kTextureFormatRGBA16F:
+    case yar_texture_format_rgb16f:
+    case yar_texture_format_rgba16f:
         return GL_HALF_FLOAT;
-    case kTextureFormatRGBA32F:
+    case yar_texture_format_rgba32f:
         return GL_FLOAT;
-    case kTextureFormatDepth16:
+    case yar_texture_format_depth16:
         return GL_UNSIGNED_SHORT;
-    case kTextureFormatDepth24:
+    case yar_texture_format_depth24:
         return GL_UNSIGNED_INT;
-    case kTextureFormatDepth32F:
+    case yar_texture_format_depth32f:
         return GL_FLOAT;
-    case kTextureFormatDepth24Stencil8:
+    case yar_texture_format_depth24_stencil8:
         return GL_UNSIGNED_INT_24_8;
     default:
         return GL_NONE;
     }
 }
 
-static GLenum util_get_gl_texture_target(TextureType type)
+static GLenum util_get_gl_texture_target(yar_texture_type type)
 {
     switch (type)
     {
-    case kTextureType1D:
+    case yar_texture_type_1d:
         return GL_TEXTURE_1D;
-    case kTextureType2D:
+    case yar_texture_type_2d:
         return GL_TEXTURE_2D;
-    case kTextureType3D:
+    case yar_texture_type_3d:
         return GL_TEXTURE_3D;
-    case kTextureType1DArray:
+    case yar_texture_type_1d_array:
         return GL_TEXTURE_1D_ARRAY;
-    case kTextureType2DArray:
+    case yar_texture_type_2d_array:
         return GL_TEXTURE_2D_ARRAY;
-    case kTextureTypeCubeMap:
+    case yar_texture_type_cube_map:
         return GL_TEXTURE_CUBE_MAP;
     default:
-        return GL_NONE; // Неизвестный тип
+        return GL_NONE; // unknown type
     }
 }
 
-static GLint util_get_gl_min_filter(FilterType min, FilterType mipmap)
+static GLint util_get_gl_min_filter(yar_filter_type min, yar_filter_type mipmap)
 {
-    if (mipmap == kFilterTypeNone)
+    if (mipmap == yar_filter_type_none)
     {
-        return (min == kFilterTypeNearest) ? GL_NEAREST : GL_LINEAR;
+        return (min == yar_filter_type_nearest) ? GL_NEAREST : GL_LINEAR;
     }
 
-    bool isNearestMipmap = (mipmap == kFilterTypeNearest);
-    if (min == kFilterTypeNearest)
+    bool isNearestMipmap = (mipmap == yar_filter_type_nearest);
+    if (min == yar_filter_type_nearest)
     {
         return isNearestMipmap ? GL_NEAREST_MIPMAP_NEAREST : GL_NEAREST_MIPMAP_LINEAR;
     }
@@ -426,48 +426,48 @@ static GLint util_get_gl_min_filter(FilterType min, FilterType mipmap)
     }
 }
 
-static GLint util_get_gl_wrap_mode(WrapMode mode)
+static GLint util_get_gl_wrap_mode(yar_wrap_mode mode)
 {
     switch (mode)
     {
-    case kWrapModeMirrored: return GL_MIRRORED_REPEAT;
-    case kWrapModeRepeat: return GL_REPEAT;
-    case kWrapModeClampToEdge: return GL_CLAMP_TO_EDGE;
-    case KWrapModeClampToBorder: return GL_CLAMP_TO_BORDER;
+    case yar_wrap_mode_mirrored: return GL_MIRRORED_REPEAT;
+    case yar_wrap_mode_repeat: return GL_REPEAT;
+    case yar_wrap_mode_clamp_edge: return GL_CLAMP_TO_EDGE;
+    case yar_wrap_mode_clamp_border: return GL_CLAMP_TO_BORDER;
     default: return GL_REPEAT;
     }
 }
 
-static GLenum util_get_gl_attrib_format(VertexAttribFormat format)
+static GLenum util_get_gl_attrib_format(yar_vertex_attrib_format format)
 {
     switch (format)
     {
-    case kAttribFormatFloat:
+    case yar_attrib_format_float:
         return GL_FLOAT;
     default:
         return GL_FLOAT;
     }
 }
 
-static GLenum util_get_gl_depth_stencil_func(DepthStencilFunc func)
+static GLenum util_get_gl_depth_stencil_func(yar_depth_stencil_func func)
 {
     switch (func)
     {
-    case kDepthStencilFuncAlways:
+    case yar_depth_stencil_func_always:
         return GL_ALWAYS;
-    case kDepthStencilFuncNever:
+    case yar_depth_stencil_func_never:
         return GL_NEVER;
-    case kDepthStencilFuncLess:
+    case yar_depth_stencil_func_less:
         return GL_LESS;
-    case kDepthStencilFuncEqual:
+    case yar_depth_stencil_func_equal:
         return GL_EQUAL;
-    case kDepthStencilFuncLessEqual:
+    case yar_depth_stencil_func_less_equal:
         return GL_LEQUAL;
-    case kDepthStencilFuncGreater:
+    case yar_depth_stencil_func_greater:
         return GL_GREATER;
-    case kDepthStencilFuncNotEqual:
+    case yar_depth_stencil_func_not_equal:
         return GL_NOTEQUAL;
-    case kDepthStencilFuncGreatEqual:
+    case yar_depth_stencil_func_great_equal:
         return GL_GEQUAL;
     }
 }
@@ -520,18 +520,18 @@ static GLenum util_get_gl_blend_equation(yar_blend_op op)
 //            Load Functions               //
 // ======================================= //
 
-void gl_loadShader(ShaderLoadDesc* desc, ShaderDesc** out_shader_desc)
+void gl_loadShader(yar_shader_load_desc* desc, yar_shader_desc** out_shader_desc)
 {
-    ShaderDesc* shader_desc = (ShaderDesc*)std::malloc(sizeof(ShaderDesc));
+    yar_shader_desc* shader_desc = (yar_shader_desc*)std::malloc(sizeof(yar_shader_desc));
     if (shader_desc == nullptr)
         return;
     
-    shader_desc->stages = kShaderStageNone;
-    for (size_t i = 0; i < kShaderStageMax; ++i)
+    shader_desc->stages = yar_shader_stage_none;
+    for (size_t i = 0; i < yar_shader_stage_max; ++i)
     {
         if (!desc->stages[i].file_name.empty())
         {
-            ShaderStage stage = desc->stages[i].stage;
+            yar_shader_stage stage = desc->stages[i].stage;
             util_load_shader_binary(stage, &desc->stages[i], shader_desc); 
             shader_desc->stages |= stage;
         }
@@ -540,9 +540,9 @@ void gl_loadShader(ShaderLoadDesc* desc, ShaderDesc** out_shader_desc)
     *out_shader_desc = shader_desc;
 }
 
-void gl_beginUpdateBuffer(BufferUpdateDesc* desc)
+void gl_beginUpdateBuffer(yar_buffer_update_desc* desc)
 {
-    if (desc->buffer->flags & kBufferFlagGPUOnly)
+    if (desc->buffer->flags & yar_buffer_flag_gpu_only)
     {
         // maybe it is better to remove buffer later
         // or have more than one staging buffer and remove it only
@@ -553,9 +553,9 @@ void gl_beginUpdateBuffer(BufferUpdateDesc* desc)
         // This is GPU only buffer that has to be updated 
         // throug the Staging CPU only buffer and
         // glCopyBufferSubData function call 
-        BufferDesc staging_buffer_desc;
-        staging_buffer_desc.flags = kBufferFlagClientStorage | kBufferFlagMapWrite;
-        staging_buffer_desc.usage = kBufferUsageTransferSrc;
+        yar_buffer_desc staging_buffer_desc;
+        staging_buffer_desc.flags = yar_buffer_flag_client_storage | yar_buffer_flag_map_write;
+        staging_buffer_desc.usage = yar_buffer_usage_transfer_src;
         staging_buffer_desc.size = desc->size;
         add_buffer(&staging_buffer_desc, &staging_buffer);
         desc->mapped_data = map_buffer(staging_buffer);
@@ -567,9 +567,9 @@ void gl_beginUpdateBuffer(BufferUpdateDesc* desc)
     }
 }
 
-void gl_endUpdateBuffer(BufferUpdateDesc* desc)
+void gl_endUpdateBuffer(yar_buffer_update_desc* desc)
 {
-    if (desc->buffer->flags & kBufferFlagGPUOnly)
+    if (desc->buffer->flags & yar_buffer_flag_gpu_only)
     {
         unmap_buffer(staging_buffer);
         uint32_t read_buffer = staging_buffer->id;
@@ -592,20 +592,20 @@ void gl_endUpdateBuffer(BufferUpdateDesc* desc)
     desc->mapped_data = nullptr;
 }
 
-void gl_beginUpdateTexture(TextureUpdateDesc* desc)
+void gl_beginUpdateTexture(yar_texture_update_desc* desc)
 {
     if (pixel_buffer != nullptr)
         remove_buffer(pixel_buffer);
 
-    BufferDesc pbo_desc;
-    pbo_desc.flags = kBufferFlagMapWrite | kBufferFlagDynamic;
-    pbo_desc.usage = kBufferUsageTransferSrc;
+    yar_buffer_desc pbo_desc;
+    pbo_desc.flags = yar_buffer_flag_map_write | yar_buffer_flag_dynamic;
+    pbo_desc.usage = yar_buffer_usage_transfer_src;
     pbo_desc.size = desc->size;
     add_buffer(&pbo_desc, &pixel_buffer);
     desc->mapped_data = map_buffer(pixel_buffer);
 }
 
-void gl_endUpdateTexture(TextureUpdateDesc* desc)
+void gl_endUpdateTexture(yar_texture_update_desc* desc)
 {
     unmap_buffer(pixel_buffer);
     
@@ -622,16 +622,16 @@ void gl_endUpdateTexture(TextureUpdateDesc* desc)
     glBindBuffer(GL_PIXEL_UNPACK_BUFFER, 0); 
 }
 
-void gl_beginUpdateResource(ResourceUpdateDesc& desc)
+void gl_beginUpdateResource(yar_resource_update_desc& desc)
 {
     std::visit([](auto* resource) {
         using T = std::decay_t<decltype(*resource)>;
 
-        if constexpr (std::is_same_v<T, TextureUpdateDesc>) 
+        if constexpr (std::is_same_v<T, yar_texture_update_desc>) 
         {
             gl_beginUpdateTexture(resource);
         }
-        else if constexpr (std::is_same_v<T, BufferUpdateDesc>) 
+        else if constexpr (std::is_same_v<T, yar_buffer_update_desc>) 
         {
             gl_beginUpdateBuffer(resource);
         }
@@ -643,16 +643,16 @@ void gl_beginUpdateResource(ResourceUpdateDesc& desc)
     ); 
 }
 
-void gl_endUpdateResource(ResourceUpdateDesc& desc)
+void gl_endUpdateResource(yar_resource_update_desc& desc)
 {
     std::visit([](auto* resource) {
         using T = std::decay_t<decltype(*resource)>;
 
-        if constexpr (std::is_same_v<T, TextureUpdateDesc>)
+        if constexpr (std::is_same_v<T, yar_texture_update_desc>)
         {
             gl_endUpdateTexture(resource);
         }
-        else if constexpr (std::is_same_v<T, BufferUpdateDesc>)
+        else if constexpr (std::is_same_v<T, yar_buffer_update_desc>)
         {
             gl_endUpdateBuffer(resource);
         }
@@ -669,9 +669,9 @@ void gl_endUpdateResource(ResourceUpdateDesc& desc)
 //            Render Functions             //
 // ======================================= //
 
-void gl_addSwapChain(bool vsync, SwapChain** swapchain)
+void gl_addSwapChain(bool vsync, yar_swapchain** swapchain)
 {
-    SwapChain* new_swapchain = (SwapChain*)std::malloc(sizeof(SwapChain)); 
+    yar_swapchain* new_swapchain = (yar_swapchain*)std::malloc(sizeof(yar_swapchain)); 
     if (new_swapchain == nullptr) 
         // Log error maybe add assert or something
         return;
@@ -683,9 +683,9 @@ void gl_addSwapChain(bool vsync, SwapChain** swapchain)
     *swapchain = new_swapchain;
 }
 
-void gl_addBuffer(BufferDesc* desc, Buffer** buffer)
+void gl_addBuffer(yar_buffer_desc* desc, yar_buffer** buffer)
 {
-    Buffer* new_buffer = (Buffer*)std::malloc(sizeof(Buffer));
+    yar_buffer* new_buffer = (yar_buffer*)std::malloc(sizeof(yar_buffer));
     if (new_buffer == nullptr)
         // Log error
         return;
@@ -699,7 +699,7 @@ void gl_addBuffer(BufferDesc* desc, Buffer** buffer)
     *buffer = new_buffer;
 }
 
-void gl_addTexture(TextureDesc* desc, Texture** texture)
+void gl_addTexture(yar_texture_desc* desc, yar_texture** texture)
 {
     yar_gl_texture* new_texture = static_cast<yar_gl_texture*>(
         std::calloc(1, sizeof(yar_gl_texture))
@@ -719,20 +719,20 @@ void gl_addTexture(TextureDesc* desc, Texture** texture)
 
     switch (desc->type)
     {
-    case kTextureType1D:
+    case yar_texture_type_1d:
         glTextureStorage1D(id, mip_levels, gl_internal_format, 
             width);
         break;
-    case kTextureType2D:
-    case kTextureTypeCubeMap:
+    case yar_texture_type_2d:
+    case yar_texture_type_cube_map:
         glTextureStorage2D(id, mip_levels, gl_internal_format, 
             width, height);
         break;
-    case kTextureType3D:
+    case yar_texture_type_3d:
         glTextureStorage3D(id, mip_levels, gl_internal_format,
             width, height, depth);
-    case kTextureType1DArray:
-    case kTextureType2DArray:
+    case yar_texture_type_1d_array:
+    case yar_texture_type_2d_array:
         glTextureStorage3D(id, mip_levels, gl_internal_format, 
             width, height, array_size);
         break;
@@ -752,9 +752,9 @@ void gl_addTexture(TextureDesc* desc, Texture** texture)
     new_texture->common.mip_levels = mip_levels;
 }
 
-void gl_addSampler(SamplerDesc* desc, Sampler** sampler)
+void gl_addSampler(yar_sampler_desc* desc, yar_sampler** sampler)
 {
-    Sampler* new_sampler = (Sampler*)std::malloc(sizeof(Sampler));
+    yar_sampler* new_sampler = (yar_sampler*)std::malloc(sizeof(yar_sampler));
     if (new_sampler == nullptr)
         return;
 
@@ -762,7 +762,7 @@ void gl_addSampler(SamplerDesc* desc, Sampler** sampler)
     glCreateSamplers(1, &id);
     
     GLint min_filter = util_get_gl_min_filter(desc->min_filter, desc->mip_map_filter);
-    GLint mag_filter = (desc->mag_filter == kFilterTypeNearest) ? GL_NEAREST : GL_LINEAR;
+    GLint mag_filter = (desc->mag_filter == yar_filter_type_nearest) ? GL_NEAREST : GL_LINEAR;
     glSamplerParameteri(id, GL_TEXTURE_MIN_FILTER, min_filter);
     glSamplerParameteri(id, GL_TEXTURE_MAG_FILTER, mag_filter);
 
@@ -775,40 +775,40 @@ void gl_addSampler(SamplerDesc* desc, Sampler** sampler)
     *sampler = new_sampler;
 }
 
-void gl_addShader(ShaderDesc* desc, Shader** out_shader)
+void gl_addShader(yar_shader_desc* desc, yar_shader** out_shader)
 {
-    Shader* shader = (Shader*)std::malloc(sizeof(Shader));
+    yar_shader* shader = (yar_shader*)std::malloc(sizeof(yar_shader));
     if (shader == nullptr)
         return;
     
     shader->program = glCreateProgram();
     shader->stages = desc->stages;
-    new (&shader->resources) std::vector<ShaderResource>();
+    new (&shader->resources) std::vector<yar_shader_resource>();
 
-    for (size_t i = 0; i < kShaderStageMax; ++i)
+    for (size_t i = 0; i < yar_shader_stage_max; ++i)
     {
-        ShaderStage stage_mask = (ShaderStage)(1 << i);
-        ShaderStageDesc* stage = nullptr;
+        yar_shader_stage stage_mask = (yar_shader_stage)(1 << i);
+        yar_shader_stage_desc* stage = nullptr;
 
         if (stage_mask != (shader->stages & stage_mask))
             continue;
 
         switch (stage_mask)
         {
-        case kShaderStageVert:
+        case yar_shader_stage_vert:
             stage = &desc->vert;
             break;
-        case kShaderStageFrag:
+        case yar_shader_stage_frag:
             stage = &desc->frag;
             break;
-        case kShaderStageGeom:
+        case yar_shader_stage_geom:
             stage = &desc->geom;
             break;
-        case kShaderStageComp:
+        case yar_shader_stage_comp:
             stage = &desc->comp;
             break;
-        case kShaderStageNone:
-        case kShaderStageMax:
+        case yar_shader_stage_none:
+        case yar_shader_stage_max:
         default:
             // error
             break;
@@ -854,7 +854,7 @@ void gl_addShader(ShaderDesc* desc, Shader** out_shader)
                 std::string_view texture_name(separate_image->name);
                 const auto& resources = shader->resources;
                 const auto& resource = std::find_if(resources.begin(), resources.end(),
-                    [&](const ShaderResource& res)
+                    [&](const yar_shader_resource& res)
                     {
                         return res.name == texture_name;
                     }
@@ -894,7 +894,7 @@ void gl_addShader(ShaderDesc* desc, Shader** out_shader)
             glGetShaderiv(gl_shader, GL_INFO_LOG_LENGTH, &logLength);
             std::string log(logLength, ' ');
             glGetShaderInfoLog(gl_shader, logLength, &logLength, &log[0]);
-            std::cerr << "Shader compilation error: " << log << std::endl;
+            std::cerr << "yar_shader compilation error: " << log << std::endl;
             glDeleteShader(gl_shader);
         }
 
@@ -914,15 +914,15 @@ void gl_addShader(ShaderDesc* desc, Shader** out_shader)
         std::vector<char> errorLog(logLength);
         glGetProgramInfoLog(shader->program, logLength, &logLength, &errorLog[0]);
 
-        std::cerr << "Shader linking failed: " << &errorLog[0] << std::endl;
+        std::cerr << "yar_shader linking failed: " << &errorLog[0] << std::endl;
     }
 #endif
     *out_shader = shader;
 }
 
-void gl_addDescriptorSet(DescriptorSetDesc* desc, DescriptorSet** set)
+void gl_addDescriptorSet(yar_descriptor_set_desc* desc, yar_descriptor_set** set)
 {
-    DescriptorSet* new_set = (DescriptorSet*)std::malloc(sizeof(DescriptorSet));
+    yar_descriptor_set* new_set = (yar_descriptor_set*)std::malloc(sizeof(yar_descriptor_set));
     if (new_set == nullptr)
         return;
 
@@ -930,21 +930,21 @@ void gl_addDescriptorSet(DescriptorSetDesc* desc, DescriptorSet** set)
     new_set->max_set = desc->max_sets;
     new_set->program = desc->shader->program;
 
-    std::vector<ShaderResource> tmp;
+    std::vector<yar_shader_resource> tmp;
     std::copy_if(desc->shader->resources.begin(), desc->shader->resources.end(),
         std::back_inserter(tmp),
-        [=](ShaderResource& resource) {
+        [=](yar_shader_resource& resource) {
             return resource.set == new_set->update_freq;
         });
-    new (&new_set->descriptors) std::set<ShaderResource>(tmp.begin(), tmp.end());
-    new (&new_set->infos) std::vector<std::vector<DescriptorInfo>>(new_set->max_set);
+    new (&new_set->descriptors) std::set<yar_shader_resource>(tmp.begin(), tmp.end());
+    new (&new_set->infos) std::vector<std::vector<yar_descriptor_info>>(new_set->max_set);
 
     *set = new_set;
 }
 
-void gl_addPipeline(const PipelineDesc* desc, Pipeline** pipeline)
+void gl_addPipeline(const yar_pipeline_desc* desc, yar_pipeline** pipeline)
 {
-    Pipeline* new_pipeline = (Pipeline*)std::malloc(sizeof(Pipeline));
+    yar_pipeline* new_pipeline = (yar_pipeline*)std::malloc(sizeof(yar_pipeline));
     if (new_pipeline == nullptr)
         return;
 
@@ -994,22 +994,22 @@ void gl_addPipeline(const PipelineDesc* desc, Pipeline** pipeline)
     *pipeline = new_pipeline;
 }
 
-void gl_addQueue([[maybe_unused]] CmdQueueDesc* desc, CmdQueue** queue)
+void gl_addQueue([[maybe_unused]] yar_cmd_queue_desc* desc, yar_cmd_queue** queue)
 {
-    CmdQueue* new_queue = (CmdQueue*)std::malloc(sizeof(CmdQueue));
+    yar_cmd_queue* new_queue = (yar_cmd_queue*)std::malloc(sizeof(yar_cmd_queue));
     if (new_queue == nullptr)
         return;
 
-    new (&new_queue->queue) std::vector<CmdBuffer*>();
+    new (&new_queue->queue) std::vector<yar_cmd_buffer*>();
     new_queue->queue.reserve(8); // just random 
     *queue = new_queue;
 }
 
-void gl_addCmd(CmdBufferDesc* desc, CmdBuffer** cmd)
+void gl_addCmd(yar_cmd_buffer_desc* desc, yar_cmd_buffer** cmd)
 {
     using Command = std::function<void()>;
 
-    CmdBuffer* new_cmd = (CmdBuffer*)std::malloc(sizeof(CmdBuffer));
+    yar_cmd_buffer* new_cmd = (yar_cmd_buffer*)std::malloc(sizeof(yar_cmd_buffer));
     if (new_cmd == nullptr)
         return;
 
@@ -1018,21 +1018,21 @@ void gl_addCmd(CmdBufferDesc* desc, CmdBuffer** cmd)
 
     if (desc->use_push_constant)
     {
-        PushConstant* new_pc = 
-            (PushConstant*)std::malloc(sizeof(PushConstant));
+        yar_push_constant* new_pc = 
+            (yar_push_constant*)std::malloc(sizeof(yar_push_constant));
         if (new_pc == nullptr)
             return;
             
-        BufferDesc pc_desc{};
+        yar_buffer_desc pc_desc{};
         pc_desc.size = desc->pc_desc->size;
-        pc_desc.flags = kBufferFlagDynamic;
+        pc_desc.flags = yar_buffer_flag_dynamic;
         add_buffer(&pc_desc, &new_pc->buffer);
 
         const auto& descriptors = desc->pc_desc->shader->resources;
         std::string_view name(desc->pc_desc->name);
         auto pc_reflection = std::find_if(
             descriptors.begin(), descriptors.end(),
-            [&](const ShaderResource& res) {return res.name == name; }
+            [&](const yar_shader_resource& res) {return res.name == name; }
         );
 
         if (pc_reflection != descriptors.end())
@@ -1049,7 +1049,7 @@ void gl_addCmd(CmdBufferDesc* desc, CmdBuffer** cmd)
     *cmd = new_cmd;
 }
 
-void gl_removeBuffer(Buffer* buffer)
+void gl_removeBuffer(yar_buffer* buffer)
 {
     if (buffer)
     {
@@ -1059,18 +1059,18 @@ void gl_removeBuffer(Buffer* buffer)
     }
 }
 
-void* gl_mapBuffer(Buffer* buffer)
+void* gl_mapBuffer(yar_buffer* buffer)
 {
     GLenum map_access = util_buffer_flags_to_map_access(buffer->flags);
     return glMapNamedBuffer(buffer->id, map_access);
 }
 
-void gl_unmapBuffer(Buffer* buffer)
+void gl_unmapBuffer(yar_buffer* buffer)
 {
     glUnmapNamedBuffer(buffer->id);
 }
 
-void gl_updateDescriptorSet(UpdateDescriptorSetDesc* desc, DescriptorSet* set)
+void gl_updateDescriptorSet(yar_update_descriptor_set_desc* desc, yar_descriptor_set* set)
 {
     // In case in opengl we don't need to actually
     // update descriptor set with data
@@ -1082,7 +1082,7 @@ void gl_updateDescriptorSet(UpdateDescriptorSetDesc* desc, DescriptorSet* set)
     set->infos[index] = std::move(desc->infos);
 }
 
-void gl_cmdBindPipeline(CmdBuffer* cmd, Pipeline* pipeline)
+void gl_cmdBindPipeline(yar_cmd_buffer* cmd, yar_pipeline* pipeline)
 {
     current_vao = pipeline->vao;
     cmd->commands.push_back([=]() {
@@ -1090,7 +1090,7 @@ void gl_cmdBindPipeline(CmdBuffer* cmd, Pipeline* pipeline)
     });
 }
 
-void gl_cmdBindDescriptorSet(CmdBuffer* cmd, DescriptorSet* set, uint32_t index)
+void gl_cmdBindDescriptorSet(yar_cmd_buffer* cmd, yar_descriptor_set* set, uint32_t index)
 {
     if (index > set->max_set)
         return;
@@ -1099,27 +1099,27 @@ void gl_cmdBindDescriptorSet(CmdBuffer* cmd, DescriptorSet* set, uint32_t index)
         for (const auto& descriptor : set->descriptors)
         {
             const auto& infos = set->infos[index];
-            if (descriptor.type & kResourceTypeCBV)
+            if (descriptor.type & yar_resource_type_cbv)
             {
                 const auto& info_iter = std::find_if(infos.begin(), infos.end(),
-                    [&](const DescriptorInfo& info)
+                    [&](const yar_descriptor_info& info)
                     {
-                        return std::holds_alternative<Buffer*>(info.descriptor);
+                        return std::holds_alternative<yar_buffer*>(info.descriptor);
                     }
                 );
 
                 if (info_iter != infos.end())
                 {
-                    const Buffer* buffer = std::get<Buffer*>(info_iter->descriptor);
+                    const yar_buffer* buffer = std::get<yar_buffer*>(info_iter->descriptor);
                     glBindBufferBase(GL_UNIFORM_BUFFER, descriptor.binding, buffer->id);
                 }
             }
 
-            if (descriptor.type & kResourceTypeSRV)
+            if (descriptor.type & yar_resource_type_srv)
             {
-                using CombTextureSampler = DescriptorInfo::CombinedTextureSample;
+                using CombTextureSampler = yar_descriptor_info::yar_combined_texture_sample;
                 const auto& info_iter = std::find_if(infos.begin(), infos.end(),
-                    [&](const DescriptorInfo& info)
+                    [&](const yar_descriptor_info& info)
                     {
                         return 
                             std::holds_alternative<CombTextureSampler>(info.descriptor) 
@@ -1131,16 +1131,16 @@ void gl_cmdBindDescriptorSet(CmdBuffer* cmd, DescriptorSet* set, uint32_t index)
                 {
                     const auto& comb = std::get<CombTextureSampler>(info_iter->descriptor);
                     const auto& sampler_iter = std::find_if(infos.begin(), infos.end(),
-                        [&](const DescriptorInfo& info)
+                        [&](const yar_descriptor_info& info)
                         {
                             return
-                                std::holds_alternative<Sampler*>(info.descriptor)
+                                std::holds_alternative<yar_sampler*>(info.descriptor)
                                 && info.name == comb.sampler_name;
                         }
                     );
                     if (sampler_iter != infos.end())
                     {
-                        const Sampler* sampler = std::get<Sampler*>(sampler_iter->descriptor);
+                        const yar_sampler* sampler = std::get<yar_sampler*>(sampler_iter->descriptor);
                         const yar_gl_texture* texture = reinterpret_cast<yar_gl_texture*>(comb.texture);
                         glBindTextureUnit(descriptor.binding, texture->id);
                         // In OpenGL in case of it use CombinedTextureSampler
@@ -1159,19 +1159,19 @@ void gl_cmdBindDescriptorSet(CmdBuffer* cmd, DescriptorSet* set, uint32_t index)
             }
 
             // TODO: properly set up UAV
-            if (descriptor.type & kResourceTypeUAV)
+            if (descriptor.type & yar_resource_type_uav)
             {
                 const auto& info_iter = std::find_if(infos.begin(), infos.end(),
-                    [&](const DescriptorInfo& info)
+                    [&](const yar_descriptor_info& info)
                     {
-                        return std::holds_alternative<Texture*>(info.descriptor);
+                        return std::holds_alternative<yar_texture*>(info.descriptor);
                     }
                 );
 
                 if (info_iter != infos.end())
                 {
                     const yar_gl_texture* uav = reinterpret_cast<yar_gl_texture*>(
-                        std::get<Texture*>(info_iter->descriptor)
+                        std::get<yar_texture*>(info_iter->descriptor)
                     );
                     glBindImageTexture(0, uav->id, 0, GL_FALSE, 0, GL_WRITE_ONLY, GL_RGBA32F);
                 }
@@ -1180,7 +1180,7 @@ void gl_cmdBindDescriptorSet(CmdBuffer* cmd, DescriptorSet* set, uint32_t index)
     });
 }
 
-void gl_cmdBindVertexBuffer(CmdBuffer* cmd, Buffer* buffer, uint32_t count, uint32_t offset, uint32_t stride)
+void gl_cmdBindVertexBuffer(yar_cmd_buffer* cmd, yar_buffer* buffer, uint32_t count, uint32_t offset, uint32_t stride)
 {
     GLuint& vao = current_vao;
     cmd->commands.push_back([=]() {
@@ -1190,7 +1190,7 @@ void gl_cmdBindVertexBuffer(CmdBuffer* cmd, Buffer* buffer, uint32_t count, uint
     });
 }
 
-void gl_cmdBindIndexBuffer(CmdBuffer* cmd, Buffer* buffer)
+void gl_cmdBindIndexBuffer(yar_cmd_buffer* cmd, yar_buffer* buffer)
 {
     GLuint& vao = current_vao;
     cmd->commands.push_back([=]() {
@@ -1198,7 +1198,7 @@ void gl_cmdBindIndexBuffer(CmdBuffer* cmd, Buffer* buffer)
     });
 }
 
-void gl_cmdBindPushConstant(CmdBuffer* cmd, void* data)
+void gl_cmdBindPushConstant(yar_cmd_buffer* cmd, void* data)
 {
     uint32_t size = cmd->push_constant->size;
     uint32_t pc_id = cmd->push_constant->buffer->id;
@@ -1212,7 +1212,7 @@ void gl_cmdBindPushConstant(CmdBuffer* cmd, void* data)
     });
 }
 
-void gl_cmdDraw(CmdBuffer* cmd, uint32_t first_vertex, uint32_t count)
+void gl_cmdDraw(yar_cmd_buffer* cmd, uint32_t first_vertex, uint32_t count)
 {
     GLuint& vao = current_vao;
     cmd->commands.push_back([=]() {
@@ -1223,7 +1223,7 @@ void gl_cmdDraw(CmdBuffer* cmd, uint32_t first_vertex, uint32_t count)
     });
 }
 
-void gl_cmdDrawIndexed(CmdBuffer* cmd, uint32_t index_count, 
+void gl_cmdDrawIndexed(yar_cmd_buffer* cmd, uint32_t index_count, 
     [[maybe_unused]] uint32_t first_index, [[maybe_unused]] uint32_t first_vertex)
 {
     GLuint& vao = current_vao;
@@ -1236,7 +1236,7 @@ void gl_cmdDrawIndexed(CmdBuffer* cmd, uint32_t index_count,
     });
 }
 
-void gl_cmdDispatch(CmdBuffer* cmd, uint32_t num_group_x, uint32_t num_group_y, uint32_t num_group_z)
+void gl_cmdDispatch(yar_cmd_buffer* cmd, uint32_t num_group_x, uint32_t num_group_y, uint32_t num_group_z)
 {
     cmd->commands.push_back([=]() {
         glDispatchCompute(num_group_x, num_group_y, num_group_z);
@@ -1246,7 +1246,7 @@ void gl_cmdDispatch(CmdBuffer* cmd, uint32_t num_group_x, uint32_t num_group_y, 
     );
 }
 
-void gl_cmdUpdateBuffer(CmdBuffer* cmd, Buffer* buffer, size_t offset, size_t size, void* data)
+void gl_cmdUpdateBuffer(yar_cmd_buffer* cmd, yar_buffer* buffer, size_t offset, size_t size, void* data)
 {
     // HACK HACK HACK
     std::vector<uint8_t> data_copy((uint8_t*)data, (uint8_t*)data + size);
@@ -1256,7 +1256,7 @@ void gl_cmdUpdateBuffer(CmdBuffer* cmd, Buffer* buffer, size_t offset, size_t si
     });
 }
 
-void gl_queueSubmit(CmdQueue* queue)
+void gl_queueSubmit(yar_cmd_queue* queue)
 {
     for (auto& cmd : queue->queue)
     {
