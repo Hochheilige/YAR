@@ -718,35 +718,41 @@ auto main() -> int {
 			VertexAttributeLayout{glm::vec3{}, "normal"},
 		},
 		{
+			// Front face 
 			Vertex{{glm::vec3(-0.5f, -0.5f,  0.5f), glm::vec3{0.0f, 0.0f, 1.0f}, glm::vec2{0.0f, 0.0f}}},
-			Vertex{{glm::vec3( 0.5f, -0.5f,  0.5f), glm::vec3{0.0f, 0.0f, 1.0f}, glm::vec2{1.0f, 0.0f}}},
-			Vertex{{glm::vec3( 0.5f,  0.5f,  0.5f), glm::vec3{0.0f, 0.0f, 1.0f}, glm::vec2{1.0f, 1.0f}}},
+			Vertex{{glm::vec3(0.5f, -0.5f,  0.5f),  glm::vec3{0.0f, 0.0f, 1.0f}, glm::vec2{1.0f, 0.0f}}},
+			Vertex{{glm::vec3(0.5f,  0.5f,  0.5f),  glm::vec3{0.0f, 0.0f, 1.0f}, glm::vec2{1.0f, 1.0f}}},
 			Vertex{{glm::vec3(-0.5f,  0.5f,  0.5f), glm::vec3{0.0f, 0.0f, 1.0f}, glm::vec2{0.0f, 1.0f}}},
 
+			// Back face 
+			Vertex{{glm::vec3(0.5f, -0.5f, -0.5f),  glm::vec3{0.0f, 0.0f, -1.0f}, glm::vec2{1.0f, 0.0f}}},
 			Vertex{{glm::vec3(-0.5f, -0.5f, -0.5f), glm::vec3{0.0f, 0.0f, -1.0f}, glm::vec2{0.0f, 0.0f}}},
-			Vertex{{glm::vec3( 0.5f, -0.5f, -0.5f), glm::vec3{0.0f, 0.0f, -1.0f}, glm::vec2{1.0f, 0.0f}}},
-			Vertex{{glm::vec3( 0.5f,  0.5f, -0.5f), glm::vec3{0.0f, 0.0f, -1.0f}, glm::vec2{1.0f, 1.0f}}},
 			Vertex{{glm::vec3(-0.5f,  0.5f, -0.5f), glm::vec3{0.0f, 0.0f, -1.0f}, glm::vec2{0.0f, 1.0f}}},
+			Vertex{{glm::vec3(0.5f,  0.5f, -0.5f),  glm::vec3{0.0f, 0.0f, -1.0f}, glm::vec2{1.0f, 1.0f}}},
 
-			Vertex{{glm::vec3(-0.5f, -0.5f, -0.5f), glm::vec3{-1.0f, 0.0f, 0.0f}, glm::vec2{1.0f, 0.0f}}},
-			Vertex{{glm::vec3(-0.5f, -0.5f,  0.5f), glm::vec3{-1.0f, 0.0f, 0.0f}, glm::vec2{0.0f, 0.0f}}},
-			Vertex{{glm::vec3(-0.5f,  0.5f,  0.5f), glm::vec3{-1.0f, 0.0f, 0.0f}, glm::vec2{0.0f, 1.0f}}},
-			Vertex{{glm::vec3(-0.5f,  0.5f, -0.5f), glm::vec3{-1.0f, 0.0f, 0.0f}, glm::vec2{1.0f, 1.0f}}},
+			// Left face 
+			Vertex{{glm::vec3(-0.5f, -0.5f, -0.5f), glm::vec3{-1.0f, 0.0f, 0.0f}, glm::vec2{0.0f, 0.0f}}},
+			Vertex{{glm::vec3(-0.5f, -0.5f,  0.5f), glm::vec3{-1.0f, 0.0f, 0.0f}, glm::vec2{1.0f, 0.0f}}},
+			Vertex{{glm::vec3(-0.5f,  0.5f,  0.5f), glm::vec3{-1.0f, 0.0f, 0.0f}, glm::vec2{1.0f, 1.0f}}},
+			Vertex{{glm::vec3(-0.5f,  0.5f, -0.5f), glm::vec3{-1.0f, 0.0f, 0.0f}, glm::vec2{0.0f, 1.0f}}},
 
-			Vertex{{glm::vec3(0.5f, -0.5f, -0.5f), glm::vec3{1.0f, 0.0f, 0.0f}, glm::vec2{0.0f, 0.0f}}},
-			Vertex{{glm::vec3(0.5f, -0.5f,  0.5f), glm::vec3{1.0f, 0.0f, 0.0f}, glm::vec2{1.0f, 0.0f}}},
-			Vertex{{glm::vec3(0.5f,  0.5f,  0.5f), glm::vec3{1.0f, 0.0f, 0.0f}, glm::vec2{1.0f, 1.0f}}},
-			Vertex{{glm::vec3(0.5f,  0.5f, -0.5f), glm::vec3{1.0f, 0.0f, 0.0f}, glm::vec2{0.0f, 1.0f}}},
+			// Right face 
+			Vertex{{glm::vec3(0.5f, -0.5f,  0.5f), glm::vec3{1.0f, 0.0f, 0.0f}, glm::vec2{0.0f, 0.0f}}},
+			Vertex{{glm::vec3(0.5f, -0.5f, -0.5f), glm::vec3{1.0f, 0.0f, 0.0f}, glm::vec2{1.0f, 0.0f}}},
+			Vertex{{glm::vec3(0.5f,  0.5f, -0.5f), glm::vec3{1.0f, 0.0f, 0.0f}, glm::vec2{1.0f, 1.0f}}},
+			Vertex{{glm::vec3(0.5f,  0.5f,  0.5f), glm::vec3{1.0f, 0.0f, 0.0f}, glm::vec2{0.0f, 1.0f}}},
 
+			// Bottom face 
 			Vertex{{glm::vec3(-0.5f, -0.5f, -0.5f), glm::vec3{0.0f, -1.0f, 0.0f}, glm::vec2{0.0f, 1.0f}}},
-			Vertex{{glm::vec3( 0.5f, -0.5f, -0.5f), glm::vec3{0.0f, -1.0f, 0.0f}, glm::vec2{1.0f, 1.0f}}},
-			Vertex{{glm::vec3( 0.5f, -0.5f,  0.5f), glm::vec3{0.0f, -1.0f, 0.0f}, glm::vec2{1.0f, 0.0f}}},
+			Vertex{{glm::vec3(0.5f, -0.5f, -0.5f),  glm::vec3{0.0f, -1.0f, 0.0f}, glm::vec2{1.0f, 1.0f}}},
+			Vertex{{glm::vec3(0.5f, -0.5f,  0.5f),  glm::vec3{0.0f, -1.0f, 0.0f}, glm::vec2{1.0f, 0.0f}}},
 			Vertex{{glm::vec3(-0.5f, -0.5f,  0.5f), glm::vec3{0.0f, -1.0f, 0.0f}, glm::vec2{0.0f, 0.0f}}},
 
-			Vertex{{glm::vec3(-0.5f,  0.5f, -0.5f), glm::vec3{0.0f, 1.0f, 0.0f}, glm::vec2{0.0f, 0.0f}}},
-			Vertex{{glm::vec3( 0.5f,  0.5f, -0.5f), glm::vec3{0.0f, 1.0f, 0.0f}, glm::vec2{1.0f, 0.0f}}},
-			Vertex{{glm::vec3( 0.5f,  0.5f,  0.5f), glm::vec3{0.0f, 1.0f, 0.0f}, glm::vec2{1.0f, 1.0f}}},
+			// Top face (y = +0.5)
 			Vertex{{glm::vec3(-0.5f,  0.5f,  0.5f), glm::vec3{0.0f, 1.0f, 0.0f}, glm::vec2{0.0f, 1.0f}}},
+			Vertex{{glm::vec3(0.5f,  0.5f,  0.5f),  glm::vec3{0.0f, 1.0f, 0.0f}, glm::vec2{1.0f, 1.0f}}},
+			Vertex{{glm::vec3(0.5f,  0.5f, -0.5f),  glm::vec3{0.0f, 1.0f, 0.0f}, glm::vec2{1.0f, 0.0f}}},
+			Vertex{{glm::vec3(-0.5f,  0.5f, -0.5f), glm::vec3{0.0f, 1.0f, 0.0f}, glm::vec2{0.0f, 0.0f}}},
 		}
 	};
 
@@ -988,6 +994,11 @@ auto main() -> int {
 	depth_stencil.depth_enable = true;
 	depth_stencil.depth_func = yar_depth_stencil_func_less;
 
+	yar_rasterizer_state raster{};
+	raster.fill_mode = yar_fill_mode_solid;
+	raster.cull_mode = yar_cull_mode_back;
+	raster.front_counter_clockwise = true;
+
 	yar_descriptor_set_desc set_desc;
 	set_desc.max_sets = image_count;
 	set_desc.shader = shader;
@@ -1049,7 +1060,6 @@ auto main() -> int {
 		}
 	};
 
-
 	update_set_desc = {};
 	update_set_desc.index = 0;
 	update_set_desc.infos = std::move(infos);
@@ -1061,6 +1071,7 @@ auto main() -> int {
 	pipeline_desc.shader = *shader;
 	pipeline_desc.vertex_layout = layout;
 	pipeline_desc.depth_stencil_state = depth_stencil;
+	pipeline_desc.rasterizer_state = raster;
 
 	yar_pipeline* graphics_pipeline;
 	add_pipeline(&pipeline_desc, &graphics_pipeline);
@@ -1081,8 +1092,6 @@ auto main() -> int {
 	add_cmd(&cmd_desc, &cmd);
 
 	glm::mat4 model{};
-	glEnable(GL_DEPTH_TEST);
-	glEnable(GL_BLEND);
 
 	while(update_window())
 	{

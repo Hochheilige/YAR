@@ -68,6 +68,12 @@ struct yar_gl_pipeline
     GLenum dst_alpha_factor;
     GLenum rgb_equation;
     GLenum alpha_equation;
+
+    // Rasterizer State
+    GLenum fill_mode;
+    GLenum cull_mode;
+    bool cull_enable;
+    bool front_counter_clockwise;
 };
 
 // ======================================= //
@@ -536,6 +542,33 @@ static GLenum util_get_gl_blend_equation(yar_blend_op op)
         return GL_MIN;
     case yar_blend_op_max:
         return GL_MAX;
+    }
+}
+
+static GLenum util_get_gl_fill_mode(yar_fill_mode mode)
+{
+    switch (mode)
+    {
+    case yar_fill_mode_solid:
+        return GL_FILL;
+    case yar_fill_mode_wireframe:
+        return GL_LINE;
+    default:
+        return GL_FILL;
+    }
+}
+
+static GLenum util_get_gl_cull_mode(yar_cull_mode mode)
+{
+    switch (mode)
+    {
+    case yar_cull_mode_front:
+        return GL_FRONT;
+    case yar_cull_mode_back:
+        return GL_BACK;
+    case yar_cull_mode_none:
+    default:
+        return 0;
     }
 }
 
@@ -1009,6 +1042,11 @@ void gl_addPipeline(const yar_pipeline_desc* desc, yar_pipeline** pipeline)
         new_pipeline->rgb_equation = util_get_gl_blend_equation(desc->blend_state.op);
         new_pipeline->alpha_equation = util_get_gl_blend_equation(desc->blend_state.alpha_op);
     }
+
+    new_pipeline->fill_mode = util_get_gl_fill_mode(desc->rasterizer_state.fill_mode);
+    new_pipeline->cull_mode = util_get_gl_cull_mode(desc->rasterizer_state.cull_mode);
+    new_pipeline->cull_enable = new_pipeline->cull_mode;
+    new_pipeline->front_counter_clockwise = desc->rasterizer_state.front_counter_clockwise;
 }
 
 void gl_addQueue([[maybe_unused]] yar_cmd_queue_desc* desc, yar_cmd_queue** queue)
@@ -1127,6 +1165,19 @@ void gl_cmdBindPipeline(yar_cmd_buffer* cmd, yar_pipeline* pipeline)
                 gl_pipeline->src_alpha_factor, gl_pipeline->dst_alpha_factor);
             glBlendEquationSeparate(gl_pipeline->rgb_equation, gl_pipeline->alpha_equation);
         }
+
+        glPolygonMode(GL_FRONT_AND_BACK, gl_pipeline->fill_mode);
+        if (gl_pipeline->cull_enable)
+        {
+            glEnable(GL_CULL_FACE);
+            glCullFace(gl_pipeline->cull_mode);
+        }
+        else
+        {
+            glDisable(GL_CULL_FACE);
+        }
+
+        gl_pipeline->front_counter_clockwise ? glFrontFace(GL_CCW) : glFrontFace(GL_CW);
     });
 }
 

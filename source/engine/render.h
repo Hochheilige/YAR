@@ -278,6 +278,27 @@ enum yar_blend_factor : uint8_t
     yar_blned_factor_one_minus_dst_alpha
 };
 
+enum yar_fill_mode : uint8_t
+{
+    yar_fill_mode_solid = 0,
+    yar_fill_mode_wireframe
+};
+
+enum yar_cull_mode : uint8_t
+{
+    yar_cull_mode_none = 0,
+    yar_cull_mode_front,
+    yar_cull_mode_back
+};
+
+enum yar_descriptor_set_update_frequency : uint8_t
+{
+    yar_update_freq_none = 0,
+    yar_update_freq_per_frame = 1,
+    yar_update_freq_per_draw = 2,
+    yar_update_freq_max = 3
+};
+
 struct yar_shader_resource
 {
     std::string name;
@@ -364,6 +385,14 @@ struct yar_blend_state
     yar_blend_op alpha_op;
 };
 
+struct yar_rasterizer_state
+{
+    yar_fill_mode fill_mode;
+    yar_cull_mode cull_mode;
+    bool front_counter_clockwise;
+    // TODO: add depth bias and stuff
+};
+
 // Tried to add RootSignature abstraction 
 // but don't see the point of it here right now
 
@@ -377,14 +406,6 @@ struct yar_blend_state
 //    std::vector<ShaderResource> descriptors;
 //    DescriptorIndexMap name_to_index;
 //};
-
-enum yar_descriptor_set_update_frequency : uint8_t
-{
-    yar_update_freq_none     = 0,
-    yar_update_freq_per_frame = 1,
-    yar_update_freq_per_draw  = 2,
-    yar_update_freq_max      = 3
-};
 
 struct yar_descriptor_set_desc
 {
@@ -448,6 +469,7 @@ struct yar_pipeline_desc
     yar_vertex_layout vertex_layout;
     yar_depth_stencil_state depth_stencil_state;
     yar_blend_state blend_state;
+    yar_rasterizer_state rasterizer_state;
     /*
     has to contain:
         * Shaders (probably shader reflection as well)
