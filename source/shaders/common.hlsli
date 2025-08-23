@@ -76,9 +76,8 @@ struct SpotLight
 
 struct LightParams
 {
-    float4 ambient[LS_COUNT];
-    float4 diffuse[LS_COUNT];
-    float4 specular[LS_COUNT];
+    float4 color[LS_COUNT];
+    float4 params[LS_COUNT];
 };
 
 struct Camera

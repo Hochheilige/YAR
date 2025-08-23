@@ -670,9 +670,8 @@ struct SpotLight
 
 struct LightParams
 {
-	glm::vec4 ambient[kLightSourcesCount];
-	glm::vec4 diffuse[kLightSourcesCount];
-	glm::vec4 specular[kLightSourcesCount];
+	glm::vec4 color[kLightSourcesCount];
+	glm::vec4 params[kLightSourcesCount];
 };
 
 struct UBO
@@ -798,17 +797,17 @@ auto main() -> int {
 	memset(&ubo, 0x00, sizeof(ubo));
 
 	// Dir Light
-	ubo.dir_light.direction[0] = glm::vec4(0.0f, 0.0f, 3.0f, 0.0f);
-	ubo.light_params.ambient[0] = glm::vec4(0.0f, 0.2f, 0.0f, 0.0f);
-	ubo.light_params.diffuse[0] = glm::vec4(0.0f, 0.4f, 0.0f, 0.0f);
-	ubo.light_params.specular[0] = glm::vec4(0.0f, 1.0f, 0.0f, 0.0f);
+	ubo.dir_light.direction[0] = glm::vec4(0.0f, -1.0f, 0.0f, 0.0f);
+	ubo.light_params.color[0] = glm::vec4(1.0f, 1.0f, 1.0f, 0.0f);
+	ubo.light_params.params[0].r = 1.0f; // intensity
+	ubo.light_params.params[0].g = 0.0f; // radius
 
 	// Point Light
 	ubo.point_light.position[0] = *light_pos;
 	ubo.point_light.attenuation[0] = glm::vec4(1.0f, 0.007f, 0.0002f, 0.0f);
-	ubo.light_params.ambient[1] = glm::vec4(0.2f, 0.0f, 0.0f, 0.0f);
-	ubo.light_params.diffuse[1] = glm::vec4(0.5f, 0.0f, 0.0f, 0.0f);
-	ubo.light_params.specular[1] = glm::vec4(1.0f, 0.0f, 0.0f, 0.0f);
+	ubo.light_params.color[1] = glm::vec4(1.0f, 1.0f, 0.0f, 0.0f);
+	ubo.light_params.params[1].r = 1.0f; // intensity
+	ubo.light_params.params[1].g = 1.0f; // radius
 
 	// Spotlight
 	ubo.spot_light.cutoff[0] = glm::vec4(
@@ -817,9 +816,9 @@ auto main() -> int {
 		0.0f, 0.0f
 	);
 	ubo.spot_light.attenuation[0] = glm::vec4(1.0f, 0.007f, 0.0002f, 0.0f);
-	ubo.light_params.ambient[2] = glm::vec4(0.0f, 0.0f, 0.2f, 0.0f);
-	ubo.light_params.diffuse[2] = glm::vec4(0.0f, 0.0f, 0.5f, 0.0f);
-	ubo.light_params.specular[2] = glm::vec4(0.0f, 0.0f, 1.0f, 0.0f);
+	ubo.light_params.color[2] = glm::vec4(1.0f, 1.0f, 1.0f, 0.0f);
+	ubo.light_params.params[2].r = 1.0f; // intensity
+	ubo.light_params.params[2].g = 0.0f; // radius
 
 
 	yar_texture* diffuse_map_tex;
