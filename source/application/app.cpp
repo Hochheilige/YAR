@@ -32,7 +32,7 @@ yar_texture* load_white_texture()
 	texture_desc.height = 1;
 	texture_desc.mip_levels = 1;
 	texture_desc.type = yar_texture_type_2d;
-	texture_desc.format = yar_texture_format_rgb8;
+	texture_desc.format = yar_texture_format_rgba8;
 	add_texture(&texture_desc, &tex);
 
 	yar_resource_update_desc resource_update_desc;
@@ -56,7 +56,7 @@ yar_texture* load_texture(const std::string_view& name)
 	stbi_set_flip_vertically_on_load(false);
 	uint8_t* buf = stbi_load(name.data(), &width, &height, &channels, 0);
 
-	yar_texture_format format;
+	yar_texture_format format; 
 	if (channels == 1)
 		format = yar_texture_format_r8;
 	if (channels == 3)
@@ -656,7 +656,6 @@ struct DirectLight
 struct PointLight
 {
 	glm::vec4 position[kPointLightCount];
-	glm::vec4 attenuation[kPointLightCount];
 };
 
 struct SpotLight
@@ -671,7 +670,6 @@ struct SpotLight
 struct LightParams
 {
 	glm::vec4 color[kLightSourcesCount];
-	glm::vec4 params[kLightSourcesCount];
 };
 
 struct UBO
@@ -797,17 +795,14 @@ auto main() -> int {
 	memset(&ubo, 0x00, sizeof(ubo));
 
 	// Dir Light
-	ubo.dir_light.direction[0] = glm::vec4(0.0f, -1.0f, 0.0f, 0.0f);
-	ubo.light_params.color[0] = glm::vec4(1.0f, 1.0f, 1.0f, 0.0f);
-	ubo.light_params.params[0].r = 1.0f; // intensity
-	ubo.light_params.params[0].g = 0.0f; // radius
+	ubo.dir_light.direction[0] = glm::vec4(-0.3f, -1.0f, -0.5f, 0.0f);
+	ubo.light_params.color[0] = glm::vec4(1.0f, 0.95f, 0.9f, 0.0f);
+	ubo.light_params.color[0].a = 1.5f;  // intensity
 
 	// Point Light
-	ubo.point_light.position[0] = *light_pos;
-	ubo.point_light.attenuation[0] = glm::vec4(1.0f, 0.007f, 0.0002f, 0.0f);
+	ubo.point_light.position[0] = *light_pos; 
 	ubo.light_params.color[1] = glm::vec4(1.0f, 1.0f, 0.0f, 0.0f);
-	ubo.light_params.params[1].r = 1.0f; // intensity
-	ubo.light_params.params[1].g = 1.0f; // radius
+	ubo.light_params.color[1].a = 1.0f; // intensity
 
 	// Spotlight
 	ubo.spot_light.cutoff[0] = glm::vec4(
@@ -816,9 +811,8 @@ auto main() -> int {
 		0.0f, 0.0f
 	);
 	ubo.spot_light.attenuation[0] = glm::vec4(1.0f, 0.007f, 0.0002f, 0.0f);
-	ubo.light_params.color[2] = glm::vec4(1.0f, 1.0f, 1.0f, 0.0f);
-	ubo.light_params.params[2].r = 1.0f; // intensity
-	ubo.light_params.params[2].g = 0.0f; // radius
+	ubo.light_params.color[2] = glm::vec4(1.0f, 0.0f, 1.0f, 0.0f);
+	ubo.light_params.color[2].a = 1.0f; // intensity
 
 
 	yar_texture* diffuse_map_tex;

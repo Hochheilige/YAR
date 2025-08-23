@@ -63,7 +63,6 @@ struct DirLight
 struct PointLight
 {
     float4 position[POINT_LIGHT_COUNT];
-    float4 attenuation[POINT_LIGHT_COUNT];
 };
 
 struct SpotLight
@@ -77,7 +76,6 @@ struct SpotLight
 struct LightParams
 {
     float4 color[LS_COUNT];
-    float4 params[LS_COUNT];
 };
 
 struct Camera
