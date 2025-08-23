@@ -467,10 +467,6 @@ struct yar_pipeline_desc
 
 struct yar_pipeline
 {
-    // it probably should be something graphics API specific
-    // but for now it will be OpenGL specific
-    const yar_shader* shader;
-    uint32_t vao;
 };
 
 struct yar_cmd_queue_desc

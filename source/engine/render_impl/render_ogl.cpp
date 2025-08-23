@@ -47,6 +47,29 @@ struct yar_gl_texture
     uint32_t gl_type;
 };
 
+struct yar_gl_pipeline
+{
+    yar_pipeline pipeline;
+    const yar_shader* shader;
+
+    GLuint vao;
+
+    // Depth Stencil State
+    GLenum depth_func;
+    GLenum stencil_func;
+    GLenum fail;
+    GLenum zfail;
+    GLenum zpass;
+
+    // Blend State
+    GLenum src_factor;
+    GLenum dst_factor;
+    GLenum src_alpha_factor;
+    GLenum dst_alpha_factor;
+    GLenum rgb_equation;
+    GLenum alpha_equation;
+};
+
 // ======================================= //
 //            Utils Functions              //
 // ======================================= //
@@ -944,9 +967,10 @@ void gl_addDescriptorSet(yar_descriptor_set_desc* desc, yar_descriptor_set** set
 
 void gl_addPipeline(const yar_pipeline_desc* desc, yar_pipeline** pipeline)
 {
-    yar_pipeline* new_pipeline = (yar_pipeline*)std::malloc(sizeof(yar_pipeline));
-    if (new_pipeline == nullptr)
-        return;
+    yar_gl_pipeline* new_pipeline = static_cast<yar_gl_pipeline*>(
+        std::calloc(1, sizeof(yar_gl_pipeline))
+    );
+    *pipeline = &new_pipeline->pipeline;
 
     new_pipeline->shader = &desc->shader;
     GLuint& vao = new_pipeline->vao;
@@ -965,33 +989,26 @@ void gl_addPipeline(const yar_pipeline_desc* desc, yar_pipeline** pipeline)
     // TODO: all glEnable functions have to be moved to bind pipeline somehow
     if (desc->depth_stencil_state.depth_enable)
     {
-        glEnable(GL_DEPTH_TEST);
-        glDepthFunc(util_get_gl_depth_stencil_func(desc->depth_stencil_state.depth_func));
+        new_pipeline->depth_func = util_get_gl_depth_stencil_func(desc->depth_stencil_state.depth_func);
     }
 
     if (desc->depth_stencil_state.stencil_enable)
     {
-        glEnable(GL_STENCIL_TEST);
-        // TODO: set up ref and mask for for glStencilFunc
-        glStencilFunc(util_get_gl_depth_stencil_func(desc->depth_stencil_state.stencil_func), 1, 0xFF);
-        glStencilOp(desc->depth_stencil_state.sfail, desc->depth_stencil_state.dpfail, desc->depth_stencil_state.dppass);
+        new_pipeline->stencil_func = util_get_gl_depth_stencil_func(desc->depth_stencil_state.stencil_func);
+        new_pipeline->fail = desc->depth_stencil_state.sfail;
+        new_pipeline->zfail = desc->depth_stencil_state.dpfail;
+        new_pipeline->zpass = desc->depth_stencil_state.dppass;
     }
 
     if (desc->blend_state.blend_enable)
     {
-        glEnable(GL_BLEND);
-        GLenum src_factor = util_get_gl_blend_factor(desc->blend_state.src_factor);
-        GLenum dst_factor = util_get_gl_blend_factor(desc->blend_state.dst_factor);
-        GLenum src_alpha_factor = util_get_gl_blend_factor(desc->blend_state.src_alpha_factor);
-        GLenum dst_alpha_factor = util_get_gl_blend_factor(desc->blend_state.dst_alpha_factor);
-        glBlendFuncSeparate(src_factor, dst_factor, src_alpha_factor, dst_alpha_factor);
-
-        GLenum rgb_equation = util_get_gl_blend_equation(desc->blend_state.op);
-        GLenum alpha_equation = util_get_gl_blend_equation(desc->blend_state.alpha_op);
-        glBlendEquationSeparate(rgb_equation, alpha_equation);
+        new_pipeline->src_factor = util_get_gl_blend_factor(desc->blend_state.src_factor);
+        new_pipeline->dst_factor = util_get_gl_blend_factor(desc->blend_state.dst_factor);
+        new_pipeline->src_alpha_factor = util_get_gl_blend_factor(desc->blend_state.src_alpha_factor);
+        new_pipeline->dst_alpha_factor = util_get_gl_blend_factor(desc->blend_state.dst_alpha_factor);
+        new_pipeline->rgb_equation = util_get_gl_blend_equation(desc->blend_state.op);
+        new_pipeline->alpha_equation = util_get_gl_blend_equation(desc->blend_state.alpha_op);
     }
-    
-    *pipeline = new_pipeline;
 }
 
 void gl_addQueue([[maybe_unused]] yar_cmd_queue_desc* desc, yar_cmd_queue** queue)
@@ -1084,9 +1101,32 @@ void gl_updateDescriptorSet(yar_update_descriptor_set_desc* desc, yar_descriptor
 
 void gl_cmdBindPipeline(yar_cmd_buffer* cmd, yar_pipeline* pipeline)
 {
-    current_vao = pipeline->vao;
+    yar_gl_pipeline* gl_pipeline = reinterpret_cast<yar_gl_pipeline*>(pipeline);
+    current_vao = gl_pipeline->vao;
     cmd->commands.push_back([=]() {
-        glUseProgram(pipeline->shader->program); 
+        glUseProgram(gl_pipeline->shader->program);
+        
+        if (gl_pipeline->depth_func)
+        {
+            glEnable(GL_DEPTH_TEST);
+            glDepthFunc(gl_pipeline->depth_func);
+        }
+
+        if (gl_pipeline->stencil_func)
+        {
+            glEnable(GL_STENCIL_TEST);
+            // Ref and Mask usually 1 and 0xFF 
+            glStencilFunc(gl_pipeline->stencil_func, 1, 0xFF);
+            glStencilOp(gl_pipeline->fail, gl_pipeline->zfail, gl_pipeline->zpass);
+        }
+
+        if (gl_pipeline->src_factor)
+        {
+            glEnable(GL_BLEND);
+            glBlendFuncSeparate(gl_pipeline->src_factor, gl_pipeline->dst_factor,
+                gl_pipeline->src_alpha_factor, gl_pipeline->dst_alpha_factor);
+            glBlendEquationSeparate(gl_pipeline->rgb_equation, gl_pipeline->alpha_equation);
+        }
     });
 }
 
