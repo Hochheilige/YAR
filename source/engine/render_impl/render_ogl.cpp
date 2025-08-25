@@ -1090,12 +1090,13 @@ void gl_addCmd(yar_cmd_buffer_desc* desc, yar_cmd_buffer** cmd)
 {
     using Command = std::function<void()>;
 
-    yar_cmd_buffer* new_cmd = (yar_cmd_buffer*)std::malloc(sizeof(yar_cmd_buffer));
-    if (new_cmd == nullptr)
-        return;
-
-    new (&new_cmd->commands) std::vector<Command>();
-    desc->current_queue->queue.push_back(new_cmd);
+    yar_gl_cmd_buffer* new_cmd = static_cast<yar_gl_cmd_buffer*>(
+        std::calloc(1, sizeof(yar_gl_cmd_buffer))
+    );
+    *cmd = &new_cmd->cmd;
+    
+    new (&new_cmd->cmd.commands) std::vector<Command>();
+    desc->current_queue->queue.push_back(&new_cmd->cmd);
 
     if (desc->use_push_constant)
     {
@@ -1124,10 +1125,8 @@ void gl_addCmd(yar_cmd_buffer_desc* desc, yar_cmd_buffer** cmd)
         new_pc->size = desc->pc_desc->size;
         new_pc->shader_program = desc->pc_desc->shader->program;
 
-        new_cmd->push_constant = new_pc;
+        new_cmd->cmd.push_constant = new_pc;
     }
-
-    *cmd = new_cmd;
 }
 
 void gl_removeBuffer(yar_buffer* buffer)
