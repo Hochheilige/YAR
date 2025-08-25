@@ -21,6 +21,9 @@
 #include <glm/glm.hpp>
 #include <glm/gtc/type_ptr.hpp>
 
+#define YAR_CONTAINER_OF(ptr, type, member) \
+    ((type *)((char *)(ptr) - offsetof(type, member)))
+
 // ======================================= //
 //            Load Variables               //
 // ======================================= //
@@ -42,10 +45,24 @@ struct yar_gl_texture
     uint32_t gl_type;
 };
 
+struct yar_gl_shader
+{
+    yar_shader shader;
+
+    GLuint vs;
+    GLuint ps;
+    GLuint gs;
+    GLuint cs;
+
+    std::vector<yar_shader_resource> resources;
+};
+
 struct yar_gl_pipeline
 {
     yar_pipeline pipeline;
-    const yar_shader* shader;
+
+    yar_gl_shader* shader;
+    GLuint program_pipeline;
 
     // Rasterizer State
     GLenum fill_mode;
@@ -143,7 +160,7 @@ static GLenum util_shader_stage_to_gl_stage(yar_shader_stage stage)
     {
     case yar_shader_stage_vert:
         return GL_VERTEX_SHADER;
-    case yar_shader_stage_frag:
+    case yar_shader_stage_pixel:
         return GL_FRAGMENT_SHADER;
     case yar_shader_stage_geom:
         return GL_GEOMETRY_SHADER;
@@ -163,7 +180,7 @@ static std::wstring util_stage_to_target_profile(yar_shader_stage stage)
     {
     case yar_shader_stage_vert:
         return L"vs_6_0";
-    case yar_shader_stage_frag:
+    case yar_shader_stage_pixel:
         return L"ps_6_0";
     case yar_shader_stage_geom:
     case yar_shader_stage_comp:
@@ -218,8 +235,8 @@ static void util_load_shader_binary(yar_shader_stage stage, yar_shader_stage_loa
     case yar_shader_stage_vert:
         stage_desc = &shader_desc->vert;
         break;
-    case yar_shader_stage_frag:
-        stage_desc = &shader_desc->frag;
+    case yar_shader_stage_pixel:
+        stage_desc = &shader_desc->pixel;
         break;
     case yar_shader_stage_geom:
         stage_desc = &shader_desc->geom;
@@ -368,7 +385,7 @@ static GLenum util_get_gl_internal_format(yar_texture_format format)
     case yar_texture_format_depth24_stencil8:
         return GL_DEPTH24_STENCIL8;
     default:
-        return GL_NONE; // Неизвестный формат
+        return GL_NONE;
     }
 }
 
@@ -858,35 +875,40 @@ void gl_addSampler(yar_sampler_desc* desc, yar_sampler** sampler)
 
 void gl_addShader(yar_shader_desc* desc, yar_shader** out_shader)
 {
-    yar_shader* shader = (yar_shader*)std::malloc(sizeof(yar_shader));
-    if (shader == nullptr)
-        return;
-    
-    shader->program = glCreateProgram();
-    shader->stages = desc->stages;
-    new (&shader->resources) std::vector<yar_shader_resource>();
+    yar_gl_shader* new_shader = static_cast<yar_gl_shader*>(
+        std::calloc(1, sizeof(yar_gl_shader))
+    );
+    *out_shader = &new_shader->shader;
+
+    new_shader->shader.stages = desc->stages;
+    new (&new_shader->resources) std::vector<yar_shader_resource>();
 
     for (size_t i = 0; i < yar_shader_stage_max; ++i)
     {
         yar_shader_stage stage_mask = (yar_shader_stage)(1 << i);
         yar_shader_stage_desc* stage = nullptr;
 
-        if (stage_mask != (shader->stages & stage_mask))
+        if (stage_mask != (new_shader->shader.stages & stage_mask))
             continue;
 
+        GLuint* gl_shader = nullptr;
         switch (stage_mask)
         {
         case yar_shader_stage_vert:
             stage = &desc->vert;
+            gl_shader = &new_shader->vs;
             break;
-        case yar_shader_stage_frag:
-            stage = &desc->frag;
+        case yar_shader_stage_pixel:
+            stage = &desc->pixel;
+            gl_shader = &new_shader->ps;
             break;
         case yar_shader_stage_geom:
             stage = &desc->geom;
+            gl_shader = &new_shader->gs;
             break;
         case yar_shader_stage_comp:
             stage = &desc->comp;
+            gl_shader = &new_shader->cs;
             break;
         case yar_shader_stage_none:
         case yar_shader_stage_max:
@@ -897,7 +919,7 @@ void gl_addShader(yar_shader_desc* desc, yar_shader** out_shader)
 
         // First of all create shader reflection to use binding and set
         // from spirv to set up it in glsl code for combined image samplers
-        util_create_shader_reflection(stage->byte_code, shader->resources);
+        util_create_shader_reflection(stage->byte_code, new_shader->resources);
 
         GLenum gl_stage = util_shader_stage_to_gl_stage(stage_mask);
         const auto& buffer = stage->byte_code;
@@ -933,7 +955,7 @@ void gl_addShader(yar_shader_desc* desc, yar_shader** out_shader)
                 // Using texture name find resource from shader reflection
                 // that store correct binding and set
                 std::string_view texture_name(separate_image->name);
-                const auto& resources = shader->resources;
+                const auto& resources = new_shader->resources;
                 const auto& resource = std::find_if(resources.begin(), resources.end(),
                     [&](const yar_shader_resource& res)
                     {
@@ -963,42 +985,22 @@ void gl_addShader(yar_shader_desc* desc, yar_shader** out_shader)
             std::cerr << "Error: " << e.what() << std::endl;
         }
 
-        GLuint gl_shader = glCreateShader(gl_stage);
         const char* src = glsl_code.c_str();
-        glShaderSource(gl_shader, 1, &src, nullptr);
-        glCompileShader(gl_shader);
-
+        *gl_shader = glCreateShaderProgramv(gl_stage, 1, &src);
+        
         GLint status;
-        glGetShaderiv(gl_shader, GL_COMPILE_STATUS, &status);
+        glGetProgramiv(*gl_shader, GL_LINK_STATUS, &status);
         if (status == GL_FALSE) {
-            GLint logLength;
-            glGetShaderiv(gl_shader, GL_INFO_LOG_LENGTH, &logLength);
-            std::string log(logLength, ' ');
-            glGetShaderInfoLog(gl_shader, logLength, &logLength, &log[0]);
+            GLint log_length;
+            glGetProgramiv(*gl_shader, GL_INFO_LOG_LENGTH, &log_length);
+            std::string log(log_length, ' ');
+            glGetShaderInfoLog(*gl_shader, log_length, &log_length, &log[0]);
             std::cerr << "yar_shader compilation error: " << log << std::endl;
-            glDeleteShader(gl_shader);
+            glDeleteProgram(*gl_shader);
         }
 
-        glAttachShader(shader->program, gl_shader);
-        glDeleteShader(gl_shader);
+        glProgramParameteri(*gl_shader, GL_PROGRAM_SEPARABLE, GL_TRUE);
     }
-
-    glLinkProgram(shader->program);
-#if defined(_DEBUG)
-    // TODO: move it to some kind of macros or func
-    GLint linkStatus;
-    glGetProgramiv(shader->program, GL_LINK_STATUS, &linkStatus);
-    if (linkStatus == GL_FALSE) {
-        GLint logLength;
-        glGetProgramiv(shader->program, GL_INFO_LOG_LENGTH, &logLength);
-
-        std::vector<char> errorLog(logLength);
-        glGetProgramInfoLog(shader->program, logLength, &logLength, &errorLog[0]);
-
-        std::cerr << "yar_shader linking failed: " << &errorLog[0] << std::endl;
-    }
-#endif
-    *out_shader = shader;
 }
 
 void gl_addDescriptorSet(yar_descriptor_set_desc* desc, yar_descriptor_set** set)
@@ -1009,10 +1011,11 @@ void gl_addDescriptorSet(yar_descriptor_set_desc* desc, yar_descriptor_set** set
 
     new_set->update_freq = desc->update_freq;
     new_set->max_set = desc->max_sets;
-    new_set->program = desc->shader->program;
+    
+    auto gl_shader = reinterpret_cast<yar_gl_shader*>(desc->shader);
 
     std::vector<yar_shader_resource> tmp;
-    std::copy_if(desc->shader->resources.begin(), desc->shader->resources.end(),
+    std::copy_if(gl_shader->resources.begin(), gl_shader->resources.end(),
         std::back_inserter(tmp),
         [=](yar_shader_resource& resource) {
             return resource.set == new_set->update_freq;
@@ -1023,14 +1026,50 @@ void gl_addDescriptorSet(yar_descriptor_set_desc* desc, yar_descriptor_set** set
     *set = new_set;
 }
 
-void gl_addPipeline(const yar_pipeline_desc* desc, yar_pipeline** pipeline)
+void gl_addPipeline(yar_pipeline_desc* desc, yar_pipeline** pipeline)
 {
     yar_gl_pipeline* new_pipeline = static_cast<yar_gl_pipeline*>(
         std::calloc(1, sizeof(yar_gl_pipeline))
     );
     *pipeline = &new_pipeline->pipeline;
 
-    new_pipeline->shader = &desc->shader;
+    new_pipeline->shader = reinterpret_cast<yar_gl_shader*>(desc->shader);
+    glGenProgramPipelines(1, &new_pipeline->program_pipeline);
+    for (size_t i = 0; i < yar_shader_stage_max; ++i)
+    {
+        yar_shader_stage stage_mask = (yar_shader_stage)(1 << i);
+        if (stage_mask != (new_pipeline->shader->shader.stages & stage_mask))
+            continue;
+
+        GLbitfield stage;
+        GLuint* gl_shader = nullptr;
+        switch (stage_mask)
+        {
+        case yar_shader_stage_vert:
+            stage = GL_VERTEX_SHADER_BIT;
+            gl_shader = &new_pipeline->shader->vs;
+            break;
+        case yar_shader_stage_pixel:
+            stage = GL_FRAGMENT_SHADER_BIT;
+            gl_shader = &new_pipeline->shader->ps;
+            break;
+        case yar_shader_stage_geom:
+            stage = GL_GEOMETRY_SHADER_BIT;
+            gl_shader = &new_pipeline->shader->gs;
+            break;
+        case yar_shader_stage_comp:
+            stage = GL_COMPUTE_SHADER_BIT;
+            gl_shader = &new_pipeline->shader->cs;
+            break;
+        case yar_shader_stage_none:
+        case yar_shader_stage_max:
+        default:
+            // error
+            break;
+        }
+
+        glUseProgramStages(new_pipeline->program_pipeline, stage, *gl_shader);
+    }
 
     new_pipeline->fill_mode = util_get_gl_fill_mode(desc->rasterizer_state.fill_mode);
     new_pipeline->cull_mode = util_get_gl_cull_mode(desc->rasterizer_state.cull_mode);
@@ -1110,7 +1149,8 @@ void gl_addCmd(yar_cmd_buffer_desc* desc, yar_cmd_buffer** cmd)
         pc_desc.flags = yar_buffer_flag_dynamic;
         add_buffer(&pc_desc, &new_pc->buffer);
 
-        const auto& descriptors = desc->pc_desc->shader->resources;
+        auto gl_shader = reinterpret_cast<yar_gl_shader*>(desc->pc_desc->shader);
+        const auto& descriptors = gl_shader->resources;
         std::string_view name(desc->pc_desc->name);
         auto pc_reflection = std::find_if(
             descriptors.begin(), descriptors.end(),
@@ -1123,8 +1163,6 @@ void gl_addCmd(yar_cmd_buffer_desc* desc, yar_cmd_buffer** cmd)
         }
 
         new_pc->size = desc->pc_desc->size;
-        new_pc->shader_program = desc->pc_desc->shader->program;
-
         new_cmd->cmd.push_constant = new_pc;
     }
 }
@@ -1164,9 +1202,10 @@ void gl_updateDescriptorSet(yar_update_descriptor_set_desc* desc, yar_descriptor
 
 void gl_cmdBindPipeline(yar_cmd_buffer* cmd, yar_pipeline* pipeline)
 {
-    yar_gl_pipeline* gl_pipeline = reinterpret_cast<yar_gl_pipeline*>(pipeline);
     cmd->commands.push_back([=]() {
-        glUseProgram(gl_pipeline->shader->program);
+        yar_gl_pipeline* gl_pipeline = reinterpret_cast<yar_gl_pipeline*>(pipeline);
+
+        glBindProgramPipeline(gl_pipeline->program_pipeline);
         
         if (gl_pipeline->depth_func)
         {
@@ -1325,7 +1364,6 @@ void gl_cmdBindPushConstant(yar_cmd_buffer* cmd, void* data)
 {
     uint32_t size = cmd->push_constant->size;
     uint32_t pc_id = cmd->push_constant->buffer->id;
-    uint32_t shader = cmd->push_constant->shader_program;
     uint32_t binding = cmd->push_constant->binding;
     std::vector<uint8_t> data_copy((uint8_t*)data, (uint8_t*)data + size);
     

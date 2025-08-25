@@ -918,7 +918,7 @@ auto main() -> int {
 	// Need to make something with shaders path 
 	yar_shader_load_desc shader_load_desc = {};
 	shader_load_desc.stages[0] = { "shaders/base_vert.hlsl", "main", yar_shader_stage::yar_shader_stage_vert };
-	shader_load_desc.stages[1] = { "shaders/base_frag.hlsl", "main", yar_shader_stage::yar_shader_stage_frag };
+	shader_load_desc.stages[1] = { "shaders/base_frag.hlsl", "main", yar_shader_stage::yar_shader_stage_pixel };
 	yar_shader_desc* shader_desc = nullptr;
 	load_shader(&shader_load_desc, &shader_desc);
 	yar_shader* shader;
@@ -1061,7 +1061,7 @@ auto main() -> int {
 	mdl.setup_descriptor_set(shader, yar_update_freq_none, sampler);
 
 	yar_pipeline_desc pipeline_desc{};
-	pipeline_desc.shader = *shader;
+	pipeline_desc.shader = shader;
 	pipeline_desc.vertex_layout = layout;
 	pipeline_desc.depth_stencil_state = depth_stencil;
 	pipeline_desc.rasterizer_state = raster;

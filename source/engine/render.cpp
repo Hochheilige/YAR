@@ -82,7 +82,7 @@ void add_descriptor_set(yar_descriptor_set_desc* desc, yar_descriptor_set** set)
 //         device->add_root_signature(desc, root_signature);
 // }
 
-void add_pipeline(const yar_pipeline_desc* desc, yar_pipeline** pipeline)
+void add_pipeline(yar_pipeline_desc* desc, yar_pipeline** pipeline)
 {
     if (device && device->add_pipeline)
         device->add_pipeline(desc, pipeline);

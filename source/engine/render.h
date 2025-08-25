@@ -208,7 +208,7 @@ enum yar_shader_stage : uint8_t
 {
     yar_shader_stage_none = 0,
     yar_shader_stage_vert = 0x00000001,
-    yar_shader_stage_frag = 0x00000002,
+    yar_shader_stage_pixel = 0x00000002,
     yar_shader_stage_geom = 0x00000004,
     yar_shader_stage_comp = 0x00000008,
     yar_shader_stage_tese = 0x00000010,
@@ -352,7 +352,7 @@ struct yar_shader_desc
 {
     yar_shader_stage stages;
     yar_shader_stage_desc vert;
-    yar_shader_stage_desc frag;
+    yar_shader_stage_desc pixel;
     yar_shader_stage_desc geom;
     yar_shader_stage_desc comp;
 };
@@ -360,8 +360,6 @@ struct yar_shader_desc
 struct yar_shader
 {
     yar_shader_stage stages;
-    uint32_t program;
-    std::vector<yar_shader_resource> resources;
 };
 
 struct yar_vertex_attrib
@@ -458,7 +456,6 @@ struct yar_descriptor_set
     // buffer to bind buffer with current context
     yar_descriptor_set_update_frequency update_freq;
     uint32_t max_set;
-    uint32_t program; // only for gl
     std::set<yar_shader_resource> descriptors;
     std::vector<std::vector<yar_descriptor_info>> infos;
 };
@@ -475,13 +472,12 @@ struct yar_push_constant
     yar_buffer* buffer;
     uint32_t size;
     uint32_t binding;
-    uint32_t shader_program;
 };
 
 struct yar_pipeline_desc
 {
     // Split shader to vertex and pixel
-    yar_shader              shader;
+    yar_shader*             shader;
     yar_rasterizer_state    rasterizer_state;
     yar_depth_stencil_state depth_stencil_state;
     yar_blend_state         blend_state;
@@ -549,7 +545,7 @@ DECLARE_YAR_RENDER_FUNC(void, add_sampler, yar_sampler_desc* desc, yar_sampler**
 DECLARE_YAR_RENDER_FUNC(void, add_shader, yar_shader_desc* desc, yar_shader** shader);
 DECLARE_YAR_RENDER_FUNC(void, add_descriptor_set, yar_descriptor_set_desc* desc, yar_descriptor_set** set);
 //DECLARE_YAR_RENDER_FUNC(void, add_root_signature, RootSignatureDesc* desc, RootSignature** root_signature);
-DECLARE_YAR_RENDER_FUNC(void, add_pipeline, const yar_pipeline_desc* desc, yar_pipeline** pipeline);
+DECLARE_YAR_RENDER_FUNC(void, add_pipeline, yar_pipeline_desc* desc, yar_pipeline** pipeline);
 DECLARE_YAR_RENDER_FUNC(void, add_queue, yar_cmd_queue_desc* desc, yar_cmd_queue** queue);
 DECLARE_YAR_RENDER_FUNC(void, add_cmd, yar_cmd_buffer_desc* desc, yar_cmd_buffer** cmd);
 DECLARE_YAR_RENDER_FUNC(void, remove_buffer, yar_buffer* buffer);

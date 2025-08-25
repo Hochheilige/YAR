@@ -26,7 +26,7 @@ struct yar_device
     void (*add_shader)(yar_shader_desc* desc, yar_shader** shader);
     void (*add_descriptor_set)(yar_descriptor_set_desc* desc, yar_descriptor_set** shader);
     // void (*add_root_signature)(RootSignatureDesc* desc, RootSignature** root_signature);
-    void (*add_pipeline)(const yar_pipeline_desc* desc, yar_pipeline** pipeline);
+    void (*add_pipeline)(yar_pipeline_desc* desc, yar_pipeline** pipeline);
     void (*add_queue)(yar_cmd_queue_desc* desc, yar_cmd_queue** queue);
     void (*add_cmd)(yar_cmd_buffer_desc* desc, yar_cmd_buffer** cmd);
     void (*remove_buffer)(yar_buffer* buffer);
