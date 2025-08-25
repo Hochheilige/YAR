@@ -1065,6 +1065,7 @@ auto main() -> int {
 	pipeline_desc.vertex_layout = layout;
 	pipeline_desc.depth_stencil_state = depth_stencil;
 	pipeline_desc.rasterizer_state = raster;
+	pipeline_desc.topology = yar_primitive_topology_triangle_list;
 
 	yar_pipeline* graphics_pipeline;
 	add_pipeline(&pipeline_desc, &graphics_pipeline);

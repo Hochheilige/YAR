@@ -291,6 +291,21 @@ enum yar_cull_mode : uint8_t
     yar_cull_mode_back
 };
 
+enum yar_primitive_topology : uint8_t
+{
+    yar_primitive_topology_triangle_list = 0,
+    yar_primitive_topology_triangle_strip,
+    yar_primitive_topology_line_list,
+    yar_primitive_topology_line_strip,
+    yar_primitive_topology_point_list
+};
+
+enum yar_pipeline_type : uint8_t
+{
+    yar_pipeline_type_graphics = 0,
+    yar_pipeline_type_compute
+};
+
 enum yar_descriptor_set_update_frequency : uint8_t
 {
     yar_update_freq_none = 0,
@@ -465,30 +480,20 @@ struct yar_push_constant
 
 struct yar_pipeline_desc
 {
-    yar_shader shader;
-    yar_vertex_layout vertex_layout;
+    // Split shader to vertex and pixel
+    yar_shader              shader;
+    yar_rasterizer_state    rasterizer_state;
     yar_depth_stencil_state depth_stencil_state;
-    yar_blend_state blend_state;
-    yar_rasterizer_state rasterizer_state;
-    /*
-    has to contain:
-        * Shaders (probably shader reflection as well)
-            if Vulkan is a reference to this we have to store shader
-            stages count and stages as well
-        * Root Signature (?)
-        * Topology - Input Assembly
-        * Vertex Attributes
-        * Viewport state
-        * Rasterization state
-        * Multisampling state
-        * DepthStencil state
-        * Color Blend state
-        * Layout - to work with resources
-*/
+    yar_blend_state         blend_state;
+    yar_vertex_layout       vertex_layout;
+    yar_primitive_topology  topology;
+    // TODO: add samples
 };
 
+// TODO: split it to Graphics and Compute pipeline
 struct yar_pipeline
 {
+    yar_pipeline_type type;
 };
 
 struct yar_cmd_queue_desc

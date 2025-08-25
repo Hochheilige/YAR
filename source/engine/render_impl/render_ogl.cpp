@@ -22,11 +22,6 @@
 #include <glm/gtc/type_ptr.hpp>
 
 // ======================================= //
-//            Utils Variables              //
-// ======================================= //
-static GLuint current_vao = 0u;
-
-// ======================================= //
 //            Load Variables               //
 // ======================================= //
 
@@ -52,7 +47,11 @@ struct yar_gl_pipeline
     yar_pipeline pipeline;
     const yar_shader* shader;
 
-    GLuint vao;
+    // Rasterizer State
+    GLenum fill_mode;
+    GLenum cull_mode;
+    bool cull_enable;
+    bool front_counter_clockwise;
 
     // Depth Stencil State
     GLenum depth_func;
@@ -69,11 +68,18 @@ struct yar_gl_pipeline
     GLenum rgb_equation;
     GLenum alpha_equation;
 
-    // Rasterizer State
-    GLenum fill_mode;
-    GLenum cull_mode;
-    bool cull_enable;
-    bool front_counter_clockwise;
+    // Vertex Layout
+    GLuint vao;
+
+    // Topology
+    GLenum topology;
+};
+
+struct yar_gl_cmd_buffer
+{
+    yar_cmd_buffer cmd;
+    GLuint vao;
+    GLenum topology;
 };
 
 // ======================================= //
@@ -572,6 +578,25 @@ static GLenum util_get_gl_cull_mode(yar_cull_mode mode)
     }
 }
 
+static GLenum util_get_gl_topology(yar_primitive_topology topology)
+{
+    switch (topology)
+    {
+    case yar_primitive_topology_triangle_list:
+        return GL_TRIANGLES;
+    case yar_primitive_topology_triangle_strip:
+        return GL_TRIANGLE_STRIP;
+    case yar_primitive_topology_line_list:
+        return GL_LINES;
+    case yar_primitive_topology_line_strip:
+        return GL_LINE_STRIP;
+    case yar_primitive_topology_point_list:
+        return GL_POINTS;
+    default:
+        return GL_TRIANGLES; // better assert here
+    }
+}
+
 // ======================================= //
 //            Load Functions               //
 // ======================================= //
@@ -1006,20 +1031,12 @@ void gl_addPipeline(const yar_pipeline_desc* desc, yar_pipeline** pipeline)
     *pipeline = &new_pipeline->pipeline;
 
     new_pipeline->shader = &desc->shader;
-    GLuint& vao = new_pipeline->vao;
 
-    glCreateVertexArrays(1, &vao);
-    for (int i = 0; i < desc->vertex_layout.attrib_count; ++i)
-    {
-        GLint size     = desc->vertex_layout.attribs[i].size;
-        GLenum format  = util_get_gl_attrib_format(desc->vertex_layout.attribs[i].format);
-        GLuint offset  = desc->vertex_layout.attribs[i].offset;
-        GLuint binding = desc->vertex_layout.attribs[i].binding;
-        glVertexArrayAttribFormat(vao, i, size, format, GL_FALSE, offset);
-        glVertexArrayAttribBinding(vao, i, binding);
-    }
+    new_pipeline->fill_mode = util_get_gl_fill_mode(desc->rasterizer_state.fill_mode);
+    new_pipeline->cull_mode = util_get_gl_cull_mode(desc->rasterizer_state.cull_mode);
+    new_pipeline->cull_enable = new_pipeline->cull_mode;
+    new_pipeline->front_counter_clockwise = desc->rasterizer_state.front_counter_clockwise;
 
-    // TODO: all glEnable functions have to be moved to bind pipeline somehow
     if (desc->depth_stencil_state.depth_enable)
     {
         new_pipeline->depth_func = util_get_gl_depth_stencil_func(desc->depth_stencil_state.depth_func);
@@ -1043,10 +1060,19 @@ void gl_addPipeline(const yar_pipeline_desc* desc, yar_pipeline** pipeline)
         new_pipeline->alpha_equation = util_get_gl_blend_equation(desc->blend_state.alpha_op);
     }
 
-    new_pipeline->fill_mode = util_get_gl_fill_mode(desc->rasterizer_state.fill_mode);
-    new_pipeline->cull_mode = util_get_gl_cull_mode(desc->rasterizer_state.cull_mode);
-    new_pipeline->cull_enable = new_pipeline->cull_mode;
-    new_pipeline->front_counter_clockwise = desc->rasterizer_state.front_counter_clockwise;
+    GLuint& vao = new_pipeline->vao;
+    glCreateVertexArrays(1, &vao);
+    for (int i = 0; i < desc->vertex_layout.attrib_count; ++i)
+    {
+        GLint size     = desc->vertex_layout.attribs[i].size;
+        GLenum format  = util_get_gl_attrib_format(desc->vertex_layout.attribs[i].format);
+        GLuint offset  = desc->vertex_layout.attribs[i].offset;
+        GLuint binding = desc->vertex_layout.attribs[i].binding;
+        glVertexArrayAttribFormat(vao, i, size, format, GL_FALSE, offset);
+        glVertexArrayAttribBinding(vao, i, binding);
+    } 
+
+    new_pipeline->topology = util_get_gl_topology(desc->topology);
 }
 
 void gl_addQueue([[maybe_unused]] yar_cmd_queue_desc* desc, yar_cmd_queue** queue)
@@ -1140,7 +1166,6 @@ void gl_updateDescriptorSet(yar_update_descriptor_set_desc* desc, yar_descriptor
 void gl_cmdBindPipeline(yar_cmd_buffer* cmd, yar_pipeline* pipeline)
 {
     yar_gl_pipeline* gl_pipeline = reinterpret_cast<yar_gl_pipeline*>(pipeline);
-    current_vao = gl_pipeline->vao;
     cmd->commands.push_back([=]() {
         glUseProgram(gl_pipeline->shader->program);
         
@@ -1178,6 +1203,10 @@ void gl_cmdBindPipeline(yar_cmd_buffer* cmd, yar_pipeline* pipeline)
         }
 
         gl_pipeline->front_counter_clockwise ? glFrontFace(GL_CCW) : glFrontFace(GL_CW);
+
+        yar_gl_cmd_buffer* gl_cmd = reinterpret_cast<yar_gl_cmd_buffer*>(cmd);
+        gl_cmd->vao = gl_pipeline->vao;
+        gl_cmd->topology = gl_pipeline->topology;
     });
 }
 
@@ -1273,8 +1302,10 @@ void gl_cmdBindDescriptorSet(yar_cmd_buffer* cmd, yar_descriptor_set* set, uint3
 
 void gl_cmdBindVertexBuffer(yar_cmd_buffer* cmd, yar_buffer* buffer, uint32_t count, uint32_t offset, uint32_t stride)
 {
-    GLuint& vao = current_vao;
     cmd->commands.push_back([=]() {
+        auto gl_cmd = reinterpret_cast<yar_gl_cmd_buffer*>(cmd);
+        GLuint vao = gl_cmd->vao;
+
         glVertexArrayVertexBuffer(vao, 0, buffer->id, offset, stride); // maybe need to store binding?
         for (int i = 0; i < count; ++i)
             glEnableVertexArrayAttrib(vao, i); // probably need to store somewhere
@@ -1283,8 +1314,10 @@ void gl_cmdBindVertexBuffer(yar_cmd_buffer* cmd, yar_buffer* buffer, uint32_t co
 
 void gl_cmdBindIndexBuffer(yar_cmd_buffer* cmd, yar_buffer* buffer)
 {
-    GLuint& vao = current_vao;
     cmd->commands.push_back([=]() {
+        auto gl_cmd = reinterpret_cast<yar_gl_cmd_buffer*>(cmd);
+        GLuint vao = gl_cmd->vao;
+
         glVertexArrayElementBuffer(vao, buffer->id);
     });
 }
@@ -1305,25 +1338,27 @@ void gl_cmdBindPushConstant(yar_cmd_buffer* cmd, void* data)
 
 void gl_cmdDraw(yar_cmd_buffer* cmd, uint32_t first_vertex, uint32_t count)
 {
-    GLuint& vao = current_vao;
     cmd->commands.push_back([=]() {
+        auto gl_cmd = reinterpret_cast<yar_gl_cmd_buffer*>(cmd);
+        GLuint vao = gl_cmd->vao;
+        GLenum topology = gl_cmd->topology;
+
         glBindVertexArray(vao);
-        // need to add topology somewhere
-        // FIXME: MOVE TOPOLOGY
-        glDrawArrays(GL_TRIANGLE_STRIP, first_vertex, count);
+        glDrawArrays(topology, first_vertex, count);
     });
 }
 
 void gl_cmdDrawIndexed(yar_cmd_buffer* cmd, uint32_t index_count, 
     [[maybe_unused]] uint32_t first_index, [[maybe_unused]] uint32_t first_vertex)
 {
-    GLuint& vao = current_vao;
     // probably need to change function signature
     cmd->commands.push_back([=]() {
-        glBindVertexArray(vao);
-        // need to add topology somewhere
+        auto gl_cmd = reinterpret_cast<yar_gl_cmd_buffer*>(cmd);
+        GLuint vao = gl_cmd->vao;
+        GLenum topology = gl_cmd->topology;
 
-        glDrawElements(GL_TRIANGLES, index_count, GL_UNSIGNED_INT, 0);
+        glBindVertexArray(vao);
+        glDrawElements(topology, index_count, GL_UNSIGNED_INT, 0);
     });
 }
 
