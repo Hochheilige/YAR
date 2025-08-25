@@ -85,7 +85,20 @@ else:
     command = [
         'python', '-m', 'glad', '--generator=c', '--spec=gl',
         '--out-path=' + output_path, '--api=gl=4.6', '--profile=core',
-        '--extensions=GL_ARB_explicit_uniform_location,GL_ARB_direct_state_access,GL_ARB_shader_draw_parameters,GL_ARB_shader_group_vote,GL_ARB_clip_control,GL_ARB_texture_filter_anisotropic,GL_ARB_texture_storage,GL_KHR_debug,GL_ARB_buffer_storage,GL_ARB_bindless_texture,GL_ARB_indirect_parameters,GL_ARB_gl_spirv,GL_ARB_shading_language_420pack'
+        '--extensions='
+        'GL_ARB_explicit_uniform_location,'
+        'GL_ARB_direct_state_access,'
+        'GL_ARB_shader_draw_parameters,'
+        'GL_ARB_shader_group_vote,'
+        'GL_ARB_clip_control,'
+        'GL_ARB_texture_filter_anisotropic,'
+        'GL_ARB_texture_storage,'
+        'GL_KHR_debug,'
+        'GL_ARB_buffer_storage,'
+        'GL_ARB_bindless_texture,'
+        'GL_ARB_indirect_parameters,'
+        'GL_ARB_gl_spirv,'
+        'GL_ARB_shading_language_420pack'
     ]
     run_command_with_progress(command, estimated_time=2, description="generate glad")
 
