@@ -36,13 +36,20 @@ static yar_buffer* pixel_buffer   = nullptr;
 // ======================================= //
 //            OpenGL Structs               //
 // ======================================= //
+enum yar_gl_texture_type
+{
+    yar_type_texture = 0,
+    yar_type_renderbuffer
+};
+
 struct yar_gl_texture
 {
     yar_texture common;
-    uint32_t id;
-    uint32_t internal_format;
-    uint32_t gl_format;
-    uint32_t gl_type;
+    yar_gl_texture_type type;
+    GLuint id;
+    GLuint internal_format;
+    GLuint gl_format;
+    GLuint gl_type;
 };
 
 struct yar_gl_shader
@@ -97,6 +104,7 @@ struct yar_gl_cmd_buffer
     yar_cmd_buffer cmd;
     GLuint vao;
     GLenum topology;
+    GLuint fbo;
 };
 
 // ======================================= //
@@ -413,7 +421,7 @@ static GLenum util_get_gl_format(yar_texture_format format)
     }
 }
 
-static GLenum util_get_gl_tetxure_data_type(yar_texture_format format)
+static GLenum util_get_gl_texture_data_type(yar_texture_format format)
 {
     switch (format)
     {
@@ -813,34 +821,51 @@ void gl_addTexture(yar_texture_desc* desc, yar_texture** texture)
     GLsizei mip_levels = desc->mip_levels;
     GLuint& id = new_texture->id;
 
-    glCreateTextures(gl_target, 1, &id);
+    bool need_shader_access = (desc->usage &
+        (yar_texture_usage::yar_texture_usage_shader_resource | yar_texture_usage::yar_texture_usage_unordered_access));
+    bool need_rt_only = (desc->usage & 
+        (yar_texture_usage::yar_texture_usage_render_target | yar_texture_usage::yar_texture_usage_depth_stencil))
+        && !need_shader_access;
 
-    switch (desc->type)
+    if (need_rt_only)
     {
-    case yar_texture_type_1d:
-        glTextureStorage1D(id, mip_levels, gl_internal_format, 
-            width);
-        break;
-    case yar_texture_type_2d:
-    case yar_texture_type_cube_map:
-        glTextureStorage2D(id, mip_levels, gl_internal_format, 
-            width, height);
-        break;
-    case yar_texture_type_3d:
-        glTextureStorage3D(id, mip_levels, gl_internal_format,
-            width, height, depth);
-    case yar_texture_type_1d_array:
-    case yar_texture_type_2d_array:
-        glTextureStorage3D(id, mip_levels, gl_internal_format, 
-            width, height, array_size);
-        break;
-    default:
-        break;
+        new_texture->type = yar_gl_texture_type::yar_type_renderbuffer;
+        glCreateRenderbuffers(1, &id);
+        glNamedRenderbufferStorage(id, gl_internal_format, width, height);
+    }
+    else
+    {
+        new_texture->type = yar_gl_texture_type::yar_type_texture;
+        glCreateTextures(gl_target, 1, &id);
+
+        switch (desc->type)
+        {
+        case yar_texture_type_1d:
+            glTextureStorage1D(id, mip_levels, gl_internal_format,
+                width);
+            break;
+        case yar_texture_type_2d:
+        case yar_texture_type_cube_map:
+            glTextureStorage2D(id, mip_levels, gl_internal_format,
+                width, height);
+            break;
+        case yar_texture_type_3d:
+            glTextureStorage3D(id, mip_levels, gl_internal_format,
+                width, height, depth);
+            break;
+        case yar_texture_type_1d_array:
+        case yar_texture_type_2d_array:
+            glTextureStorage3D(id, mip_levels, gl_internal_format,
+                width, height, array_size);
+            break;
+        default:
+            break;
+        }
     }
 
     new_texture->internal_format = gl_internal_format;
     new_texture->gl_format = util_get_gl_format(desc->format);
-    new_texture->gl_type = util_get_gl_tetxure_data_type(desc->format);
+    new_texture->gl_type = util_get_gl_texture_data_type(desc->format);
     new_texture->common.type = desc->type;
     new_texture->common.format = desc->format;
     new_texture->common.width = width;
@@ -848,6 +873,24 @@ void gl_addTexture(yar_texture_desc* desc, yar_texture** texture)
     new_texture->common.depth = depth;
     new_texture->common.array_size = array_size;
     new_texture->common.mip_levels = mip_levels;
+}
+
+void gl_addRenderTarget(yar_render_target_desc* desc, yar_render_target** rt)
+{
+    auto new_rt = static_cast<yar_render_target*>(calloc(1, sizeof(yar_render_target)));
+
+    yar_texture_desc tex_desc{};
+    tex_desc.type = desc->type;
+    tex_desc.format = desc->format;
+    tex_desc.usage = desc->usage;
+    tex_desc.array_size = desc->array_size;
+    tex_desc.depth = desc->depth;
+    tex_desc.height = desc->height;
+    tex_desc.mip_levels = desc->mip_levels;
+    tex_desc.width = desc->width;
+    gl_addTexture(&tex_desc, &new_rt->texture);
+
+    *rt = new_rt;
 }
 
 void gl_addSampler(yar_sampler_desc* desc, yar_sampler** sampler)
@@ -1040,7 +1083,7 @@ void gl_addPipeline(yar_pipeline_desc* desc, yar_pipeline** pipeline)
         yar_shader_stage stage_mask = (yar_shader_stage)(1 << i);
         if (stage_mask != (new_pipeline->shader->shader.stages & stage_mask))
             continue;
-
+        
         GLbitfield stage;
         GLuint* gl_shader = nullptr;
         switch (stage_mask)
@@ -1165,6 +1208,8 @@ void gl_addCmd(yar_cmd_buffer_desc* desc, yar_cmd_buffer** cmd)
         new_pc->size = desc->pc_desc->size;
         new_cmd->cmd.push_constant = new_pc;
     }
+
+    glCreateFramebuffers(1, &new_cmd->fbo);
 }
 
 void gl_removeBuffer(yar_buffer* buffer)
@@ -1373,6 +1418,61 @@ void gl_cmdBindPushConstant(yar_cmd_buffer* cmd, void* data)
     });
 }
 
+void gl_cmdBeginRenderPass(yar_cmd_buffer* cmd, yar_render_pass_desc* desc)
+{
+    auto gl_cmd = reinterpret_cast<yar_gl_cmd_buffer*>(cmd);
+    uint8_t color_attachment_count = desc->color_attachment_count;
+    for (size_t i = 0; i < color_attachment_count; ++i)
+    {
+        yar_render_target* target = desc->color_attachments[i].target;
+        auto gl_texture = reinterpret_cast<yar_gl_texture*>(target->texture);
+        
+        if (gl_texture->type == yar_gl_texture_type::yar_type_texture)
+        {
+            glNamedFramebufferTexture(gl_cmd->fbo, 
+                GL_COLOR_ATTACHMENT0 + i, gl_texture->id, 0);
+        }
+        else
+        {
+            glNamedFramebufferRenderbuffer(gl_cmd->fbo, 
+                GL_COLOR_ATTACHMENT0 + i, GL_RENDERBUFFER, gl_texture->id);
+        }
+    }
+
+    yar_render_target* ds_target = desc->depth_stencil_attachment.target;
+    if (ds_target)
+    {
+        auto gl_ds_texture = reinterpret_cast<yar_gl_texture*>(ds_target->texture);
+
+        // TODO: add separate for depth and stencil
+        if (gl_ds_texture->type == yar_gl_texture_type::yar_type_texture)
+        {
+            if (gl_ds_texture->common.format)
+            glNamedFramebufferTexture(gl_cmd->fbo,
+                GL_DEPTH_STENCIL_ATTACHMENT,  gl_ds_texture->id, 0);
+        }
+        else
+        {
+            glNamedFramebufferRenderbuffer(gl_cmd->fbo,
+                GL_DEPTH_STENCIL_ATTACHMENT, GL_RENDERBUFFER, gl_ds_texture->id);
+        }
+    }
+
+    GLenum bufs[kMaxColorAttachments];
+    if (color_attachment_count)
+    {
+        for (uint8_t i = 0; i < color_attachment_count; ++i)
+            bufs[i] = GL_COLOR_ATTACHMENT0 + i;
+        glNamedFramebufferDrawBuffers(gl_cmd->fbo, color_attachment_count, bufs);
+    }
+    else
+    {
+        glNamedFramebufferDrawBuffers(gl_cmd->fbo, 0, nullptr);
+    }
+
+    glBindFramebuffer(GL_FRAMEBUFFER, gl_cmd->fbo);
+}
+
 void gl_cmdDraw(yar_cmd_buffer* cmd, uint32_t first_vertex, uint32_t count)
 {
     cmd->commands.push_back([=]() {
@@ -1444,6 +1544,7 @@ bool gl_init_render(yar_device* device)
     device->add_swapchain           = gl_addSwapChain;
     device->add_buffer              = gl_addBuffer;
     device->add_texture             = gl_addTexture;
+    device->add_render_target       = gl_addRenderTarget;
     device->add_sampler             = gl_addSampler;
     device->add_shader              = gl_addShader;
     device->add_descriptor_set      = gl_addDescriptorSet;
@@ -1459,6 +1560,7 @@ bool gl_init_render(yar_device* device)
     device->cmd_bind_vertex_buffer  = gl_cmdBindVertexBuffer;
     device->cmd_bind_index_buffer   = gl_cmdBindIndexBuffer;
     device->cmd_bind_push_constant  = gl_cmdBindPushConstant;
+    device->cmd_begin_render_pass   = gl_cmdBeginRenderPass;
     device->cmd_draw                = gl_cmdDraw;
     device->cmd_draw_indexed        = gl_cmdDrawIndexed;
     device->cmd_dispatch            = gl_cmdDispatch;

@@ -75,7 +75,8 @@ using yar_descriptor_index_map = std::unordered_map<std::string, uint32_t>;
 	static inline ENUM_TYPE operator|=(ENUM_TYPE& a, ENUM_TYPE b) { return a = (a | b); }                      \
 	static inline ENUM_TYPE operator&=(ENUM_TYPE& a, ENUM_TYPE b) { return a = (a & b); }
 
-constexpr uint8_t kMaxVertexAttribCount = 16;
+constexpr uint8_t kMaxVertexAttribCount = 16u;
+constexpr uint8_t kMaxColorAttachments = 8u;
 
 struct yar_swapchain
 {
@@ -152,10 +153,21 @@ enum yar_texture_format : uint8_t
     yar_texture_format_depth24_stencil8,
 };
 
+enum yar_texture_usage : uint8_t
+{
+    yar_texture_usage_none = 0, 
+    yar_texture_usage_render_target = 1 << 0, // WEIRD
+    yar_texture_usage_depth_stencil = 1 << 1,
+    yar_texture_usage_shader_resource = 1 << 2,
+    yar_texture_usage_unordered_access = 1 << 3,
+};
+MAKE_ENUM_FLAG(uint8_t, yar_texture_usage);
+
 struct yar_texture_desc
 {
     yar_texture_type type;
     yar_texture_format format;
+    yar_texture_usage usage;
     uint32_t width;
     uint32_t height;
     uint32_t depth;
@@ -517,6 +529,38 @@ struct yar_cmd_buffer
     yar_push_constant* push_constant;
 };
 
+struct yar_render_target_desc
+{
+    // It is literally the same as texture_desc now
+    yar_texture_type type;
+    yar_texture_format format;
+    yar_texture_usage usage;
+    uint32_t width;
+    uint32_t height;
+    uint32_t depth;
+    uint32_t array_size;
+    uint32_t mip_levels;
+};
+
+struct yar_render_target
+{
+    yar_texture* texture;
+    uint32_t width;
+    uint32_t height;
+};
+
+struct yar_attachment_desc
+{
+    yar_render_target* target;
+};
+
+struct yar_render_pass_desc
+{
+    uint8_t color_attachment_count;
+    yar_attachment_desc color_attachments[kMaxColorAttachments];
+    yar_attachment_desc depth_stencil_attachment;
+};
+
 // ======================================= //
 //            Load Functions               //
 // ======================================= //
@@ -541,6 +585,7 @@ ret name(__VA_ARGS__)                           \
 DECLARE_YAR_RENDER_FUNC(void, add_swapchain, bool vsync, yar_swapchain** swapchain);
 DECLARE_YAR_RENDER_FUNC(void, add_buffer, yar_buffer_desc* desc, yar_buffer** buffer);
 DECLARE_YAR_RENDER_FUNC(void, add_texture, yar_texture_desc* desc, yar_texture** texture);
+DECLARE_YAR_RENDER_FUNC(void, add_render_target, yar_render_target_desc* desc, yar_render_target* rt);
 DECLARE_YAR_RENDER_FUNC(void, add_sampler, yar_sampler_desc* desc, yar_sampler** sampler);
 DECLARE_YAR_RENDER_FUNC(void, add_shader, yar_shader_desc* desc, yar_shader** shader);
 DECLARE_YAR_RENDER_FUNC(void, add_descriptor_set, yar_descriptor_set_desc* desc, yar_descriptor_set** set);
@@ -555,6 +600,8 @@ DECLARE_YAR_RENDER_FUNC(void, cmd_bind_descriptor_set, yar_cmd_buffer* cmd, yar_
 DECLARE_YAR_RENDER_FUNC(void, cmd_bind_vertex_buffer, yar_cmd_buffer* cmd, yar_buffer* buffer, uint32_t count, uint32_t offset, uint32_t stride);
 DECLARE_YAR_RENDER_FUNC(void, cmd_bind_index_buffer, yar_cmd_buffer* cmd, yar_buffer* buffer); // maybe for other render api there should be more params
 DECLARE_YAR_RENDER_FUNC(void, cmd_bind_push_constant, yar_cmd_buffer* cmd, void* data);
+DECLARE_YAR_RENDER_FUNC(void, cmd_begin_render_pass, yar_cmd_buffer* cmd, yar_render_pass_desc* desc);
+DECLARE_YAR_RENDER_FUNC(void, cmd_end_render_pass, yar_cmd_buffer* cmd);
 DECLARE_YAR_RENDER_FUNC(void, cmd_draw, yar_cmd_buffer* cmd, uint32_t first_vertex, uint32_t count);
 DECLARE_YAR_RENDER_FUNC(void, cmd_draw_indexed, yar_cmd_buffer* cmd, uint32_t index_count, uint32_t first_index, uint32_t first_vertex);
 DECLARE_YAR_RENDER_FUNC(void, cmd_dispatch, yar_cmd_buffer* cmd, uint32_t num_groups_x, uint32_t num_groups_y, uint32_t num_groups_z);

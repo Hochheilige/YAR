@@ -58,6 +58,12 @@ void add_texture(yar_texture_desc* desc, yar_texture** texture)
         device->add_texture(desc, texture);
 }
 
+void add_render_target(yar_render_target_desc* desc, yar_render_target** rt)
+{
+    if (device && device->add_render_target)
+        device->add_render_target(desc, rt);
+}
+
 void add_sampler(yar_sampler_desc* desc, yar_sampler** sampler)
 {
     if (device && device->add_sampler)
@@ -140,6 +146,18 @@ void cmd_bind_push_constant(yar_cmd_buffer* cmd, void* data)
 {
     if (device && device->cmd_bind_push_constant)
         device->cmd_bind_push_constant(cmd, data);
+}
+
+void cmd_begin_render_pass(yar_cmd_buffer* cmd, yar_render_pass_desc* desc)
+{
+    if (device && device->cmd_begin_render_pass)
+        device->cmd_begin_render_pass(cmd, desc);
+}
+
+void cmd_end_render_pass(yar_cmd_buffer* cmd)
+{
+    if (device && device->cmd_end_render_pass)
+        device->cmd_end_render_pass(cmd);
 }
 
 void cmd_draw(yar_cmd_buffer* cmd, uint32_t first_vertex, uint32_t count)

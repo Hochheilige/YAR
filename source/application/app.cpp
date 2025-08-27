@@ -33,6 +33,7 @@ yar_texture* load_white_texture()
 	texture_desc.mip_levels = 1;
 	texture_desc.type = yar_texture_type_2d;
 	texture_desc.format = yar_texture_format_rgba8;
+	texture_desc.usage = yar_texture_usage_shader_resource;
 	add_texture(&texture_desc, &tex);
 
 	yar_resource_update_desc resource_update_desc;
@@ -72,6 +73,7 @@ yar_texture* load_texture(const std::string_view& name)
 		texture_desc.mip_levels = 1;
 		texture_desc.type = yar_texture_type_2d;
 		texture_desc.format = format;
+		texture_desc.usage = yar_texture_usage_shader_resource;
 		add_texture(&texture_desc, &tex);
 
 		yar_resource_update_desc resource_update_desc;
@@ -831,6 +833,7 @@ auto main() -> int {
 		texture_desc.mip_levels = 1;
 		texture_desc.type = yar_texture_type_2d;
 		texture_desc.format = yar_texture_format_rgba8;
+		texture_desc.usage = yar_texture_usage_shader_resource;
 		add_texture(&texture_desc, &diffuse_map_tex);
 
 		yar_resource_update_desc resource_update_desc;
@@ -858,6 +861,7 @@ auto main() -> int {
 		texture_desc.mip_levels = 1;
 		texture_desc.type = yar_texture_type_2d;
 		texture_desc.format = yar_texture_format_rgba8;
+		texture_desc.usage = yar_texture_usage_shader_resource;
 		add_texture(&texture_desc, &specular_map_tex);
 
 		yar_resource_update_desc resource_update_desc;
