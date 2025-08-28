@@ -14,5 +14,9 @@ void terminate_window();
 
 typedef void (*swap_buffers)(void*);
 swap_buffers get_swap_buffers_func();
+
+typedef void (*swap_interval)(bool);
+swap_interval get_swap_interval_func();
+
 void* get_window();
 const WindowDimensions& get_window_dims();

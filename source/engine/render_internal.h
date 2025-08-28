@@ -19,7 +19,7 @@ struct yar_device
     //            Render Functions             //
     // ======================================= //
 
-    void (*add_swapchain)(bool vsync, yar_swapchain** swapchain);
+    void (*add_swapchain)(yar_swapchain_desc* desc, yar_swapchain** swapchain);
     void (*add_buffer)(yar_buffer_desc* desc, yar_buffer** buffer);
     void (*add_texture)(yar_texture_desc* desc, yar_texture** texture);
     void (*add_render_target)(yar_render_target_desc* desc, yar_render_target** rt);
@@ -32,6 +32,7 @@ struct yar_device
     void (*add_cmd)(yar_cmd_buffer_desc* desc, yar_cmd_buffer** cmd);
     void (*remove_buffer)(yar_buffer* buffer);
     void (*update_descriptor_set)(yar_update_descriptor_set_desc* desc, yar_descriptor_set* set);
+    void (*acquire_next_image)(yar_swapchain* swapchain, uint32_t& swapchain_index);
     void (*cmd_bind_pipeline)(yar_cmd_buffer* cmd, yar_pipeline* pipeline);
     void (*cmd_bind_descriptor_set)(yar_cmd_buffer* cmd, yar_descriptor_set* set, uint32_t index);
     void (*cmd_bind_vertex_buffer)(yar_cmd_buffer* cmd, yar_buffer* buffer, uint32_t count, uint32_t offset, uint32_t stride);
@@ -44,4 +45,5 @@ struct yar_device
     void (*cmd_dispatch)(yar_cmd_buffer* cmd, uint32_t num_groups_x, uint32_t num_groups_y, uint32_t num_groups_z);
     void (*cmd_update_buffer)(yar_cmd_buffer* cmd, yar_buffer* buffer, size_t offset, size_t size, void* data);
     void (*queue_submit)(yar_cmd_queue* queue);
+    void (*queue_present)(yar_cmd_queue* queue, yar_queue_present_desc* desc);
 };

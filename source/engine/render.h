@@ -78,14 +78,6 @@ using yar_descriptor_index_map = std::unordered_map<std::string, uint32_t>;
 constexpr uint8_t kMaxVertexAttribCount = 16u;
 constexpr uint8_t kMaxColorAttachments = 8u;
 
-struct yar_swapchain
-{
-    // this implementation is probably good only for OpenGL
-    bool vsync;
-    void* window;
-    void(*swap_buffers)(void*);
-};
-
 enum yar_buffer_usage : uint8_t
 {
     yar_buffer_usage_none          = 0,
@@ -114,19 +106,6 @@ enum yar_buffer_flag : uint8_t
 };
 MAKE_ENUM_FLAG(uint8_t, yar_buffer_flag);
 
-struct yar_buffer_desc
-{
-    uint32_t size;
-    yar_buffer_usage usage;
-    yar_buffer_flag flags;
-};
-
-struct yar_buffer
-{
-    uint32_t id;
-    yar_buffer_flag flags;
-};
-
 enum yar_texture_type
 {
     yar_texture_type_none = 0,
@@ -144,9 +123,14 @@ enum yar_texture_format : uint8_t
     yar_texture_format_r8,
     yar_texture_format_rgb8,
     yar_texture_format_rgba8,
+
+    yar_texture_format_srgb8,
+    yar_texture_format_srgba8,
+
     yar_texture_format_rgb16f,
     yar_texture_format_rgba16f,
     yar_texture_format_rgba32f,
+
     yar_texture_format_depth16,
     yar_texture_format_depth24,
     yar_texture_format_depth32f,
@@ -163,29 +147,6 @@ enum yar_texture_usage : uint8_t
 };
 MAKE_ENUM_FLAG(uint8_t, yar_texture_usage);
 
-struct yar_texture_desc
-{
-    yar_texture_type type;
-    yar_texture_format format;
-    yar_texture_usage usage;
-    uint32_t width;
-    uint32_t height;
-    uint32_t depth;
-    uint32_t array_size;
-    uint32_t mip_levels;
-};
-
-struct yar_texture
-{
-    yar_texture_type type;
-    yar_texture_format format;
-    uint32_t width;
-    uint32_t height;
-    uint32_t depth;
-    uint32_t array_size;
-    uint32_t mip_levels;
-};
-
 enum yar_filter_type
 {
     yar_filter_type_none = 0,
@@ -199,21 +160,6 @@ enum yar_wrap_mode
     yar_wrap_mode_mirrored,
     yar_wrap_mode_clamp_edge,
     yar_wrap_mode_clamp_border
-};
-
-struct yar_sampler_desc
-{
-    yar_filter_type min_filter;
-    yar_filter_type mag_filter;
-    yar_filter_type mip_map_filter;
-    yar_wrap_mode wrap_u;
-    yar_wrap_mode wrap_v;
-    yar_wrap_mode wrap_w;
-};
-
-struct yar_sampler
-{
-    uint32_t id;
 };
 
 enum yar_shader_stage : uint8_t
@@ -246,13 +192,13 @@ enum yar_vertex_attrib_format : uint8_t
 enum yar_depth_stencil_func : uint8_t
 {
     yar_depth_stencil_func_always = 0,
-    yar_depth_stencil_func_never,      
-    yar_depth_stencil_func_less,       
-    yar_depth_stencil_func_equal,      
-    yar_depth_stencil_func_less_equal,  
-    yar_depth_stencil_func_greater,   
-    yar_depth_stencil_func_not_equal,   
-    yar_depth_stencil_func_great_equal 
+    yar_depth_stencil_func_never,
+    yar_depth_stencil_func_less,
+    yar_depth_stencil_func_equal,
+    yar_depth_stencil_func_less_equal,
+    yar_depth_stencil_func_greater,
+    yar_depth_stencil_func_not_equal,
+    yar_depth_stencil_func_great_equal
 };
 
 enum yar_stencil_op : uint8_t
@@ -324,6 +270,95 @@ enum yar_descriptor_set_update_frequency : uint8_t
     yar_update_freq_per_frame = 1,
     yar_update_freq_per_draw = 2,
     yar_update_freq_max = 3
+};
+
+struct yar_texture_desc
+{
+    yar_texture_type type;
+    yar_texture_format format;
+    yar_texture_usage usage;
+    uint32_t width;
+    uint32_t height;
+    uint32_t depth;
+    uint32_t array_size;
+    uint32_t mip_levels;
+};
+
+struct yar_texture
+{
+    yar_texture_type type;
+    yar_texture_format format;
+    uint32_t width;
+    uint32_t height;
+    uint32_t depth;
+    uint32_t array_size;
+    uint32_t mip_levels;
+};
+
+struct yar_render_target_desc
+{
+    // It is literally the same as texture_desc now
+    yar_texture_type type;
+    yar_texture_format format;
+    yar_texture_usage usage;
+    uint32_t width;
+    uint32_t height;
+    uint32_t depth;
+    uint32_t array_size;
+    uint32_t mip_levels;
+};
+
+struct yar_render_target
+{
+    yar_texture* texture;
+    uint32_t width;
+    uint32_t height;
+};
+
+struct yar_swapchain_desc
+{
+    void* window_handle;
+    uint32_t width;
+    uint32_t height;
+    uint32_t buffer_count;
+    yar_texture_format format;
+    bool vsync;
+};
+
+struct yar_swapchain
+{
+    uint32_t buffer_count;
+    yar_render_target** render_targets;
+    uint32_t buffer_index;
+    bool vsync;
+};
+
+struct yar_buffer_desc
+{
+    uint32_t size;
+    yar_buffer_usage usage;
+    yar_buffer_flag flags;
+};
+
+struct yar_buffer
+{
+    uint32_t id;
+    yar_buffer_flag flags;
+};
+
+struct yar_sampler_desc
+{
+    yar_filter_type min_filter;
+    yar_filter_type mag_filter;
+    yar_filter_type mip_map_filter;
+    yar_wrap_mode wrap_u;
+    yar_wrap_mode wrap_v;
+    yar_wrap_mode wrap_w;
+};
+
+struct yar_sampler
+{
+    uint32_t id;
 };
 
 struct yar_shader_resource
@@ -509,12 +544,7 @@ struct yar_cmd_queue_desc
     uint8_t dummy;
 };
 
-struct yar_cmd_buffer;
-
-struct yar_cmd_queue
-{
-    std::vector<yar_cmd_buffer*> queue;
-};
+struct yar_cmd_queue;
 
 struct yar_cmd_buffer_desc
 {
@@ -529,24 +559,14 @@ struct yar_cmd_buffer
     yar_push_constant* push_constant;
 };
 
-struct yar_render_target_desc
+struct yar_cmd_queue
 {
-    // It is literally the same as texture_desc now
-    yar_texture_type type;
-    yar_texture_format format;
-    yar_texture_usage usage;
-    uint32_t width;
-    uint32_t height;
-    uint32_t depth;
-    uint32_t array_size;
-    uint32_t mip_levels;
+    std::vector<yar_cmd_buffer*> queue;
 };
 
-struct yar_render_target
+struct yar_queue_present_desc
 {
-    yar_texture* texture;
-    uint32_t width;
-    uint32_t height;
+    yar_swapchain* swapchain;
 };
 
 struct yar_attachment_desc
@@ -582,10 +602,10 @@ DECLARE_YAR_LOAD_FUNC(void, unmap_buffer, yar_buffer* buffer);
 #define DECLARE_YAR_RENDER_FUNC(ret, name, ...) \
 ret name(__VA_ARGS__)                           \
 
-DECLARE_YAR_RENDER_FUNC(void, add_swapchain, bool vsync, yar_swapchain** swapchain);
+DECLARE_YAR_RENDER_FUNC(void, add_swapchain, yar_swapchain_desc* desc, yar_swapchain** swapchain);
 DECLARE_YAR_RENDER_FUNC(void, add_buffer, yar_buffer_desc* desc, yar_buffer** buffer);
 DECLARE_YAR_RENDER_FUNC(void, add_texture, yar_texture_desc* desc, yar_texture** texture);
-DECLARE_YAR_RENDER_FUNC(void, add_render_target, yar_render_target_desc* desc, yar_render_target* rt);
+DECLARE_YAR_RENDER_FUNC(void, add_render_target, yar_render_target_desc* desc, yar_render_target** rt);
 DECLARE_YAR_RENDER_FUNC(void, add_sampler, yar_sampler_desc* desc, yar_sampler** sampler);
 DECLARE_YAR_RENDER_FUNC(void, add_shader, yar_shader_desc* desc, yar_shader** shader);
 DECLARE_YAR_RENDER_FUNC(void, add_descriptor_set, yar_descriptor_set_desc* desc, yar_descriptor_set** set);
@@ -595,6 +615,7 @@ DECLARE_YAR_RENDER_FUNC(void, add_queue, yar_cmd_queue_desc* desc, yar_cmd_queue
 DECLARE_YAR_RENDER_FUNC(void, add_cmd, yar_cmd_buffer_desc* desc, yar_cmd_buffer** cmd);
 DECLARE_YAR_RENDER_FUNC(void, remove_buffer, yar_buffer* buffer);
 DECLARE_YAR_RENDER_FUNC(void, update_descriptor_set, yar_update_descriptor_set_desc* desc, yar_descriptor_set* set);
+DECLARE_YAR_RENDER_FUNC(void, acquire_next_image, yar_swapchain* swapchain, uint32_t& swapchain_index);
 DECLARE_YAR_RENDER_FUNC(void, cmd_bind_pipeline, yar_cmd_buffer* cmd, yar_pipeline* pipeline);
 DECLARE_YAR_RENDER_FUNC(void, cmd_bind_descriptor_set, yar_cmd_buffer* cmd, yar_descriptor_set* set, uint32_t index);
 DECLARE_YAR_RENDER_FUNC(void, cmd_bind_vertex_buffer, yar_cmd_buffer* cmd, yar_buffer* buffer, uint32_t count, uint32_t offset, uint32_t stride);
@@ -608,5 +629,6 @@ DECLARE_YAR_RENDER_FUNC(void, cmd_draw_indexed, yar_cmd_buffer* cmd, uint32_t in
 DECLARE_YAR_RENDER_FUNC(void, cmd_dispatch, yar_cmd_buffer* cmd, uint32_t num_groups_x, uint32_t num_groups_y, uint32_t num_groups_z);
 DECLARE_YAR_RENDER_FUNC(void, cmd_update_buffer, yar_cmd_buffer* cmd, yar_buffer* buffer, size_t offset, size_t size, void* data);
 DECLARE_YAR_RENDER_FUNC(void, queue_submit, yar_cmd_queue* queue);
+DECLARE_YAR_RENDER_FUNC(void, queue_present, yar_cmd_queue* queue, yar_queue_present_desc* desc);
 
 void init_render();

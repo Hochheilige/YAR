@@ -42,6 +42,13 @@ enum yar_gl_texture_type
     yar_type_renderbuffer
 };
 
+struct yar_gl_swapchain
+{
+    yar_swapchain swapchain;
+    void* window_handle;
+    GLuint fbo;
+};
+
 struct yar_gl_texture
 {
     yar_texture common;
@@ -378,6 +385,10 @@ static GLenum util_get_gl_internal_format(yar_texture_format format)
         return GL_RGB8;
     case yar_texture_format_rgba8:
         return GL_RGBA8;
+    case yar_texture_format_srgb8:
+        return GL_SRGB8;
+    case yar_texture_format_srgba8:
+        return GL_SRGB8_ALPHA8;
     case yar_texture_format_rgb16f:
         return GL_RGB16F;
     case yar_texture_format_rgba16f:
@@ -404,9 +415,11 @@ static GLenum util_get_gl_format(yar_texture_format format)
     case yar_texture_format_r8:
         return GL_RED;
     case yar_texture_format_rgb8:
+    case yar_texture_format_srgb8:
     case yar_texture_format_rgb16f:
         return GL_RGB;
     case yar_texture_format_rgba8:
+    case yar_texture_format_srgba8:
     case yar_texture_format_rgba16f:
     case yar_texture_format_rgba32f:
         return GL_RGBA;
@@ -428,6 +441,8 @@ static GLenum util_get_gl_texture_data_type(yar_texture_format format)
     case yar_texture_format_r8:
     case yar_texture_format_rgb8:
     case yar_texture_format_rgba8:
+    case yar_texture_format_srgb8:
+    case yar_texture_format_srgba8:
         return GL_UNSIGNED_BYTE;
     case yar_texture_format_rgb16f:
     case yar_texture_format_rgba16f:
@@ -775,18 +790,37 @@ void gl_endUpdateResource(yar_resource_update_desc& desc)
 //            Render Functions             //
 // ======================================= //
 
-void gl_addSwapChain(bool vsync, yar_swapchain** swapchain)
+void gl_addSwapChain(yar_swapchain_desc* desc, yar_swapchain** swapchain)
 {
-    yar_swapchain* new_swapchain = (yar_swapchain*)std::malloc(sizeof(yar_swapchain)); 
-    if (new_swapchain == nullptr) 
-        // Log error maybe add assert or something
-        return;
+    auto new_swapchain = static_cast<yar_gl_swapchain*>(std::calloc(1, sizeof(yar_gl_swapchain))); 
+    
+    *swapchain = &new_swapchain->swapchain;
 
-    new_swapchain->vsync = vsync;
-    new_swapchain->window = get_window();
-    new_swapchain->swap_buffers = get_swap_buffers_func();
+    uint32_t buffer_count = desc->buffer_count;
 
-    *swapchain = new_swapchain;
+    new_swapchain->swapchain.vsync = desc->vsync;
+    new_swapchain->swapchain.buffer_count = buffer_count;
+    new_swapchain->window_handle = desc->window_handle;
+    
+    new_swapchain->swapchain.render_targets = static_cast<yar_render_target**>(
+        std::calloc(buffer_count, sizeof(yar_render_target*))
+    );
+
+    yar_render_target_desc rt_desc{};
+    rt_desc.format = desc->format;
+    rt_desc.width = desc->width;
+    rt_desc.height = desc->height;
+    rt_desc.type = yar_texture_type_2d;
+    rt_desc.usage = yar_texture_usage_render_target;
+    rt_desc.mip_levels = 1;
+    for (uint32_t i = 0; i < buffer_count; ++i)
+    {
+        yar_render_target* rt;
+        add_render_target(&rt_desc, &rt);
+        new_swapchain->swapchain.render_targets[i] = rt;
+    }
+
+    glCreateFramebuffers(1, &new_swapchain->fbo);
 }
 
 void gl_addBuffer(yar_buffer_desc* desc, yar_buffer** buffer)
@@ -890,6 +924,8 @@ void gl_addRenderTarget(yar_render_target_desc* desc, yar_render_target** rt)
     tex_desc.width = desc->width;
     gl_addTexture(&tex_desc, &new_rt->texture);
 
+    new_rt->width = desc->width;
+    new_rt->height = desc->height;
     *rt = new_rt;
 }
 
@@ -1245,6 +1281,16 @@ void gl_updateDescriptorSet(yar_update_descriptor_set_desc* desc, yar_descriptor
     set->infos[index] = std::move(desc->infos);
 }
 
+void gl_acquireNextImage(yar_swapchain* swapchain, uint32_t& swapchain_index)
+{
+    auto gl_swapchain = reinterpret_cast<yar_gl_swapchain*>(swapchain);
+    swapchain_index = swapchain->buffer_index % swapchain->buffer_count;
+    auto rt = swapchain->render_targets[swapchain_index];
+    auto gl_texture = reinterpret_cast<yar_gl_texture*>(rt->texture);
+    glNamedFramebufferRenderbuffer(gl_swapchain->fbo,
+        GL_COLOR_ATTACHMENT0, GL_RENDERBUFFER, gl_texture->id);
+}
+
 void gl_cmdBindPipeline(yar_cmd_buffer* cmd, yar_pipeline* pipeline)
 {
     cmd->commands.push_back([=]() {
@@ -1450,12 +1496,12 @@ void gl_cmdBeginRenderPass(yar_cmd_buffer* cmd, yar_render_pass_desc* desc)
             {
                 if (gl_ds_texture->common.format)
                     glNamedFramebufferTexture(gl_cmd->fbo,
-                        GL_DEPTH_STENCIL_ATTACHMENT, gl_ds_texture->id, 0);
+                        GL_DEPTH_ATTACHMENT, gl_ds_texture->id, 0);
             }
             else
             {
                 glNamedFramebufferRenderbuffer(gl_cmd->fbo,
-                    GL_DEPTH_STENCIL_ATTACHMENT, GL_RENDERBUFFER, gl_ds_texture->id);
+                    GL_DEPTH_ATTACHMENT, GL_RENDERBUFFER, gl_ds_texture->id);
             }
         }
 
@@ -1472,6 +1518,13 @@ void gl_cmdBeginRenderPass(yar_cmd_buffer* cmd, yar_render_pass_desc* desc)
         }
 
         glBindFramebuffer(GL_FRAMEBUFFER, gl_cmd->fbo);
+        if (glCheckFramebufferStatus(GL_FRAMEBUFFER) == GL_FRAMEBUFFER_COMPLETE)
+            int a = 10;
+
+
+        // TODO: add color here
+        glClearColor(0.0f, 0.5f, 1.0f, 1.0f);
+        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT);
     });
 }
 
@@ -1540,6 +1593,48 @@ void gl_queueSubmit(yar_cmd_queue* queue)
     }
 }
 
+void gl_queuePresent(yar_cmd_queue* queue, yar_queue_present_desc* desc)
+{
+    auto set_vsync = get_swap_interval_func();
+    auto swap = get_swap_buffers_func();
+
+    set_vsync(desc->swapchain->vsync);
+
+    auto swapchain = desc->swapchain;
+    auto gl_swapchain = reinterpret_cast<yar_gl_swapchain*>(swapchain);
+    uint32_t index = swapchain->buffer_index % swapchain->buffer_count;
+    yar_render_target* rt = swapchain->render_targets[index];
+    auto gl_rt = reinterpret_cast<yar_gl_texture*>(rt->texture);
+
+    glBindFramebuffer(GL_FRAMEBUFFER, gl_swapchain->fbo);
+
+    if (gl_rt->type == yar_gl_texture_type::yar_type_texture) {
+        glNamedFramebufferTexture(gl_swapchain->fbo, GL_COLOR_ATTACHMENT0, gl_rt->id, 0);
+    }
+    else {
+        glNamedFramebufferRenderbuffer(gl_swapchain->fbo, GL_COLOR_ATTACHMENT0, GL_RENDERBUFFER, gl_rt->id);
+    }
+
+    GLenum bufs[1] = { GL_COLOR_ATTACHMENT0 };
+    glNamedFramebufferDrawBuffers(gl_swapchain->fbo, 1, bufs);
+    if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE) {
+        printf("swapchain FBO incomplete!\n");
+    }
+
+    glBindFramebuffer(GL_READ_FRAMEBUFFER, gl_swapchain->fbo);
+    glBindFramebuffer(GL_DRAW_FRAMEBUFFER, 0);
+    glBlitFramebuffer(
+        0, 0, rt->width, rt->height,
+        0, 0, rt->width, rt->height,
+        GL_COLOR_BUFFER_BIT,
+        GL_NEAREST
+    );
+
+    glBindFramebuffer(GL_FRAMEBUFFER, 0);
+    swap(gl_swapchain->window_handle);
+    swapchain->buffer_index++;
+}
+
 // Maybe need to add some params to this function in future
 bool gl_init_render(yar_device* device)
 {
@@ -1564,6 +1659,7 @@ bool gl_init_render(yar_device* device)
     device->map_buffer              = gl_mapBuffer;
     device->unmap_buffer            = gl_unmapBuffer;
     device->update_descriptor_set   = gl_updateDescriptorSet;
+    device->acquire_next_image      = gl_acquireNextImage;
     device->cmd_bind_pipeline       = gl_cmdBindPipeline;
     device->cmd_bind_descriptor_set = gl_cmdBindDescriptorSet;
     device->cmd_bind_vertex_buffer  = gl_cmdBindVertexBuffer;
@@ -1576,6 +1672,7 @@ bool gl_init_render(yar_device* device)
     device->cmd_dispatch            = gl_cmdDispatch;
     device->cmd_update_buffer       = gl_cmdUpdateBuffer;
     device->queue_submit            = gl_queueSubmit;
+    device->queue_present           = gl_queuePresent;
 
 #if _DEBUG
     glEnable(GL_DEBUG_OUTPUT);

@@ -71,6 +71,14 @@ swap_buffers get_swap_buffers_func()
     return (swap_buffers)glfw_swap_buffers;
 }
 
+swap_interval get_swap_interval_func()
+{
+    auto glfw_swap_interval = [](bool vsync) {
+        glfwSwapInterval(vsync);
+    };
+    return (swap_interval)glfw_swap_interval;
+}
+
 void* get_window()
 {
     return static_cast<void*>(window);

@@ -40,10 +40,10 @@ void unmap_buffer(yar_buffer* buffer)
         device->unmap_buffer(buffer);
 }
 
-void add_swapchain(bool vsync, yar_swapchain** swapchain)
+void add_swapchain(yar_swapchain_desc* desc, yar_swapchain** swapchain)
 {
     if (device && device->add_swapchain)
-        device->add_swapchain(vsync, swapchain);
+        device->add_swapchain(desc, swapchain);
 }
 
 void add_buffer(yar_buffer_desc* desc, yar_buffer** buffer)
@@ -118,6 +118,12 @@ void update_descriptor_set(yar_update_descriptor_set_desc* desc, yar_descriptor_
         device->update_descriptor_set(desc, set);
 }
 
+void acquire_next_image(yar_swapchain* swapchain, uint32_t& swapchain_index)
+{
+    if (device && device->acquire_next_image)
+        device->acquire_next_image(swapchain, swapchain_index);
+}
+
 void cmd_bind_pipeline(yar_cmd_buffer* cmd, yar_pipeline* pipeline)
 {
     if (device && device->cmd_bind_pipeline)
@@ -188,6 +194,12 @@ void queue_submit(yar_cmd_queue* queue)
 {
     if (device && device->queue_submit)
         device->queue_submit(queue);
+}
+
+void queue_present(yar_cmd_queue* queue, yar_queue_present_desc* desc)
+{
+    if (device && device->queue_present)
+        device->queue_present(queue, desc);
 }
 
 extern bool gl_init_render(yar_device* device);

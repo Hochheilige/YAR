@@ -707,8 +707,27 @@ auto main() -> int {
 	
 	init_render();
 
+	int32_t w, h;
+	glfwGetFramebufferSize((GLFWwindow*)get_window(), &w, &h);
+
+	yar_swapchain_desc swapchain_desc{};
+	swapchain_desc.buffer_count = 2;
+	swapchain_desc.format = yar_texture_format_srgba8;
+	swapchain_desc.height = h;
+	swapchain_desc.width = w;
+	swapchain_desc.vsync = false;
+	swapchain_desc.window_handle = get_window();
 	yar_swapchain* swapchain;
-	add_swapchain(true, &swapchain);
+	add_swapchain(&swapchain_desc, &swapchain);
+
+	yar_render_target_desc depth_buffer_desc{};
+	depth_buffer_desc.format = yar_texture_format_depth32f;
+	depth_buffer_desc.height = h;
+	depth_buffer_desc.width = w;
+	depth_buffer_desc.type = yar_texture_type_2d;
+	depth_buffer_desc.usage = yar_texture_usage_depth_stencil;
+	yar_render_target* depth_buffer;
+	add_render_target(&depth_buffer_desc, &depth_buffer);
 
 	VertexBuffer vertex_buffer{
 		{
@@ -1101,9 +1120,14 @@ auto main() -> int {
 
 		imgui_begin_frame();
 
-		// TODO: it's better to move this calls somewhere to swapchain swap buffers
-		glClearColor(gBackGroundColor[0], gBackGroundColor[1], gBackGroundColor[2], 1.0f);
-		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT);
+		uint32_t sc_image;
+		acquire_next_image(swapchain, sc_image);
+		yar_render_pass_desc pass_desc{};
+		pass_desc.color_attachment_count = 1;
+		pass_desc.color_attachments[0].target = swapchain->render_targets[sc_image];
+		pass_desc.depth_stencil_attachment.target = depth_buffer;
+
+		cmd_begin_render_pass(cmd, &pass_desc);
 
 		ubo.point_light.position[0] = *light_pos; // update point light pos
 		ubo.view_pos = glm::vec4(camera.pos, 0.0f);
@@ -1142,7 +1166,7 @@ auto main() -> int {
 		begin_update_resource(resource_update_desc);
 		std::memcpy(update.mapped_data, &ubo, sizeof(ubo));
 		end_update_resource(resource_update_desc);
-
+		
 		for (uint32_t i = 0; i < 10; ++i)
 		{
 			cmd_bind_pipeline(cmd, graphics_pipeline);
@@ -1162,12 +1186,20 @@ auto main() -> int {
 		cmd_bind_push_constant(cmd, &index);
 		mdl.draw(cmd);
 		
+		// HACK for Imgui, but need to move it to separate render pass
+		cmd->commands.push_back([]() {
+			imgui_render();
+			imgui_end_frame();
+			});
+
+		cmd_end_render_pass(cmd);
+
 		queue_submit(queue);
 
-        imgui_render();
-        imgui_end_frame();
+		yar_queue_present_desc present_desc{};
+		present_desc.swapchain = swapchain;
+		queue_present(queue, &present_desc);
 
-        swapchain->swap_buffers(swapchain->window);
         glfwPollEvents();
 		
 		frame_index = (frame_index + 1) % image_count;
