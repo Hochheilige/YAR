@@ -602,6 +602,7 @@ DECLARE_YAR_RENDER_FUNC(void, cmd_bind_index_buffer, yar_cmd_buffer* cmd, yar_bu
 DECLARE_YAR_RENDER_FUNC(void, cmd_bind_push_constant, yar_cmd_buffer* cmd, void* data);
 DECLARE_YAR_RENDER_FUNC(void, cmd_begin_render_pass, yar_cmd_buffer* cmd, yar_render_pass_desc* desc);
 DECLARE_YAR_RENDER_FUNC(void, cmd_end_render_pass, yar_cmd_buffer* cmd);
+DECLARE_YAR_RENDER_FUNC(void, cmd_end_render_pass, yar_cmd_buffer* cmd);
 DECLARE_YAR_RENDER_FUNC(void, cmd_draw, yar_cmd_buffer* cmd, uint32_t first_vertex, uint32_t count);
 DECLARE_YAR_RENDER_FUNC(void, cmd_draw_indexed, yar_cmd_buffer* cmd, uint32_t index_count, uint32_t first_index, uint32_t first_vertex);
 DECLARE_YAR_RENDER_FUNC(void, cmd_dispatch, yar_cmd_buffer* cmd, uint32_t num_groups_x, uint32_t num_groups_y, uint32_t num_groups_z);

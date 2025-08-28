@@ -1420,57 +1420,66 @@ void gl_cmdBindPushConstant(yar_cmd_buffer* cmd, void* data)
 
 void gl_cmdBeginRenderPass(yar_cmd_buffer* cmd, yar_render_pass_desc* desc)
 {
-    auto gl_cmd = reinterpret_cast<yar_gl_cmd_buffer*>(cmd);
-    uint8_t color_attachment_count = desc->color_attachment_count;
-    for (size_t i = 0; i < color_attachment_count; ++i)
-    {
-        yar_render_target* target = desc->color_attachments[i].target;
-        auto gl_texture = reinterpret_cast<yar_gl_texture*>(target->texture);
-        
-        if (gl_texture->type == yar_gl_texture_type::yar_type_texture)
+    cmd->commands.push_back([=]() {
+        auto gl_cmd = reinterpret_cast<yar_gl_cmd_buffer*>(cmd);
+        uint8_t color_attachment_count = desc->color_attachment_count;
+        for (size_t i = 0; i < color_attachment_count; ++i)
         {
-            glNamedFramebufferTexture(gl_cmd->fbo, 
-                GL_COLOR_ATTACHMENT0 + i, gl_texture->id, 0);
+            yar_render_target* target = desc->color_attachments[i].target;
+            auto gl_texture = reinterpret_cast<yar_gl_texture*>(target->texture);
+
+            if (gl_texture->type == yar_gl_texture_type::yar_type_texture)
+            {
+                glNamedFramebufferTexture(gl_cmd->fbo,
+                    GL_COLOR_ATTACHMENT0 + i, gl_texture->id, 0);
+            }
+            else
+            {
+                glNamedFramebufferRenderbuffer(gl_cmd->fbo,
+                    GL_COLOR_ATTACHMENT0 + i, GL_RENDERBUFFER, gl_texture->id);
+            }
+        }
+
+        yar_render_target* ds_target = desc->depth_stencil_attachment.target;
+        if (ds_target)
+        {
+            auto gl_ds_texture = reinterpret_cast<yar_gl_texture*>(ds_target->texture);
+
+            // TODO: add separate for depth and stencil
+            if (gl_ds_texture->type == yar_gl_texture_type::yar_type_texture)
+            {
+                if (gl_ds_texture->common.format)
+                    glNamedFramebufferTexture(gl_cmd->fbo,
+                        GL_DEPTH_STENCIL_ATTACHMENT, gl_ds_texture->id, 0);
+            }
+            else
+            {
+                glNamedFramebufferRenderbuffer(gl_cmd->fbo,
+                    GL_DEPTH_STENCIL_ATTACHMENT, GL_RENDERBUFFER, gl_ds_texture->id);
+            }
+        }
+
+        GLenum bufs[kMaxColorAttachments];
+        if (color_attachment_count)
+        {
+            for (uint8_t i = 0; i < color_attachment_count; ++i)
+                bufs[i] = GL_COLOR_ATTACHMENT0 + i;
+            glNamedFramebufferDrawBuffers(gl_cmd->fbo, color_attachment_count, bufs);
         }
         else
         {
-            glNamedFramebufferRenderbuffer(gl_cmd->fbo, 
-                GL_COLOR_ATTACHMENT0 + i, GL_RENDERBUFFER, gl_texture->id);
+            glNamedFramebufferDrawBuffers(gl_cmd->fbo, 0, nullptr);
         }
-    }
 
-    yar_render_target* ds_target = desc->depth_stencil_attachment.target;
-    if (ds_target)
-    {
-        auto gl_ds_texture = reinterpret_cast<yar_gl_texture*>(ds_target->texture);
+        glBindFramebuffer(GL_FRAMEBUFFER, gl_cmd->fbo);
+    });
+}
 
-        // TODO: add separate for depth and stencil
-        if (gl_ds_texture->type == yar_gl_texture_type::yar_type_texture)
-        {
-            if (gl_ds_texture->common.format)
-            glNamedFramebufferTexture(gl_cmd->fbo,
-                GL_DEPTH_STENCIL_ATTACHMENT,  gl_ds_texture->id, 0);
-        }
-        else
-        {
-            glNamedFramebufferRenderbuffer(gl_cmd->fbo,
-                GL_DEPTH_STENCIL_ATTACHMENT, GL_RENDERBUFFER, gl_ds_texture->id);
-        }
-    }
-
-    GLenum bufs[kMaxColorAttachments];
-    if (color_attachment_count)
-    {
-        for (uint8_t i = 0; i < color_attachment_count; ++i)
-            bufs[i] = GL_COLOR_ATTACHMENT0 + i;
-        glNamedFramebufferDrawBuffers(gl_cmd->fbo, color_attachment_count, bufs);
-    }
-    else
-    {
-        glNamedFramebufferDrawBuffers(gl_cmd->fbo, 0, nullptr);
-    }
-
-    glBindFramebuffer(GL_FRAMEBUFFER, gl_cmd->fbo);
+void gl_cmdEndRenderPass(yar_cmd_buffer* cmd)
+{
+    cmd->commands.push_back([=]() {
+        glBindFramebuffer(GL_FRAMEBUFFER, 0);
+    });
 }
 
 void gl_cmdDraw(yar_cmd_buffer* cmd, uint32_t first_vertex, uint32_t count)
@@ -1561,6 +1570,7 @@ bool gl_init_render(yar_device* device)
     device->cmd_bind_index_buffer   = gl_cmdBindIndexBuffer;
     device->cmd_bind_push_constant  = gl_cmdBindPushConstant;
     device->cmd_begin_render_pass   = gl_cmdBeginRenderPass;
+    device->cmd_end_render_pass     = gl_cmdEndRenderPass;
     device->cmd_draw                = gl_cmdDraw;
     device->cmd_draw_indexed        = gl_cmdDrawIndexed;
     device->cmd_dispatch            = gl_cmdDispatch;
