@@ -678,6 +678,7 @@ void gl_beginUpdateBuffer(yar_buffer_update_desc* desc)
         staging_buffer_desc.flags = yar_buffer_flag_client_storage | yar_buffer_flag_map_write;
         staging_buffer_desc.usage = yar_buffer_usage_transfer_src;
         staging_buffer_desc.size = desc->size;
+        staging_buffer_desc.name = "staging_buffer";
         add_buffer(&staging_buffer_desc, &staging_buffer);
         desc->mapped_data = map_buffer(staging_buffer);
     }
@@ -722,6 +723,7 @@ void gl_beginUpdateTexture(yar_texture_update_desc* desc)
     pbo_desc.flags = yar_buffer_flag_map_write | yar_buffer_flag_dynamic;
     pbo_desc.usage = yar_buffer_usage_transfer_src;
     pbo_desc.size = desc->size;
+    pbo_desc.name = "pbo_buffer";
     add_buffer(&pbo_desc, &pixel_buffer);
     desc->mapped_data = map_buffer(pixel_buffer);
 }
@@ -836,6 +838,11 @@ void gl_addBuffer(yar_buffer_desc* desc, yar_buffer** buffer)
     glCreateBuffers(1, &new_buffer->id);
     glNamedBufferStorage(new_buffer->id, desc->size, nullptr, flags);
 
+#if _DEBUG
+    if (desc->name)
+        glObjectLabel(GL_BUFFER, new_buffer->id, -1, desc->name);
+#endif
+
     *buffer = new_buffer;
 }
 
@@ -845,7 +852,7 @@ void gl_addTexture(yar_texture_desc* desc, yar_texture** texture)
         std::calloc(1, sizeof(yar_gl_texture))
     );
     *texture = &new_texture->common;
-
+    
     GLuint gl_target = util_get_gl_texture_target(desc->type);
     GLenum gl_internal_format = util_get_gl_internal_format(desc->format);
     GLsizei width = desc->width;
@@ -907,6 +914,11 @@ void gl_addTexture(yar_texture_desc* desc, yar_texture** texture)
     new_texture->common.depth = depth;
     new_texture->common.array_size = array_size;
     new_texture->common.mip_levels = mip_levels;
+
+#if _DEBUG
+    if (desc->name)
+        glObjectLabel(GL_TEXTURE, new_texture->id, -1, desc->name);
+#endif
 }
 
 void gl_addRenderTarget(yar_render_target_desc* desc, yar_render_target** rt)

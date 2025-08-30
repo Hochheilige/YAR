@@ -34,6 +34,7 @@ yar_texture* load_white_texture()
 	texture_desc.type = yar_texture_type_2d;
 	texture_desc.format = yar_texture_format_rgba8;
 	texture_desc.usage = yar_texture_usage_shader_resource;
+	texture_desc.name = "white_dummy_texture";
 	add_texture(&texture_desc, &tex);
 
 	yar_resource_update_desc resource_update_desc;
@@ -74,6 +75,7 @@ yar_texture* load_texture(const std::string_view& name)
 		texture_desc.type = yar_texture_type_2d;
 		texture_desc.format = format;
 		texture_desc.usage = yar_texture_usage_shader_resource;
+		texture_desc.name = name.data();
 		add_texture(&texture_desc, &tex);
 
 		yar_resource_update_desc resource_update_desc;
@@ -292,10 +294,12 @@ private:
 		yar_buffer_desc buffer_desc;
 		buffer_desc.size = buffer.get_size();
 		buffer_desc.flags = yar_buffer_flag_gpu_only;
+		buffer_desc.name = "vertex_buffer";
 		add_buffer(&buffer_desc, &gpu_vertex_buffer);
 
 		uint64_t indexes_size = indices.size() * sizeof(uint32_t);
 		buffer_desc.size = indexes_size;
+		buffer_desc.name = "index_buffer";
 		add_buffer(&buffer_desc, &gpu_index_buffer);
 
 		yar_resource_update_desc resource_update_desc;
@@ -853,6 +857,7 @@ auto main() -> int {
 		texture_desc.type = yar_texture_type_2d;
 		texture_desc.format = yar_texture_format_rgba8;
 		texture_desc.usage = yar_texture_usage_shader_resource;
+		texture_desc.name = name.c_str();
 		add_texture(&texture_desc, &diffuse_map_tex);
 
 		yar_resource_update_desc resource_update_desc;
@@ -881,6 +886,7 @@ auto main() -> int {
 		texture_desc.type = yar_texture_type_2d;
 		texture_desc.format = yar_texture_format_rgba8;
 		texture_desc.usage = yar_texture_usage_shader_resource;
+		texture_desc.name = name.c_str();
 		add_texture(&texture_desc, &specular_map_tex);
 
 		yar_resource_update_desc resource_update_desc;
@@ -915,28 +921,16 @@ auto main() -> int {
 	sampler_desc.wrap_v = yar_wrap_mode_repeat;
 	add_sampler(&sampler_desc, &sampler);
 
-	yar_buffer_desc buffer_desc;
-	buffer_desc.size = vertex_buffer.get_size();
-	buffer_desc.flags = yar_buffer_flag_gpu_only;
-	yar_buffer* vbo = nullptr;
-	add_buffer(&buffer_desc, &vbo);
-
-	buffer_desc.size = sizeof(indexes);
-	yar_buffer* ebo = nullptr;
-	add_buffer(&buffer_desc, &ebo);
-
 	constexpr uint32_t image_count = 2;
 	uint32_t frame_index = 0;
 
+	yar_buffer_desc buffer_desc;
 	buffer_desc.size = sizeof(ubo);
 	buffer_desc.flags = yar_buffer_flag_map_write;
+	buffer_desc.name = "UBO";
 	yar_buffer* ubo_buf[image_count] = { nullptr, nullptr };
 	for (auto& buf : ubo_buf)
 		add_buffer(&buffer_desc, &buf);
-
-	buffer_desc.size = sizeof(material);
-	yar_buffer* mat_buf;
-	add_buffer(&buffer_desc, &mat_buf);
 
 	// Need to make something with shaders path 
 	yar_shader_load_desc shader_load_desc = {};
@@ -947,65 +941,8 @@ auto main() -> int {
 	yar_shader* shader;
 	add_shader(shader_desc, &shader);
 
-	yar_resource_update_desc resource_update_desc;
-	{ // update buffers data
-		yar_buffer_update_desc update_desc{};
-		resource_update_desc = &update_desc;
-		update_desc.buffer = vbo;
-		update_desc.size = vertex_buffer.get_size();
-		begin_update_resource(resource_update_desc);
-		std::memcpy(update_desc.mapped_data, vertex_buffer.get_plain_data(), vertex_buffer.get_size());
-		end_update_resource(resource_update_desc);
-
-		uint64_t indexes_size = indexes.size() * sizeof(uint32_t);
-		update_desc.buffer = ebo;
-		update_desc.size = indexes_size;
-		begin_update_resource(resource_update_desc);
-		std::memcpy(update_desc.mapped_data, indexes.data(), indexes_size);
-		end_update_resource(resource_update_desc);
-
-		// emerald
-		material[0].shinines = 128u * 0.6f;
-		
-		// emerald
-		material[1].shinines = 128u * 0.6f;;
-		
-		// green plastic
-		material[2].shinines = 128u * 0.25f;
-
-		// red rubber
-		material[3].shinines = 128u * 0.078125f;
-
-		// silver
-		material[4].shinines = 128u * 0.4f;
-
-		// gold 
-		material[5].shinines = 128u * 0.4f;
-
-		// ruby
-		material[6].shinines = 128u * 0.6f;
-
-		// pearl
-		material[7].shinines = 128u * 0.088;
-
-		// jade 
-		material[8].shinines = 128u * 0.1f;
-
-		// turquoise
-		material[9].shinines = 128u * 0.1f;
-
-		material[10].shinines = 1;
-
-		update_desc.buffer = mat_buf;
-		update_desc.size = sizeof(material);
-		begin_update_resource(resource_update_desc);
-		std::memcpy(update_desc.mapped_data, &material, sizeof(material));
-		end_update_resource(resource_update_desc);		
-	}
-
 	yar_vertex_layout layout{};
 	yar_depth_stencil_state depth_stencil{};
-	//test_mesh.setup_vertex_layout(layout);
 	mdl.setup_vertex_layout(layout);
 	depth_stencil.depth_enable = true;
 	depth_stencil.depth_func = yar_depth_stencil_func_less;
@@ -1069,10 +1006,6 @@ auto main() -> int {
 		{
 			.name = "samplerState",
 			.descriptor = sampler
-		},
-		{
-			.name = "mat",
-			.descriptor = mat_buf
 		}
 	};
 
@@ -1159,6 +1092,7 @@ auto main() -> int {
 		model = glm::scale(model, glm::vec3(0.01f, 0.01f, 0.01f));
 		ubo.model[10] = model;
 
+		yar_resource_update_desc resource_update_desc;
 		yar_buffer_update_desc update;
 		update.buffer = ubo_buf[frame_index];
 		update.size = sizeof(ubo);
@@ -1170,9 +1104,6 @@ auto main() -> int {
 		for (uint32_t i = 0; i < 10; ++i)
 		{
 			cmd_bind_pipeline(cmd, graphics_pipeline);
-			// looks not good
-			//cmd_bind_vertex_buffer(cmd, vbo, layout.attrib_count, 0, sizeof(float) * 8);
-			//cmd_bind_index_buffer(cmd, ebo);
 			cmd_bind_descriptor_set(cmd, ubo_desc, frame_index);
 			cmd_bind_descriptor_set(cmd, texture_set, 0);
 			cmd_bind_push_constant(cmd, &i);

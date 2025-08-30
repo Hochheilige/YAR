@@ -282,6 +282,7 @@ struct yar_texture_desc
     uint32_t depth;
     uint32_t array_size;
     uint32_t mip_levels;
+    const char* name;
 };
 
 struct yar_texture
@@ -338,6 +339,7 @@ struct yar_buffer_desc
     uint32_t size;
     yar_buffer_usage usage;
     yar_buffer_flag flags;
+    const char* name;
 };
 
 struct yar_buffer

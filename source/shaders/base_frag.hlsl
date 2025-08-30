@@ -115,7 +115,6 @@ float4 main(PSInput input) : SV_TARGET {
     lcp.norm               = input.normal;
     lcp.frag_pos           = input.frag_pos;
     lcp.cam_pos            = cam.pos.xyz;
-    Material mt = material[index]; 
 
     float4 light_contribution = float4(0.0f, 0.0f, 0.0f, 0.0f);
     for (uint i = 0; i < DIR_LIGHT_COUNT; ++i)
@@ -125,7 +124,7 @@ float4 main(PSInput input) : SV_TARGET {
         light_contribution += calculate_dir_light(dir_light.direction[i].xyz, lcp);
     }
 
-    for (i = DIR_LIGHT_COUNT; i < DIR_LIGHT_COUNT + POINT_LIGHT_COUNT; ++i)
+    for (uint i = DIR_LIGHT_COUNT; i < DIR_LIGHT_COUNT + POINT_LIGHT_COUNT; ++i)
     {
         lcp.color = float4(light_params.color[i].rgb, 0.0f);
         lcp.intensity = light_params.color[i].a;
@@ -136,7 +135,7 @@ float4 main(PSInput input) : SV_TARGET {
             );
     }
 
-    for (i = DIR_LIGHT_COUNT + POINT_LIGHT_COUNT; i < LS_COUNT; ++i)
+    for (uint i = DIR_LIGHT_COUNT + POINT_LIGHT_COUNT; i < LS_COUNT; ++i)
     {
         lcp.color = float4(light_params.color[i].rgb, 0.0f);
         lcp.intensity = light_params.color[i].a;

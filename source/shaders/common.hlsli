@@ -98,7 +98,3 @@ cbuffer ubo : register(b1, space1)
     Camera cam;
 };
 
-cbuffer mat : register(b2, space0)
-{
-    Material material[MAT_COUNT];
-};
