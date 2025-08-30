@@ -46,6 +46,7 @@ float4x4 inverse(float4x4 m) {
 struct MVP
 {
     float4x4 view;
+    float4x4 view_sb;
     float4x4 proj;
     float4x4 model[11];
 };

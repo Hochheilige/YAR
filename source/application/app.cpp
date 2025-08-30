@@ -71,7 +71,7 @@ yar_texture* load_texture(const std::string_view& name)
 		yar_texture_desc texture_desc{};
 		texture_desc.width = width;
 		texture_desc.height = height;
-		texture_desc.mip_levels = 1;
+		texture_desc.mip_levels = 1 + (uint32_t)std::floor(std::log2(std::max(width, height)));;
 		texture_desc.type = yar_texture_type_2d;
 		texture_desc.format = format;
 		texture_desc.usage = yar_texture_usage_shader_resource;
@@ -95,6 +95,82 @@ yar_texture* load_texture(const std::string_view& name)
 
 	return tex;
 }
+
+yar_texture* load_cubemap(const std::array<std::string, 6>& faces, const std::string& name)
+{
+	yar_texture* tex = nullptr;
+
+	int32_t width = 0, height = 0, channels = 0;
+	std::vector<uint8_t> image;
+
+	for (size_t i = 0; i < faces.size(); i++)
+	{
+		int32_t w, h, c;
+		stbi_set_flip_vertically_on_load(false); 
+		uint8_t* buf = stbi_load(faces[i].data(), &w, &h, &c, 0);
+		if (!buf)
+		{
+			std::cerr << "error loading cubemap face: " << faces[i] << "\n";
+			return nullptr;
+		}
+
+		if (i == 0)
+		{
+			width = w;
+			height = h;
+			channels = c;
+			image.reserve(6 * w * h * c);
+		}
+		else
+		{
+			if (w != width || h != height || c != channels)
+			{
+				std::cerr << "cubemap face size mismatch: " << faces[i] << "\n";
+				stbi_image_free(buf);
+				return nullptr;
+			}
+		}
+
+		image.insert(image.end(), buf, buf + w * h * c);
+		stbi_image_free(buf);
+	}
+
+	yar_texture_format format;
+	if (channels == 1)
+		format = yar_texture_format_r8;
+	else if (channels == 3)
+		format = yar_texture_format_rgb8;
+	else if (channels == 4)
+		format = yar_texture_format_rgba8;
+	else
+		return nullptr;
+
+	yar_texture_desc texture_desc{};
+	texture_desc.width = width;
+	texture_desc.height = height;
+	texture_desc.depth = 6; 
+	texture_desc.mip_levels = 1 + (uint32_t)std::floor(std::log2(std::max(width, height)));
+	texture_desc.type = yar_texture_type_cube_map;
+	texture_desc.format = format;
+	texture_desc.usage = yar_texture_usage_shader_resource;
+	texture_desc.name = name.c_str();
+	add_texture(&texture_desc, &tex);
+
+	yar_resource_update_desc resource_update_desc;
+	yar_texture_update_desc tex_update_desc{};
+	resource_update_desc = &tex_update_desc;
+
+	tex_update_desc.size = static_cast<uint32_t>(image.size());
+	tex_update_desc.texture = tex;
+	tex_update_desc.data = image.data();
+
+	begin_update_resource(resource_update_desc);
+	std::memcpy(tex_update_desc.mapped_data, image.data(), tex_update_desc.size);
+	end_update_resource(resource_update_desc);
+
+	return tex;
+}
+
 
 using VertexData = std::variant<glm::vec2, glm::vec3, glm::vec4>;
 
@@ -681,6 +757,7 @@ struct LightParams
 struct UBO
 {
 	glm::mat4 view;
+	glm::mat4 view_sb;
 	glm::mat4 proj;
 	glm::mat4 model[11];
 	DirectLight dir_light;
@@ -813,6 +890,74 @@ auto main() -> int {
 
 	glm::vec4 backpack_pos(0.0f);
 
+	VertexBuffer skybox_buffer{
+	{
+		VertexAttributeLayout{glm::vec3{}, "position"},
+	},
+	{
+		// Front face
+		Vertex{{glm::vec3(-1.0f, -1.0f,  1.0f)}},
+		Vertex{{glm::vec3(1.0f, -1.0f,  1.0f)}},
+		Vertex{{glm::vec3(1.0f,  1.0f,  1.0f)}},
+		Vertex{{glm::vec3(-1.0f,  1.0f,  1.0f)}},
+
+		// Back face
+		Vertex{{glm::vec3(1.0f, -1.0f, -1.0f)}},
+		Vertex{{glm::vec3(-1.0f, -1.0f, -1.0f)}},
+		Vertex{{glm::vec3(-1.0f,  1.0f, -1.0f)}},
+		Vertex{{glm::vec3(1.0f,  1.0f, -1.0f)}},
+
+		// Left face
+		Vertex{{glm::vec3(-1.0f, -1.0f, -1.0f)}},
+		Vertex{{glm::vec3(-1.0f, -1.0f,  1.0f)}},
+		Vertex{{glm::vec3(-1.0f,  1.0f,  1.0f)}},
+		Vertex{{glm::vec3(-1.0f,  1.0f, -1.0f)}},
+
+		// Right face
+		Vertex{{glm::vec3(1.0f, -1.0f,  1.0f)}},
+		Vertex{{glm::vec3(1.0f, -1.0f, -1.0f)}},
+		Vertex{{glm::vec3(1.0f,  1.0f, -1.0f)}},
+		Vertex{{glm::vec3(1.0f,  1.0f,  1.0f)}},
+
+		// Bottom face
+		Vertex{{glm::vec3(-1.0f, -1.0f, -1.0f)}},
+		Vertex{{glm::vec3(1.0f, -1.0f, -1.0f)}},
+		Vertex{{glm::vec3(1.0f, -1.0f,  1.0f)}},
+		Vertex{{glm::vec3(-1.0f, -1.0f,  1.0f)}},
+
+		// Top face
+		Vertex{{glm::vec3(-1.0f,  1.0f,  1.0f)}},
+		Vertex{{glm::vec3(1.0f,  1.0f,  1.0f)}},
+		Vertex{{glm::vec3(1.0f,  1.0f, -1.0f)}},
+		Vertex{{glm::vec3(-1.0f,  1.0f, -1.0f)}},
+	}
+	};
+
+	std::vector<uint32_t> skybox_indices = {
+		// Front face (z+)
+		0, 2, 1,
+		2, 0, 3,
+
+		// Back face (z-)
+		4, 6, 5,
+		6, 4, 7,
+
+		// Left face (x-)
+		8, 10, 9,
+		10, 8, 11,
+
+		// Right face (x+)
+		12, 14, 13,
+		14, 12, 15,
+
+		// Bottom face (y-)
+		16, 18, 17,
+		18, 16, 19,
+
+		// Top face (y+)
+		20, 22, 21,
+		22, 20, 23
+	};
 
 	light_pos = &cube_positions[0];
 
@@ -840,86 +985,45 @@ auto main() -> int {
 	ubo.light_params.color[2].a = 1.0f; // intensity
 
 
-	yar_texture* diffuse_map_tex;
-	yar_texture* specular_map_tex;
+	yar_texture* diffuse_map_tex = load_texture("assets/container2.png");
+	yar_texture* specular_map_tex = load_texture("assets/container2_specular.png");
 
-	int32_t width, height, channels;
-	std::string name = "assets/container2.png";
-	stbi_set_flip_vertically_on_load(true);
-	uint8_t* diffuse_map = stbi_load(name.c_str(), &width, &height, &channels, 0);
-
-	if (diffuse_map)
-	{
-		yar_texture_desc texture_desc{};
-		texture_desc.width = width;
-		texture_desc.height = height;
-		texture_desc.mip_levels = 1;
-		texture_desc.type = yar_texture_type_2d;
-		texture_desc.format = yar_texture_format_rgba8;
-		texture_desc.usage = yar_texture_usage_shader_resource;
-		texture_desc.name = name.c_str();
-		add_texture(&texture_desc, &diffuse_map_tex);
-
-		yar_resource_update_desc resource_update_desc;
-		yar_texture_update_desc tex_update_desc{};
-		resource_update_desc = &tex_update_desc;
-		tex_update_desc.size = width * height * channels;
-		tex_update_desc.texture = diffuse_map_tex;
-		tex_update_desc.data = diffuse_map;
-		begin_update_resource(resource_update_desc);
-		std::memcpy(tex_update_desc.mapped_data, diffuse_map, tex_update_desc.size);
-		end_update_resource(resource_update_desc);
-	}
-	else
-	{
-		std::cerr << "Failed to load diffuse_map_tex: " << name << std::endl;
-	}
-
-	name = "assets/container2_specular.png";
-	uint8_t* specular_map = stbi_load(name.c_str(), &width, &height, &channels, 0);
-	if (specular_map)
-	{
-		yar_texture_desc texture_desc{};
-		texture_desc.width = width;
-		texture_desc.height = height;
-		texture_desc.mip_levels = 1;
-		texture_desc.type = yar_texture_type_2d;
-		texture_desc.format = yar_texture_format_rgba8;
-		texture_desc.usage = yar_texture_usage_shader_resource;
-		texture_desc.name = name.c_str();
-		add_texture(&texture_desc, &specular_map_tex);
-
-		yar_resource_update_desc resource_update_desc;
-		yar_texture_update_desc tex_update_desc{};
-		resource_update_desc = &tex_update_desc;
-		tex_update_desc.size = width * height * channels;
-		tex_update_desc.texture = specular_map_tex;
-		tex_update_desc.data = specular_map;
-		begin_update_resource(resource_update_desc);
-		std::memcpy(tex_update_desc.mapped_data, specular_map, tex_update_desc.size);
-		end_update_resource(resource_update_desc);
-	}
-	else
-	{
-		std::cerr << "Failed to load specular_map_tex: " << name << std::endl;
-	}
+	std::array<std::string, 6> cubemap_paths = {
+		"assets/px.png",
+		"assets/nx.png",
+		"assets/py.png",
+		"assets/ny.png",
+		"assets/pz.png",
+		"assets/nz.png",
+	};
+	yar_texture* skybox = load_cubemap(cubemap_paths, "skybox");
 
 	std::vector<yar_texture*> textures = {
 		diffuse_map_tex,
 		specular_map_tex
 	};
 
-
 	Mesh test_mesh(vertex_buffer, indexes, textures);
+	Mesh skybox_mesh(skybox_buffer, skybox_indices, { skybox });
 	Model mdl("assets/sponza/sponza.obj");
 
 	yar_sampler* sampler;
 	yar_sampler_desc sampler_desc{};
-	sampler_desc.min_filter = yar_filter_type_nearest;
-	sampler_desc.mag_filter = yar_filter_type_nearest;
+	sampler_desc.min_filter = yar_filter_type_linear;
+	sampler_desc.mag_filter = yar_filter_type_linear;
 	sampler_desc.wrap_u = yar_wrap_mode_repeat;
 	sampler_desc.wrap_v = yar_wrap_mode_repeat;
+	sampler_desc.mip_map_filter = yar_filter_type_linear;
 	add_sampler(&sampler_desc, &sampler);
+
+	yar_sampler* skybox_sampler;
+	sampler_desc.min_filter = yar_filter_type_linear;
+	sampler_desc.mag_filter = yar_filter_type_linear;
+	sampler_desc.wrap_u = yar_wrap_mode_clamp_edge;
+	sampler_desc.wrap_v = yar_wrap_mode_clamp_edge;
+	sampler_desc.wrap_w = yar_wrap_mode_clamp_edge;
+	sampler_desc.mip_map_filter = yar_filter_type_linear;
+	add_sampler(&sampler_desc, &skybox_sampler);
 
 	constexpr uint32_t image_count = 2;
 	uint32_t frame_index = 0;
@@ -941,10 +1045,18 @@ auto main() -> int {
 	yar_shader* shader;
 	add_shader(shader_desc, &shader);
 
+	shader_load_desc.stages[0] = { "shaders/skybox_vert.hlsl", "main", yar_shader_stage::yar_shader_stage_vert };
+	shader_load_desc.stages[1] = { "shaders/skybox_pix.hlsl", "main", yar_shader_stage::yar_shader_stage_pixel };
+	shader_desc = nullptr;
+	load_shader(&shader_load_desc, &shader_desc);
+	yar_shader* skybox_shader;
+	add_shader(shader_desc, &skybox_shader);
+	 
 	yar_vertex_layout layout{};
 	yar_depth_stencil_state depth_stencil{};
 	mdl.setup_vertex_layout(layout);
 	depth_stencil.depth_enable = true;
+	depth_stencil.depth_write = true;
 	depth_stencil.depth_func = yar_depth_stencil_func_less;
 
 	yar_rasterizer_state raster{};
@@ -1014,6 +1126,30 @@ auto main() -> int {
 	update_set_desc.infos = std::move(infos);
 	update_descriptor_set(&update_set_desc, texture_set);
 
+	set_desc.max_sets = 1;
+	set_desc.update_freq = yar_update_freq_none;
+	set_desc.shader = skybox_shader;
+	yar_descriptor_set* skybox_texture_set;
+	add_descriptor_set(&set_desc, &skybox_texture_set);
+
+	std::vector<yar_descriptor_info> skybox_infos{
+		{
+			.name = "skybox",
+			.descriptor =
+			yar_descriptor_info::yar_combined_texture_sample{
+				skybox,
+				"samplerState",
+			}
+		},
+		{
+			.name = "samplerState",
+			.descriptor = skybox_sampler
+		}
+	};
+
+	update_set_desc.infos = std::move(skybox_infos);
+	update_descriptor_set(&update_set_desc, skybox_texture_set);
+
 	mdl.setup_descriptor_set(shader, yar_update_freq_none, sampler);
 
 	yar_pipeline_desc pipeline_desc{};
@@ -1025,6 +1161,22 @@ auto main() -> int {
 
 	yar_pipeline* graphics_pipeline;
 	add_pipeline(&pipeline_desc, &graphics_pipeline);
+
+	yar_vertex_layout skybox_layout{};
+	skybox_layout.attrib_count = skybox_buffer.attrib_count();
+	skybox_layout.attribs[0].size = skybox_buffer.attribute_size("position");
+	skybox_layout.attribs[0].format = yar_attrib_format_float;
+	skybox_layout.attribs[0].offset = skybox_buffer.offsetof_by_name("position");
+	pipeline_desc.shader = skybox_shader;
+	pipeline_desc.vertex_layout = skybox_layout;
+	pipeline_desc.depth_stencil_state.depth_enable = true;
+	pipeline_desc.depth_stencil_state.depth_write = true;
+	pipeline_desc.depth_stencil_state.depth_func = yar_depth_stencil_func_less_equal;
+	pipeline_desc.depth_stencil_state.stencil_enable = false;
+	pipeline_desc.blend_state.blend_enable = false;
+	pipeline_desc.rasterizer_state.cull_mode = yar_cull_mode_back;
+	yar_pipeline* skybox_pipeline;
+	add_pipeline(&pipeline_desc, &skybox_pipeline);
 
 	yar_cmd_queue_desc queue_desc;
 	yar_cmd_queue* queue;
@@ -1066,6 +1218,7 @@ auto main() -> int {
 		ubo.view_pos = glm::vec4(camera.pos, 0.0f);
 		ubo.view = glm::mat4(1.0f);
 		ubo.view = glm::lookAt(camera.pos, camera.pos + camera.front, camera.up);
+		ubo.view_sb = glm::mat4(glm::mat3(ubo.view));
 		ubo.proj = glm::perspective(glm::radians(fov), 1920.0f / 1080.0f, 0.1f, 100.0f);
 		ubo.spot_light.position[0] = ubo.view_pos;
 		ubo.spot_light.direction[0] = glm::vec4(camera.front, 0.0f);
@@ -1101,22 +1254,25 @@ auto main() -> int {
 		std::memcpy(update.mapped_data, &ubo, sizeof(ubo));
 		end_update_resource(resource_update_desc);
 		
+		cmd_bind_pipeline(cmd, graphics_pipeline);
+		cmd_bind_descriptor_set(cmd, ubo_desc, frame_index);
+
 		for (uint32_t i = 0; i < 10; ++i)
 		{
-			cmd_bind_pipeline(cmd, graphics_pipeline);
-			cmd_bind_descriptor_set(cmd, ubo_desc, frame_index);
 			cmd_bind_descriptor_set(cmd, texture_set, 0);
 			cmd_bind_push_constant(cmd, &i);
 			test_mesh.draw(cmd);
 			//cmd_draw_indexed(cmd, 36, 0, 0);
 		}
 
-		cmd_bind_pipeline(cmd, graphics_pipeline);
-		cmd_bind_descriptor_set(cmd, ubo_desc, frame_index);
 		uint32_t index = 10;
 		cmd_bind_push_constant(cmd, &index);
 		mdl.draw(cmd);
-		
+
+		cmd_bind_pipeline(cmd, skybox_pipeline);
+		cmd_bind_descriptor_set(cmd, skybox_texture_set, 0);
+		skybox_mesh.draw(cmd);
+
 		// HACK for Imgui, but need to move it to separate render pass
 		cmd->commands.push_back([]() {
 			imgui_render();

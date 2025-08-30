@@ -7,7 +7,7 @@ def compile_shader(shader_path, target_path):
     shader_name = shader_path.name
     if "vert" in shader_name:
         target_profile = "vs_6_0"
-    elif "frag" in shader_name:
+    elif any(x in shader_name for x in ("frag", "pix", "pixel")):
         target_profile = "ps_6_0"
     elif "comp" in shader_name:
         target_profile = "cs_6_0"

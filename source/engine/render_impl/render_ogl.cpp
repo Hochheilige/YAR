@@ -85,6 +85,9 @@ struct yar_gl_pipeline
     bool front_counter_clockwise;
 
     // Depth Stencil State
+    bool depth_enable;
+    bool depth_write;
+    bool stencil_enable;
     GLenum depth_func;
     GLenum stencil_func;
     GLenum fail;
@@ -92,6 +95,7 @@ struct yar_gl_pipeline
     GLenum zpass;
 
     // Blend State
+    bool blend_enable;
     GLenum src_factor;
     GLenum dst_factor;
     GLenum src_alpha_factor;
@@ -736,12 +740,45 @@ void gl_endUpdateTexture(yar_texture_update_desc* desc)
 
     GLsizei width = texture->common.width;
     GLsizei height = texture->common.height;
+    GLsizei depth = texture->common.depth;
     GLenum format = texture->gl_format;
     GLenum type = texture->gl_type;
+    uint32_t mip_count = texture->common.mip_levels;
 
     glBindBuffer(GL_PIXEL_UNPACK_BUFFER, pixel_buffer->id); 
-    glBindTexture(GL_TEXTURE_2D, texture->id);
-    glTextureSubImage2D(texture->id, 0, 0, 0, width, height, format, type, nullptr);
+    switch (desc->texture->type)
+    {
+    case yar_texture_type_1d:
+        glTextureSubImage1D(texture->id, 0, 0, width, format, type, nullptr);
+        break;
+    case yar_texture_type_2d:
+        glTextureSubImage2D(texture->id, 0, 0, 0, width, height, 
+            format, type, nullptr);
+        break;
+    case yar_texture_type_3d:
+        glTextureSubImage3D(texture->id, 0, 0, 0, 0, width, height, depth,
+            format, type, nullptr);
+        break;
+    case yar_texture_type_1d_array:
+        glTextureSubImage2D(texture->id, 0, 0, 0, width, height,
+            format, type, nullptr);
+        break;
+    case yar_texture_type_2d_array:
+        glTextureSubImage3D(texture->id, 0, 0, 0, 0, width, height, 
+            depth, format, type, nullptr);
+        break;
+    case yar_texture_type_cube_map:
+        glTextureSubImage3D(texture->id, 0, 0, 0, 0, width, height,
+            6, format, type, nullptr);
+        break;
+    case yar_texture_type_none:
+    default:
+        break;
+    }
+    
+    if (mip_count > 1)
+        glGenerateTextureMipmap(texture->id);
+
     glBindBuffer(GL_PIXEL_UNPACK_BUFFER, 0); 
 }
 
@@ -903,7 +940,7 @@ void gl_addTexture(yar_texture_desc* desc, yar_texture** texture)
             break;
         }
     }
-
+        
     new_texture->internal_format = gl_internal_format;
     new_texture->gl_format = util_get_gl_format(desc->format);
     new_texture->gl_type = util_get_gl_texture_data_type(desc->format);
@@ -957,8 +994,10 @@ void gl_addSampler(yar_sampler_desc* desc, yar_sampler** sampler)
 
     GLint wrap_u = util_get_gl_wrap_mode(desc->wrap_u);
     GLint wrap_v = util_get_gl_wrap_mode(desc->wrap_v);
+    GLint wrap_w = util_get_gl_wrap_mode(desc->wrap_w);
     glSamplerParameteri(id, GL_TEXTURE_WRAP_S, wrap_u);
     glSamplerParameteri(id, GL_TEXTURE_WRAP_T, wrap_v);
+    glSamplerParameteri(id, GL_TEXTURE_WRAP_R, wrap_w);
 
     new_sampler->id = id;
     *sampler = new_sampler;
@@ -1166,13 +1205,16 @@ void gl_addPipeline(yar_pipeline_desc* desc, yar_pipeline** pipeline)
     new_pipeline->cull_mode = util_get_gl_cull_mode(desc->rasterizer_state.cull_mode);
     new_pipeline->cull_enable = new_pipeline->cull_mode;
     new_pipeline->front_counter_clockwise = desc->rasterizer_state.front_counter_clockwise;
+    new_pipeline->depth_write = desc->depth_stencil_state.depth_write;
 
-    if (desc->depth_stencil_state.depth_enable)
+    new_pipeline->depth_enable = desc->depth_stencil_state.depth_enable;
+    if (new_pipeline->depth_enable)
     {
         new_pipeline->depth_func = util_get_gl_depth_stencil_func(desc->depth_stencil_state.depth_func);
     }
 
-    if (desc->depth_stencil_state.stencil_enable)
+    new_pipeline->stencil_enable = desc->depth_stencil_state.stencil_enable;
+    if (new_pipeline->stencil_enable)
     {
         new_pipeline->stencil_func = util_get_gl_depth_stencil_func(desc->depth_stencil_state.stencil_func);
         new_pipeline->fail = desc->depth_stencil_state.sfail;
@@ -1180,7 +1222,8 @@ void gl_addPipeline(yar_pipeline_desc* desc, yar_pipeline** pipeline)
         new_pipeline->zpass = desc->depth_stencil_state.dppass;
     }
 
-    if (desc->blend_state.blend_enable)
+    new_pipeline->blend_enable = desc->blend_state.blend_enable;
+    if (new_pipeline->blend_enable)
     {
         new_pipeline->src_factor = util_get_gl_blend_factor(desc->blend_state.src_factor);
         new_pipeline->dst_factor = util_get_gl_blend_factor(desc->blend_state.dst_factor);
@@ -1310,26 +1353,47 @@ void gl_cmdBindPipeline(yar_cmd_buffer* cmd, yar_pipeline* pipeline)
 
         glBindProgramPipeline(gl_pipeline->program_pipeline);
         
-        if (gl_pipeline->depth_func)
+        if (gl_pipeline->depth_enable)
         {
             glEnable(GL_DEPTH_TEST);
             glDepthFunc(gl_pipeline->depth_func);
         }
+        else
+        {
+            glDisable(GL_DEPTH_TEST);
+        }
 
-        if (gl_pipeline->stencil_func)
+        if (gl_pipeline->depth_write)
+        {
+            glDepthMask(GL_TRUE);
+        }
+        else
+        {
+            glDepthMask(GL_FALSE);
+        }
+
+        if (gl_pipeline->stencil_enable)
         {
             glEnable(GL_STENCIL_TEST);
             // Ref and Mask usually 1 and 0xFF 
             glStencilFunc(gl_pipeline->stencil_func, 1, 0xFF);
             glStencilOp(gl_pipeline->fail, gl_pipeline->zfail, gl_pipeline->zpass);
         }
+        else
+        {
+            glDisable(GL_STENCIL_TEST);
+        }
 
-        if (gl_pipeline->src_factor)
+        if (gl_pipeline->blend_enable)
         {
             glEnable(GL_BLEND);
             glBlendFuncSeparate(gl_pipeline->src_factor, gl_pipeline->dst_factor,
                 gl_pipeline->src_alpha_factor, gl_pipeline->dst_alpha_factor);
             glBlendEquationSeparate(gl_pipeline->rgb_equation, gl_pipeline->alpha_equation);
+        }
+        else
+        {
+            glDisable(GL_BLEND);
         }
 
         glPolygonMode(GL_FRONT_AND_BACK, gl_pipeline->fill_mode);

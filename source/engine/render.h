@@ -428,6 +428,7 @@ struct yar_vertex_layout
 struct yar_depth_stencil_state
 {
     bool depth_enable;
+    bool depth_write;
     bool stencil_enable;
     yar_depth_stencil_func depth_func;
     yar_depth_stencil_func stencil_func;
