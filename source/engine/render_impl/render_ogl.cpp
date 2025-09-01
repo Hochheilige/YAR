@@ -1598,6 +1598,8 @@ void gl_cmdBeginRenderPass(yar_cmd_buffer* cmd, yar_render_pass_desc* desc)
             int a = 10;
 
 
+        // We must allow to write into depth buffer before clear
+        glDepthMask(GL_TRUE); 
         // TODO: add color here
         glClearColor(0.0f, 0.5f, 1.0f, 1.0f);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT);

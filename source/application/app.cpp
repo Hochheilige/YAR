@@ -1170,7 +1170,7 @@ auto main() -> int {
 	pipeline_desc.shader = skybox_shader;
 	pipeline_desc.vertex_layout = skybox_layout;
 	pipeline_desc.depth_stencil_state.depth_enable = true;
-	pipeline_desc.depth_stencil_state.depth_write = true;
+	pipeline_desc.depth_stencil_state.depth_write = false;
 	pipeline_desc.depth_stencil_state.depth_func = yar_depth_stencil_func_less_equal;
 	pipeline_desc.depth_stencil_state.stencil_enable = false;
 	pipeline_desc.blend_state.blend_enable = false;
