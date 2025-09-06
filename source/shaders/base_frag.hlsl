@@ -40,8 +40,8 @@ float4 calculate_dir_light(float3 light_dir, const LightCalculationParams lcp)
     float4 diffuse = diff * diffuse_map_color * light_color;
 
     float3 view_dir = normalize(cam_pos - frag_pos);
-    float3 reflect_dir = reflect(-light_dir, norm);
-    float spec = pow(max(dot(view_dir, reflect_dir), 0.0), 64);
+    float3 halfway_dir = normalize(light_dir + view_dir);
+    float spec = pow(max(dot(norm, halfway_dir), 0.0), 64);
     float4 specular = specular_map_color * spec * light_color;
 
     return diffuse + specular;
@@ -67,8 +67,8 @@ float4 calculate_point_light(float4 position, const LightCalculationParams lcp)
     float4 diffuse = diff * diffuse_map_color * attenuation * light_color;
 
     float3 view_dir = normalize(cam_pos - frag_pos);
-    float3 reflect_dir = reflect(-light_dir, norm);
-    float spec = pow(max(dot(view_dir, reflect_dir), 0.0), 64);
+    float3 halfway_dir = normalize(light_dir + view_dir);
+    float spec = pow(max(dot(norm, halfway_dir), 0.0), 64);
     float4 specular = specular_map_color * spec * attenuation * light_color;
 
     return diffuse + specular;
@@ -98,8 +98,8 @@ float4 calculate_spot_light(float4 position, float3 direction, float4 cutoff, fl
     float4 diffuse = diff * diffuse_map_color * attenuation * intensity * color;
     
     float3 view_dir = normalize(cam_pos - frag_pos);
-    float3 reflect_dir = reflect(-light_dir, norm);
-    float spec = pow(saturate(dot(view_dir, reflect_dir)), 64);
+    float3 halfway_dir = normalize(light_dir + view_dir);
+    float spec = pow(saturate(dot(norm, halfway_dir)), 64);
     float4 specular = specular_map_color * spec * attenuation * intensity * color;
 
     return diffuse + specular;
