@@ -18,8 +18,6 @@
 #include <spirv_reflect.h>
 #include <spirv_glsl.hpp>
 #include <spirv_parser.hpp>
-#include <glm/glm.hpp>
-#include <glm/gtc/type_ptr.hpp>
 
 #define YAR_CONTAINER_OF(ptr, type, member) \
     ((type *)((char *)(ptr) - offsetof(type, member)))

@@ -110,6 +110,7 @@ submodules_urls = [
     "https://github.com/KhronosGroup/SPIRV-Cross.git",
     "https://github.com/g-truc/glm.git",
     "https://github.com/assimp/assimp",
+    "https://github.com/zeux/meshoptimizer.git",
 ]
 
 submodules_paths = [
@@ -120,6 +121,7 @@ submodules_paths = [
     "external/spirv-cross",
     "external/glm",
     "external/assimp",
+    "external/meshoptimizer",
 ]
 
 for url, path in zip(submodules_urls, submodules_paths):
@@ -140,4 +142,13 @@ build_project(submodules_paths[6], "assimp",
          "-DASSIMP_INJECT_DEBUG_POSTFIX=OFF",
          "-DASSIMP_BUILD_ASSIMP_VIEW=OFF"
         ]
+)
+
+build_project(submodules_paths[7], "meshoptimizer", 
+        ["-DMESHOPT_BUILD_DEMO=OFF",
+         "-DMESHOPT_BUILD_GLTFPACK=OFF",
+         "-DMESHOPT_BUILD_SHARED_LIBS=OFF",
+         "-DMESHOPT_WERROR=OFF",
+         "-DMESHOPT_INSTALL=ON"
+        ]     
 )

@@ -17,8 +17,12 @@
 #include <assimp/scene.h>
 #include <assimp/postprocess.h>
 
+#include <meshoptimizer.h>
+
 #include <iostream>
 #include <optional>
+
+#include <cstddef>
 
 yar_texture* load_white_texture()
 {
@@ -171,190 +175,48 @@ yar_texture* load_cubemap(const std::array<std::string, 6>& faces, const std::st
 	return tex;
 }
 
-
-using VertexData = std::variant<glm::vec2, glm::vec3, glm::vec4>;
-
-struct VertexAttributeLayout
-{
-	VertexData data;
-	std::string name;
-};
-
 struct Vertex
 {
-	std::vector<VertexData> data;
+	glm::vec3 position;
+	glm::vec3 normal;
+	glm::vec2 tex_coord;
 };
 
-class VertexBuffer
+struct SkyBoxVertex
 {
-public:
-	VertexBuffer(const std::vector<VertexAttributeLayout>&& attr, const std::vector<Vertex>&& vert) :
-		attributes(attr), vertexes(vert), plain_data(), size(0) {}
-
-	VertexBuffer(const VertexBuffer& other) :
-		attributes(other.attributes),
-		vertexes(other.vertexes),
-		plain_data(other.plain_data),
-		size(other.size)
-	{}
-
-	float* get_plain_data()
-	{
-		size_t data_size = get_vertex_buffer_size();
-		if (data_size != size)
-		{
-			size = data_size;
-
-			plain_data.reserve(data_size);
-
-			for (const auto& vertex : vertexes)
-			{
-				for (const auto& attr : vertex.data)
-				{
-					std::visit([&](auto&& arg) {
-						using T = std::decay_t<decltype(arg)>;
-						if constexpr (std::is_same_v<T, glm::vec2>)
-						{
-							plain_data.push_back(arg.x);
-							plain_data.push_back(arg.y);
-						}
-						else if constexpr (std::is_same_v<T, glm::vec3>)
-						{
-							plain_data.push_back(arg.x);
-							plain_data.push_back(arg.y);
-							plain_data.push_back(arg.z);
-						}
-						else if constexpr (std::is_same_v<T, glm::vec4>)
-						{
-							plain_data.push_back(arg.x);
-							plain_data.push_back(arg.y);
-							plain_data.push_back(arg.z);
-							plain_data.push_back(arg.w);
-						}
-						}, attr);
-				}
-			}
-		}
-
-		return plain_data.data();
-	}
-
-	const size_t get_size() const
-	{
-		return vertex_size() * vertexes.size();
-	}
-
-	const uint32_t offsetof_by_name(std::string_view name) const
-	{
-		size_t offset = 0;
-		for (const auto& attr : attributes) {
-			if (attr.name == name) {
-				return offset;
-			}
-			if (std::holds_alternative<glm::vec2>(attr.data)) {
-				offset += sizeof(glm::vec2);
-			}
-			else if (std::holds_alternative<glm::vec3>(attr.data)) {
-				offset += sizeof(glm::vec3);
-			}
-			else if (std::holds_alternative<glm::vec4>(attr.data)) {
-				offset += sizeof(glm::vec4);
-			}
-		}
-		return -1;
-	}
-
-	const size_t attribute_size(std::string_view name) const
-	{
-		for (const auto& attr : attributes) {
-			if (attr.name == name) {
-				if (std::holds_alternative<glm::vec2>(attr.data)) {
-					return 2;
-				}
-				else if (std::holds_alternative<glm::vec3>(attr.data)) {
-					return 3;
-				}
-				else if (std::holds_alternative<glm::vec4>(attr.data)) {
-					return 4;
-				}
-			}
-		}
-		return -1;
-	}
-
-	const size_t vertex_size() const
-	{
-		size_t size = 0;
-		for (const auto& attr : attributes) {
-			if (std::holds_alternative<glm::vec2>(attr.data)) {
-				size += sizeof(glm::vec2);
-			}
-			else if (std::holds_alternative<glm::vec3>(attr.data)) {
-				size += sizeof(glm::vec3);
-			}
-			else if (std::holds_alternative<glm::vec4>(attr.data)) {
-				size += sizeof(glm::vec4);
-			}
-		}
-		return size;
-	}
-
-	const uint32_t attrib_count() const
-	{
-		return attributes.size();
-	}
-
-private:
-	std::vector<VertexAttributeLayout> attributes;
-	std::vector<Vertex> vertexes;
-	std::vector<float> plain_data;
-	size_t size;
-
-	size_t get_vertex_buffer_size()
-	{
-		size_t data_size = 0;
-		for (const auto& vertex : vertexes)
-		{
-			data_size += vertex.data.size();
-		}
-		return data_size * sizeof(float);
-	}
+	glm::vec3 position;
 };
 
 class Mesh
 {
 public:
-	Mesh(const VertexBuffer& buffer, const std::vector<uint32_t>& indices, const std::vector<yar_texture*> textures) :
-		buffer(buffer), indices(indices), textures(textures),
+	Mesh(std::vector<Vertex>&& vertices, std::vector<uint32_t>&& indices, std::vector<yar_texture*>&& textures) :
+		vertices(vertices), indices(indices), textures(textures),
 		gpu_vertex_buffer(nullptr), gpu_index_buffer(nullptr)
 	{
+		optimize_mesh();
 		upload_buffers();
 	}
 
 	void setup_vertex_layout(yar_vertex_layout& layout)
 	{
-		layout.attrib_count = buffer.attrib_count();
-		layout.attribs[0].size = buffer.attribute_size("position");
+		layout.attrib_count = 3u;
+		layout.attribs[0].size = 3u;
 		layout.attribs[0].format = yar_attrib_format_float;
-		layout.attribs[0].offset = buffer.offsetof_by_name("position");
-		layout.attribs[1].size = buffer.attribute_size("normal");
+		layout.attribs[0].offset = offsetof(Vertex, position);
+		layout.attribs[1].size = 3u;
 		layout.attribs[1].format = yar_attrib_format_float;
-		layout.attribs[1].offset = buffer.offsetof_by_name("normal");
-		layout.attribs[2].size = buffer.attribute_size("tex_coords");
+		layout.attribs[1].offset = offsetof(Vertex, normal);
+		layout.attribs[2].size = 2u;
 		layout.attribs[2].format = yar_attrib_format_float;
-		layout.attribs[2].offset = buffer.offsetof_by_name("tex_coords");
+		layout.attribs[2].offset = offsetof(Vertex, tex_coord);
 	}
 
 	void draw(yar_cmd_buffer* cmd)
 	{
-		cmd_bind_vertex_buffer(cmd, gpu_vertex_buffer, buffer.attrib_count(), 0, buffer.vertex_size());
+		cmd_bind_vertex_buffer(cmd, gpu_vertex_buffer, attrib_count, 0, sizeof(Vertex));
 		cmd_bind_index_buffer(cmd, gpu_index_buffer);
 		cmd_draw_indexed(cmd, indices.size(), 0, 0);
-	}
-
-	const VertexBuffer& get_vertex_buffer() const
-	{
-		return buffer;
 	}
 
 	yar_texture* get_texture(uint32_t index) const
@@ -365,10 +227,44 @@ public:
 	}
 
 private:
+	void optimize_mesh()
+	{
+		uint32_t vertex_size = sizeof(Vertex);
+		uint32_t index_count = indices.size();
+		uint32_t vertex_count = vertices.size();
+
+		// 1. Indexing (generate remap table from vertex and index data)
+		std::vector<uint32_t> remap(vertex_count); // temporary remap table
+		size_t opt_vertex_count = meshopt_generateVertexRemap(&remap[0], indices.data(), index_count,
+			vertices.data(), vertex_count, vertex_size);
+
+		std::vector<uint32_t> opt_indices(index_count);
+		std::vector<Vertex> opt_vertices(opt_vertex_count);
+
+		// 2. Remove duplicate vertices
+		meshopt_remapIndexBuffer(opt_indices.data(), indices.data(), index_count, remap.data());
+		meshopt_remapVertexBuffer(opt_vertices.data(), vertices.data(), vertex_count, vertex_size, remap.data());
+
+		// 3. Optimize vertex cache
+		meshopt_optimizeVertexCache(opt_indices.data(), opt_indices.data(), index_count, opt_vertex_count);
+
+		// 4. Overdraw optimization
+		meshopt_optimizeOverdraw(opt_indices.data(), opt_indices.data(), index_count, &(opt_vertices[0].position.x),
+			opt_vertex_count, vertex_size, 1.05f);
+
+		// 5. Vertex fetch optimization
+		meshopt_optimizeVertexFetch(opt_vertices.data(), opt_indices.data(), index_count, opt_vertices.data(),
+			opt_vertex_count, vertex_size);
+
+		vertices = opt_vertices;
+		indices = opt_indices;
+	}
+
 	void upload_buffers()
 	{
 		yar_buffer_desc buffer_desc;
-		buffer_desc.size = buffer.get_size();
+		uint32_t vertexes_size = vertices.size() * sizeof(Vertex);
+		buffer_desc.size = vertexes_size;
 		buffer_desc.flags = yar_buffer_flag_gpu_only;
 		buffer_desc.name = "vertex_buffer";
 		add_buffer(&buffer_desc, &gpu_vertex_buffer);
@@ -383,9 +279,9 @@ private:
 			yar_buffer_update_desc update_desc{};
 			resource_update_desc = &update_desc;
 			update_desc.buffer = gpu_vertex_buffer;
-			update_desc.size = buffer.get_size();
+			update_desc.size = vertexes_size;
 			begin_update_resource(resource_update_desc);
-			std::memcpy(update_desc.mapped_data, buffer.get_plain_data(), buffer.get_size());
+			std::memcpy(update_desc.mapped_data, vertices.data(), vertexes_size);
 			end_update_resource(resource_update_desc);
 
 			update_desc.buffer = gpu_index_buffer;
@@ -397,12 +293,14 @@ private:
 	}
 
 private:
-	VertexBuffer buffer;
+	std::vector<Vertex> vertices;
 	std::vector<uint32_t> indices;
 	std::vector<yar_texture*> textures;
 
 	yar_buffer* gpu_vertex_buffer;
 	yar_buffer* gpu_index_buffer;
+
+	const uint32_t attrib_count = 3u;
 };
 
 class Model
@@ -509,142 +407,43 @@ private:
 	
 	Mesh process_mesh(aiMesh* mesh, const aiScene* scene)
 	{
-		std::vector<VertexAttributeLayout> layouts;
 		std::vector<Vertex> vertices;
 		std::vector<uint32_t> indices;
 		std::vector<yar_texture*> textures;
-
-		bool has_pos = false;
-		bool has_norm = false;
-		bool has_tang = false;
-		bool has_color = false;
-		bool has_tex_coord = false;
-
-		if (mesh->HasPositions())
-		{
-			has_pos = true;
-			layouts.push_back({ glm::vec3{}, "position" });
-		}
-
-		if (mesh->HasNormals())
-		{
-			has_norm = true;
-			layouts.push_back({ glm::vec3{}, "normal" });
-		}
-
-		if (mesh->HasTangentsAndBitangents())
-		{
-			has_tang = true;
-			layouts.push_back({ glm::vec3{}, "tangent" });
-			layouts.push_back({ glm::vec3{}, "bi_tangent" });
-		}
-
-		for (uint32_t i = 0; i < mesh->GetNumUVChannels(); ++i)
-		{
-			if (mesh->HasVertexColors(i))
-			{
-				has_color = true;
-				layouts.push_back({ glm::vec4{}, "color" + i });
-			}
-		}
-
-		for (uint32_t i = 0; i < mesh->GetNumUVChannels(); ++i)
-		{
-			if (mesh->HasTextureCoords(i))
-			{
-				has_tex_coord = true;
-				if (mesh->mNumUVComponents[i] == 2)
-					layouts.push_back({ glm::vec2{}, "tex_coords" + i });
-				
-				if (mesh->mNumUVComponents[i] == 3)
-					layouts.push_back({ glm::vec3{}, "tex_coords" + i });
-			}
-		}
 
 		for (uint32_t i = 0; i < mesh->mNumVertices; ++i)
 		{
 			Vertex vertex;
 
-			if (has_pos)
+			if (mesh->HasPositions())
 			{
-				glm::vec3 pos;
-				pos.x = mesh->mVertices[i].x;
-				pos.y = mesh->mVertices[i].y;
-				pos.z = mesh->mVertices[i].z;
-				vertex.data.push_back(pos);
+				vertex.position.x = mesh->mVertices[i].x;
+				vertex.position.y = mesh->mVertices[i].y;
+				vertex.position.z = mesh->mVertices[i].z;
 			}
 
-			if (has_norm)
+			if (mesh->HasNormals())
 			{
-				glm::vec3 norm;
-				norm.x = mesh->mNormals[i].x;
-				norm.y = mesh->mNormals[i].y;
-				norm.z = mesh->mNormals[i].z;
-				vertex.data.push_back(norm);
+				vertex.normal.x = mesh->mNormals[i].x;
+				vertex.normal.y = mesh->mNormals[i].y;
+				vertex.normal.z = mesh->mNormals[i].z;
 			}
 
-			if (has_tang)
+			if (mesh->HasTextureCoords(0))
 			{
-				glm::vec3 tang;
-				tang.x = mesh->mTangents[i].x;
-				tang.y = mesh->mTangents[i].y;
-				tang.z = mesh->mTangents[i].z;
-				vertex.data.push_back(tang);
-
-				tang.x = mesh->mBitangents[i].x;
-				tang.y = mesh->mBitangents[i].y;
-				tang.z = mesh->mBitangents[i].z;
-				vertex.data.push_back(tang);
+				vertex.tex_coord.x = mesh->mTextureCoords[0][i].x;
+				vertex.tex_coord.y = mesh->mTextureCoords[0][i].y;
 			}
-
-			if (has_color)
-			{
-				for (uint32_t j = 0; j < mesh->GetNumColorChannels(); ++j)
-				{
-					glm::vec4 col;
-					col.r = mesh->mColors[i][j].r;
-					col.g = mesh->mColors[i][j].g;
-					col.b = mesh->mColors[i][j].b;
-					col.a = mesh->mColors[i][j].a;
-					vertex.data.push_back(col);
-				}
-			}
-
-			if (has_tex_coord)
-			{
-				for (uint32_t j = 0; j < mesh->GetNumUVChannels(); ++j)
-				{
-					if (mesh->mNumUVComponents[j] == 2)
-					{
-						glm::vec2 tex_coord;
-						tex_coord.x = mesh->mTextureCoords[j][i].x;
-						tex_coord.y = mesh->mTextureCoords[j][i].y;
-						vertex.data.push_back(tex_coord);
-					}
-
-					if (mesh->mNumUVComponents[j] == 3)
-					{
-						glm::vec3 tex_coord;
-						tex_coord.x = mesh->mTextureCoords[j][i].x;
-						tex_coord.y = mesh->mTextureCoords[j][i].y;
-						tex_coord.z = mesh->mTextureCoords[j][i].z;
-						vertex.data.push_back(tex_coord);
-					}
-				}
-			}
-
 			vertices.push_back(vertex);
 		}
-		VertexBuffer buffer(std::move(layouts), std::move(vertices));
-
+		
 		for (uint32_t i = 0; i < mesh->mNumFaces; ++i)
 		{
 			aiFace face = mesh->mFaces[i];
 			for (uint32_t j = 0; j < face.mNumIndices; ++j)
 				indices.push_back(face.mIndices[j]);
 		}
-
-			// process material
+		
 		if (mesh->mMaterialIndex >= 0)
 		{
 			aiMaterial* material = scene->mMaterials[mesh->mMaterialIndex];
@@ -659,7 +458,7 @@ private:
 			textures.insert(textures.end(), normal_maps.begin(), normal_maps.end());
 		}
 
-		return Mesh(buffer, indices, textures);
+		return Mesh(std::move(vertices), std::move(indices), std::move(textures));
 	}
 
 	std::vector<yar_texture*> load_material_textures(aiMaterial* mat, aiTextureType type)
@@ -702,14 +501,6 @@ private:
 	yar_descriptor_set* set;
 
 	std::unordered_map<std::string, yar_texture*> loaded_textures;
-};
-
-class GeometryRenderer
-{
-public:
-
-private:
-	std::vector<Model> models;
 };
 
 struct Camera
@@ -810,49 +601,42 @@ auto main() -> int {
 	yar_render_target* depth_buffer;
 	add_render_target(&depth_buffer_desc, &depth_buffer);
 
-	VertexBuffer vertex_buffer{
-		{
-			VertexAttributeLayout{glm::vec3{}, "position"},
-			VertexAttributeLayout{glm::vec2{}, "tex_coords"},
-			VertexAttributeLayout{glm::vec3{}, "normal"},
-		},
-		{
+	auto cube_vertexes = std::vector<Vertex>{
 			// Front face 
-			Vertex{{glm::vec3(-0.5f, -0.5f,  0.5f), glm::vec3{0.0f, 0.0f, 1.0f}, glm::vec2{0.0f, 0.0f}}},
-			Vertex{{glm::vec3(0.5f, -0.5f,  0.5f),  glm::vec3{0.0f, 0.0f, 1.0f}, glm::vec2{1.0f, 0.0f}}},
-			Vertex{{glm::vec3(0.5f,  0.5f,  0.5f),  glm::vec3{0.0f, 0.0f, 1.0f}, glm::vec2{1.0f, 1.0f}}},
-			Vertex{{glm::vec3(-0.5f,  0.5f,  0.5f), glm::vec3{0.0f, 0.0f, 1.0f}, glm::vec2{0.0f, 1.0f}}},
+		Vertex{glm::vec3(-0.5f, -0.5f,  0.5f), glm::vec3(0.0f, 0.0f, 1.0f), glm::vec2(0.0f, 0.0f)},
+		Vertex{glm::vec3(0.5f, -0.5f,  0.5f),  glm::vec3(0.0f, 0.0f, 1.0f), glm::vec2(1.0f, 0.0f)},
+		Vertex{glm::vec3(0.5f,  0.5f,  0.5f),  glm::vec3(0.0f, 0.0f, 1.0f), glm::vec2(1.0f, 1.0f)},
+		Vertex{glm::vec3(-0.5f,  0.5f,  0.5f), glm::vec3(0.0f, 0.0f, 1.0f), glm::vec2(0.0f, 1.0f)},
 
 			// Back face 
-			Vertex{{glm::vec3(0.5f, -0.5f, -0.5f),  glm::vec3{0.0f, 0.0f, -1.0f}, glm::vec2{1.0f, 0.0f}}},
-			Vertex{{glm::vec3(-0.5f, -0.5f, -0.5f), glm::vec3{0.0f, 0.0f, -1.0f}, glm::vec2{0.0f, 0.0f}}},
-			Vertex{{glm::vec3(-0.5f,  0.5f, -0.5f), glm::vec3{0.0f, 0.0f, -1.0f}, glm::vec2{0.0f, 1.0f}}},
-			Vertex{{glm::vec3(0.5f,  0.5f, -0.5f),  glm::vec3{0.0f, 0.0f, -1.0f}, glm::vec2{1.0f, 1.0f}}},
+		Vertex{glm::vec3(0.5f, -0.5f, -0.5f),  glm::vec3(0.0f, 0.0f, -1.0f), glm::vec2(1.0f, 0.0f)},
+		Vertex{glm::vec3(-0.5f, -0.5f, -0.5f), glm::vec3(0.0f, 0.0f, -1.0f), glm::vec2(0.0f, 0.0f)},
+		Vertex{glm::vec3(-0.5f,  0.5f, -0.5f), glm::vec3(0.0f, 0.0f, -1.0f), glm::vec2(0.0f, 1.0f)},
+		Vertex{glm::vec3(0.5f,  0.5f, -0.5f),  glm::vec3(0.0f, 0.0f, -1.0f), glm::vec2(1.0f, 1.0f)},
 
 			// Left face 
-			Vertex{{glm::vec3(-0.5f, -0.5f, -0.5f), glm::vec3{-1.0f, 0.0f, 0.0f}, glm::vec2{0.0f, 0.0f}}},
-			Vertex{{glm::vec3(-0.5f, -0.5f,  0.5f), glm::vec3{-1.0f, 0.0f, 0.0f}, glm::vec2{1.0f, 0.0f}}},
-			Vertex{{glm::vec3(-0.5f,  0.5f,  0.5f), glm::vec3{-1.0f, 0.0f, 0.0f}, glm::vec2{1.0f, 1.0f}}},
-			Vertex{{glm::vec3(-0.5f,  0.5f, -0.5f), glm::vec3{-1.0f, 0.0f, 0.0f}, glm::vec2{0.0f, 1.0f}}},
+		Vertex{glm::vec3(-0.5f, -0.5f, -0.5f), glm::vec3(-1.0f, 0.0f, 0.0f), glm::vec2(0.0f, 0.0f)},
+		Vertex{glm::vec3(-0.5f, -0.5f,  0.5f), glm::vec3(-1.0f, 0.0f, 0.0f), glm::vec2(1.0f, 0.0f)},
+		Vertex{glm::vec3(-0.5f,  0.5f,  0.5f), glm::vec3(-1.0f, 0.0f, 0.0f), glm::vec2(1.0f, 1.0f)},
+		Vertex{glm::vec3(-0.5f,  0.5f, -0.5f), glm::vec3(-1.0f, 0.0f, 0.0f), glm::vec2(0.0f, 1.0f)},
 
 			// Right face 
-			Vertex{{glm::vec3(0.5f, -0.5f,  0.5f), glm::vec3{1.0f, 0.0f, 0.0f}, glm::vec2{0.0f, 0.0f}}},
-			Vertex{{glm::vec3(0.5f, -0.5f, -0.5f), glm::vec3{1.0f, 0.0f, 0.0f}, glm::vec2{1.0f, 0.0f}}},
-			Vertex{{glm::vec3(0.5f,  0.5f, -0.5f), glm::vec3{1.0f, 0.0f, 0.0f}, glm::vec2{1.0f, 1.0f}}},
-			Vertex{{glm::vec3(0.5f,  0.5f,  0.5f), glm::vec3{1.0f, 0.0f, 0.0f}, glm::vec2{0.0f, 1.0f}}},
+		Vertex{glm::vec3(0.5f, -0.5f,  0.5f), glm::vec3(1.0f, 0.0f, 0.0f), glm::vec2(0.0f, 0.0f)},
+		Vertex{glm::vec3(0.5f, -0.5f, -0.5f), glm::vec3(1.0f, 0.0f, 0.0f), glm::vec2(1.0f, 0.0f)},
+		Vertex{glm::vec3(0.5f,  0.5f, -0.5f), glm::vec3(1.0f, 0.0f, 0.0f), glm::vec2(1.0f, 1.0f)},
+		Vertex{glm::vec3(0.5f,  0.5f,  0.5f), glm::vec3(1.0f, 0.0f, 0.0f), glm::vec2(0.0f, 1.0f)},
 
 			// Bottom face 
-			Vertex{{glm::vec3(-0.5f, -0.5f, -0.5f), glm::vec3{0.0f, -1.0f, 0.0f}, glm::vec2{0.0f, 1.0f}}},
-			Vertex{{glm::vec3(0.5f, -0.5f, -0.5f),  glm::vec3{0.0f, -1.0f, 0.0f}, glm::vec2{1.0f, 1.0f}}},
-			Vertex{{glm::vec3(0.5f, -0.5f,  0.5f),  glm::vec3{0.0f, -1.0f, 0.0f}, glm::vec2{1.0f, 0.0f}}},
-			Vertex{{glm::vec3(-0.5f, -0.5f,  0.5f), glm::vec3{0.0f, -1.0f, 0.0f}, glm::vec2{0.0f, 0.0f}}},
+		Vertex{glm::vec3(-0.5f, -0.5f, -0.5f), glm::vec3(0.0f, -1.0f, 0.0f), glm::vec2(0.0f, 1.0f)},
+		Vertex{glm::vec3(0.5f, -0.5f, -0.5f),  glm::vec3(0.0f, -1.0f, 0.0f), glm::vec2(1.0f, 1.0f)},
+		Vertex{glm::vec3(0.5f, -0.5f,  0.5f),  glm::vec3(0.0f, -1.0f, 0.0f), glm::vec2(1.0f, 0.0f)},
+		Vertex{glm::vec3(-0.5f, -0.5f,  0.5f), glm::vec3(0.0f, -1.0f, 0.0f), glm::vec2(0.0f, 0.0f)},
 
 			// Top face (y = +0.5)
-			Vertex{{glm::vec3(-0.5f,  0.5f,  0.5f), glm::vec3{0.0f, 1.0f, 0.0f}, glm::vec2{0.0f, 1.0f}}},
-			Vertex{{glm::vec3(0.5f,  0.5f,  0.5f),  glm::vec3{0.0f, 1.0f, 0.0f}, glm::vec2{1.0f, 1.0f}}},
-			Vertex{{glm::vec3(0.5f,  0.5f, -0.5f),  glm::vec3{0.0f, 1.0f, 0.0f}, glm::vec2{1.0f, 0.0f}}},
-			Vertex{{glm::vec3(-0.5f,  0.5f, -0.5f), glm::vec3{0.0f, 1.0f, 0.0f}, glm::vec2{0.0f, 0.0f}}},
-		}
+		Vertex{glm::vec3(-0.5f,  0.5f,  0.5f), glm::vec3(0.0f, 1.0f, 0.0f), glm::vec2(0.0f, 1.0f)},
+		Vertex{glm::vec3(0.5f,  0.5f,  0.5f),  glm::vec3(0.0f, 1.0f, 0.0f), glm::vec2(1.0f, 1.0f)},
+		Vertex{glm::vec3(0.5f,  0.5f, -0.5f),  glm::vec3(0.0f, 1.0f, 0.0f), glm::vec2(1.0f, 0.0f)},
+		Vertex{glm::vec3(-0.5f,  0.5f, -0.5f), glm::vec3(0.0f, 1.0f, 0.0f), glm::vec2(0.0f, 0.0f)},
 	};
 
 	std::vector<uint32_t> indexes = {
@@ -890,11 +674,8 @@ auto main() -> int {
 
 	glm::vec4 backpack_pos(0.0f);
 
-	VertexBuffer skybox_buffer{
-	{
-		VertexAttributeLayout{glm::vec3{}, "position"},
-	},
-	{
+	
+	auto skybox_vertexes = std::vector{
 		// Front face
 		Vertex{{glm::vec3(-1.0f, -1.0f,  1.0f)}},
 		Vertex{{glm::vec3(1.0f, -1.0f,  1.0f)}},
@@ -930,7 +711,6 @@ auto main() -> int {
 		Vertex{{glm::vec3(1.0f,  1.0f,  1.0f)}},
 		Vertex{{glm::vec3(1.0f,  1.0f, -1.0f)}},
 		Vertex{{glm::vec3(-1.0f,  1.0f, -1.0f)}},
-	}
 	};
 
 	std::vector<uint32_t> skybox_indices = {
@@ -1003,8 +783,10 @@ auto main() -> int {
 		specular_map_tex
 	};
 
-	Mesh test_mesh(vertex_buffer, indexes, textures);
-	Mesh skybox_mesh(skybox_buffer, skybox_indices, { skybox });
+	std::vector<yar_texture*> skybox_textures = { skybox };
+
+	Mesh test_mesh(std::move(cube_vertexes), std::move(indexes), std::move(textures));
+	Mesh skybox_mesh(std::move(skybox_vertexes), std::move(skybox_indices), std::move(skybox_textures));
 	Model mdl("assets/sponza/sponza.obj");
 
 	yar_sampler* sampler;
@@ -1163,10 +945,10 @@ auto main() -> int {
 	add_pipeline(&pipeline_desc, &graphics_pipeline);
 
 	yar_vertex_layout skybox_layout{};
-	skybox_layout.attrib_count = skybox_buffer.attrib_count();
-	skybox_layout.attribs[0].size = skybox_buffer.attribute_size("position");
+	skybox_layout.attrib_count = 1u;
+	skybox_layout.attribs[0].size = 3u;
 	skybox_layout.attribs[0].format = yar_attrib_format_float;
-	skybox_layout.attribs[0].offset = skybox_buffer.offsetof_by_name("position");
+	skybox_layout.attribs[0].offset = offsetof(SkyBoxVertex, position);
 	pipeline_desc.shader = skybox_shader;
 	pipeline_desc.vertex_layout = skybox_layout;
 	pipeline_desc.depth_stencil_state.depth_enable = true;
