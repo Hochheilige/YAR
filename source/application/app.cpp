@@ -12,6 +12,7 @@
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/type_ptr.hpp>
+#include <glm/gtc/random.hpp>
 
 #include <assimp/Importer.hpp>
 #include <assimp/scene.h>
@@ -380,11 +381,12 @@ public:
 		meshes[0].setup_vertex_layout(layout);
 	}
 
-	void draw(yar_cmd_buffer* cmd)
+	void draw(yar_cmd_buffer* cmd, bool shadow_map = false)
 	{
 		for (uint32_t i = 0; i < meshes.size(); ++i)
 		{
-			cmd_bind_descriptor_set(cmd, set, i);
+			if (!shadow_map)
+				cmd_bind_descriptor_set(cmd, set, i);
 			meshes[i].draw(cmd);
 		}
 	}
@@ -550,6 +552,7 @@ struct UBO
 	glm::mat4 view;
 	glm::mat4 view_sb;
 	glm::mat4 proj;
+	glm::mat4 light_space;
 	glm::mat4 model[11];
 	DirectLight dir_light;
 	PointLight point_light;
@@ -574,8 +577,40 @@ void mouse_callback(GLFWwindow* window, double xpos, double ypos);
 void scroll_callback(GLFWwindow* window, double xoffset, double yoffset);
 void process_input(GLFWwindow* window);
 
+static float dir_light_distance = 15.0f; // base good value for current scene
+
+static std::function<void()> app_layer = []()
+	{
+
+		ImGui::Begin("Light Settings");
+
+		static float dir[3] = {
+			ubo.dir_light.direction[0].x,
+			ubo.dir_light.direction[0].y,
+			ubo.dir_light.direction[0].z
+		};
+		if (ImGui::SliderFloat3("Direction Light", dir, -1.0f, 1.0f))
+		{
+			glm::vec3 lightDir = glm::vec3(dir[0], dir[1], dir[2]);
+			ubo.dir_light.direction[0] = glm::vec4(lightDir, 0.0f);
+		}
+
+		ImGui::SliderFloat("Direction Light Distance", &dir_light_distance, 0.0f, 100.0f);
+
+		static bool spot_light_enabled = true;
+		ImGui::Checkbox("Enable Spot Light", &spot_light_enabled);
+		{
+			if (spot_light_enabled)
+				ubo.light_params.color[2].a = 1.0f;
+			else
+				ubo.light_params.color[2].a = 0.0f;
+		}
+
+		ImGui::End();
+	};
+
 auto main() -> int {
-	init_window();
+	init_window(app_layer);
 	
 	init_render();
 
@@ -600,6 +635,16 @@ auto main() -> int {
 	depth_buffer_desc.usage = yar_texture_usage_depth_stencil;
 	yar_render_target* depth_buffer;
 	add_render_target(&depth_buffer_desc, &depth_buffer);
+
+	uint32_t shadow_map_dims = 1024;
+	depth_buffer_desc.height = shadow_map_dims;
+	depth_buffer_desc.width = shadow_map_dims;
+	depth_buffer_desc.usage = yar_texture_usage_shader_resource;
+	depth_buffer_desc.format = yar_texture_format_depth32f;
+	depth_buffer_desc.type = yar_texture_type_2d;
+	depth_buffer_desc.mip_levels = 1;
+	yar_render_target* shadow_map_target;
+	add_render_target(&depth_buffer_desc, &shadow_map_target);
 
 	auto cube_vertexes = std::vector<Vertex>{
 			// Front face 
@@ -660,16 +705,16 @@ auto main() -> int {
 	};
 
 	glm::vec4 cube_positions[] = {
-		glm::vec4(0.0f,  0.0f,  0.0f  , 1.0f),
-		glm::vec4(2.0f,  5.0f, -15.0f , 1.0f),
-		glm::vec4(-1.5f, -2.2f, -2.5f , 1.0f),
-		glm::vec4(-3.8f, -2.0f, -12.3f, 1.0f),
-		glm::vec4(2.4f, -0.4f, -3.5f  , 1.0f),
+		glm::vec4(0.0f,  0.0f,  -5.0f  , 1.0f),
+		glm::vec4(2.0f,  5.0f, 0.0f , 1.0f),
+		glm::vec4(-1.5f, 10.2f, 0.0f , 1.0f),
+		glm::vec4(-3.8f, 7.0f, 0.3f, 1.0f),
+		glm::vec4(2.4f, 9.4f, 0.0f  , 1.0f),
 		glm::vec4(-1.7f,  3.0f, -7.5f , 1.0f),
-		glm::vec4(1.3f, -2.0f, -2.5f  , 1.0f),
+		glm::vec4(1.3f, 3.0f, -2.5f  , 1.0f),
 		glm::vec4(1.5f,  2.0f, -2.5f  , 1.0f),
-		glm::vec4(1.5f,  0.2f, -1.5f  , 1.0f),
-		glm::vec4(-1.3f,  1.0f, -1.5f , 1.0f)
+		glm::vec4(1.5f,  3.2f, -1.5f  , 1.0f),
+		glm::vec4(-1.3f,  3.0f, -1.5f , 1.0f)
 	};
 
 	glm::vec4 backpack_pos(0.0f);
@@ -745,7 +790,7 @@ auto main() -> int {
 	memset(&ubo, 0x00, sizeof(ubo));
 
 	// Dir Light
-	ubo.dir_light.direction[0] = glm::vec4(-0.3f, -1.0f, -0.5f, 0.0f);
+	ubo.dir_light.direction[0] = glm::vec4(-0.01f, -1.0f, 0.0f, 0.0f);
 	ubo.light_params.color[0] = glm::vec4(1.0f, 0.95f, 0.9f, 0.0f);
 	ubo.light_params.color[0].a = 1.5f;  // intensity
 
@@ -763,7 +808,6 @@ auto main() -> int {
 	ubo.spot_light.attenuation[0] = glm::vec4(1.0f, 0.007f, 0.0002f, 0.0f);
 	ubo.light_params.color[2] = glm::vec4(1.0f, 0.0f, 1.0f, 0.0f);
 	ubo.light_params.color[2].a = 1.0f; // intensity
-
 
 	yar_texture* diffuse_map_tex = load_texture("assets/container2.png");
 	yar_texture* specular_map_tex = load_texture("assets/container2_specular.png");
@@ -798,6 +842,14 @@ auto main() -> int {
 	sampler_desc.mip_map_filter = yar_filter_type_linear;
 	add_sampler(&sampler_desc, &sampler);
 
+	yar_sampler* sm_sampler;
+	sampler_desc.min_filter = yar_filter_type_nearest;
+	sampler_desc.mag_filter = yar_filter_type_nearest;
+	sampler_desc.wrap_u = yar_wrap_mode_clamp_border;
+	sampler_desc.wrap_v = yar_wrap_mode_clamp_border;
+	sampler_desc.mip_map_filter = yar_filter_type_linear;
+	add_sampler(&sampler_desc, &sm_sampler);
+
 	yar_sampler* skybox_sampler;
 	sampler_desc.min_filter = yar_filter_type_linear;
 	sampler_desc.mag_filter = yar_filter_type_linear;
@@ -808,7 +860,7 @@ auto main() -> int {
 	add_sampler(&sampler_desc, &skybox_sampler);
 
 	constexpr uint32_t image_count = 2;
-	uint32_t frame_index = 0;
+	uint32_t frame_index = 0; 
 
 	yar_buffer_desc buffer_desc;
 	buffer_desc.size = sizeof(ubo);
@@ -833,6 +885,13 @@ auto main() -> int {
 	load_shader(&shader_load_desc, &shader_desc);
 	yar_shader* skybox_shader;
 	add_shader(shader_desc, &skybox_shader);
+
+	shader_load_desc.stages[0] = { "shaders/shadow_map_vert.hlsl", "main", yar_shader_stage::yar_shader_stage_vert };
+	shader_load_desc.stages[1] = {  };
+	shader_desc = nullptr;
+	load_shader(&shader_load_desc, &shader_desc);
+	yar_shader* shadow_map_shader;
+	add_shader(shader_desc, &shadow_map_shader);
 	 
 	yar_vertex_layout layout{};
 	yar_depth_stencil_state depth_stencil{};
@@ -852,6 +911,10 @@ auto main() -> int {
 	set_desc.update_freq = yar_update_freq_per_frame;
 	yar_descriptor_set* ubo_desc;
 	add_descriptor_set(&set_desc, &ubo_desc);
+
+	set_desc.max_sets = 1;
+	yar_descriptor_set* shadow_map_ds_desc;
+	add_descriptor_set(&set_desc, &shadow_map_ds_desc);
 
 	yar_update_descriptor_set_desc update_set_desc{};
 	for (uint32_t i = 0; i < image_count; ++i)
@@ -908,6 +971,23 @@ auto main() -> int {
 	update_set_desc.infos = std::move(infos);
 	update_descriptor_set(&update_set_desc, texture_set);
 
+	infos = {
+		{
+			.name = "shadow_map", 
+			.descriptor =
+			yar_descriptor_info::yar_combined_texture_sample{
+				shadow_map_target->texture,
+				"smSampler",
+			}
+		},
+		{
+			.name = "smSampler",
+			.descriptor = sm_sampler
+		}
+	};
+	update_set_desc.infos = std::move(infos);
+	update_descriptor_set(&update_set_desc, shadow_map_ds_desc);
+
 	set_desc.max_sets = 1;
 	set_desc.update_freq = yar_update_freq_none;
 	set_desc.shader = skybox_shader;
@@ -960,6 +1040,21 @@ auto main() -> int {
 	yar_pipeline* skybox_pipeline;
 	add_pipeline(&pipeline_desc, &skybox_pipeline);
 
+	yar_vertex_layout shadow_map_layout{};
+	shadow_map_layout.attrib_count = 1u;
+	shadow_map_layout.attribs[0].size = 3u;
+	shadow_map_layout.attribs[0].format = yar_attrib_format_float;
+	shadow_map_layout.attribs[0].offset = offsetof(Vertex, position);
+	pipeline_desc.shader = shadow_map_shader;
+	pipeline_desc.vertex_layout = shadow_map_layout;
+	pipeline_desc.depth_stencil_state.depth_enable = true;
+	pipeline_desc.depth_stencil_state.depth_write = true;
+	pipeline_desc.depth_stencil_state.depth_func = yar_depth_stencil_func_less_equal;
+	pipeline_desc.depth_stencil_state.stencil_enable = false;
+	pipeline_desc.rasterizer_state.cull_mode = yar_cull_mode_front;
+	yar_pipeline* shadow_map_pipeline;
+	add_pipeline(&pipeline_desc, &shadow_map_pipeline);
+
 	yar_cmd_queue_desc queue_desc;
 	yar_cmd_queue* queue;
 	add_queue(&queue_desc, &queue);
@@ -975,7 +1070,24 @@ auto main() -> int {
 	yar_cmd_buffer* cmd;
 	add_cmd(&cmd_desc, &cmd);
 
-	glm::mat4 model{};
+	glm::mat4 model = glm::mat4(1.0f);
+	
+	float max_cube_scale = 0.5f;
+	glm::vec3 cube_scales[] = {
+		glm::vec3(glm::linearRand(0.08f, max_cube_scale)),
+		glm::vec3(glm::linearRand(0.08f, max_cube_scale)),
+		glm::vec3(glm::linearRand(0.08f, max_cube_scale)),
+		glm::vec3(glm::linearRand(0.08f, max_cube_scale)),
+		glm::vec3(glm::linearRand(0.08f, max_cube_scale)),
+		glm::vec3(glm::linearRand(0.08f, max_cube_scale)),
+		glm::vec3(glm::linearRand(0.08f, max_cube_scale)),
+		glm::vec3(glm::linearRand(0.08f, max_cube_scale)),
+		glm::vec3(glm::linearRand(0.08f, max_cube_scale))
+	};
+
+	float near_plane = 0.1f;
+	float far_plane = 100.0f;
+	glm::mat4 light_projection = glm::ortho(-10.0f, 10.0f, -10.0f, 10.0f, near_plane, far_plane);
 
 	while(update_window())
 	{
@@ -987,14 +1099,36 @@ auto main() -> int {
 
 		imgui_begin_frame();
 
-		uint32_t sc_image;
-		acquire_next_image(swapchain, sc_image);
-		yar_render_pass_desc pass_desc{};
-		pass_desc.color_attachment_count = 1;
-		pass_desc.color_attachments[0].target = swapchain->render_targets[sc_image];
-		pass_desc.depth_stencil_attachment.target = depth_buffer;
+		glm::vec3 light_dir = glm::vec3(ubo.dir_light.direction->x, ubo.dir_light.direction->y, ubo.dir_light.direction->z);
+		glm::mat4 dir_light_view = glm::lookAt(
+			-light_dir * dir_light_distance,
+			glm::vec3(0.0f, 0.0f, 0.0f),
+			glm::vec3(0.0f, 1.0f, 0.0f)
+		); 
+		glm::mat4 light_space_mat = light_projection * dir_light_view;
+		ubo.light_space = light_space_mat;
 
-		cmd_begin_render_pass(cmd, &pass_desc);
+		for (uint32_t i = 0; i < 10; ++i)
+		{
+			model = glm::mat4(1.0f);
+			model = glm::translate(model, glm::vec3(cube_positions[i]));
+			if (i != 0) // i == 0 light position
+			{
+				float angle = 20.0f;// *(i + 1);
+				model = glm::rotate(model, (float)glfwGetTime() * glm::radians(angle), glm::vec3(1.0f, 0.3f, 0.5f));
+				model = glm::scale(model, cube_scales[i - 1]);
+			}
+			else
+			{
+				model = glm::scale(model, glm::vec3(0.5f, 0.5f, 0.5f));
+			}
+			ubo.model[i] = model;
+		}
+
+		model = glm::mat4(1.0f);
+		model = glm::translate(model, glm::vec3(backpack_pos));
+		model = glm::scale(model, glm::vec3(0.01f, 0.01f, 0.01f));
+		ubo.model[10] = model;
 
 		ubo.point_light.position[0] = *light_pos; // update point light pos
 		ubo.view_pos = glm::vec4(camera.pos, 0.0f);
@@ -1005,27 +1139,6 @@ auto main() -> int {
 		ubo.spot_light.position[0] = ubo.view_pos;
 		ubo.spot_light.direction[0] = glm::vec4(camera.front, 0.0f);
 
-		for (uint32_t i = 0; i < 10; ++i)
-		{
-			model = glm::mat4(1.0f);
-			model = glm::translate(model, glm::vec3(cube_positions[i]));
-			if (i != 0) // i == 0 light position
-			{
-				float angle = 20.0f;// *(i + 1);
-				model = glm::rotate(model, (float)glfwGetTime() * glm::radians(angle), glm::vec3(1.0f, 0.3f, 0.5f));
-			}
-			else
-			{
-				model = glm::scale(model, glm::vec3(0.5f, 0.5f, 0.5f));
-			}
-			ubo.model[i] = model;
-		}
-
-
-		model = glm::mat4(1.0f);
-		model = glm::translate(model, glm::vec3(backpack_pos));
-		model = glm::scale(model, glm::vec3(0.01f, 0.01f, 0.01f));
-		ubo.model[10] = model;
 
 		yar_resource_update_desc resource_update_desc;
 		yar_buffer_update_desc update;
@@ -1035,9 +1148,41 @@ auto main() -> int {
 		begin_update_resource(resource_update_desc);
 		std::memcpy(update.mapped_data, &ubo, sizeof(ubo));
 		end_update_resource(resource_update_desc);
+
+		uint32_t sc_image;
+		acquire_next_image(swapchain, sc_image);
+
+		yar_render_pass_desc shadow_map_pass_desc{};
+		shadow_map_pass_desc.color_attachment_count = 0;
+		shadow_map_pass_desc.depth_stencil_attachment.target = shadow_map_target;
+		cmd_begin_render_pass(cmd, &shadow_map_pass_desc);
+		{
+			cmd_set_viewport(cmd, shadow_map_dims, shadow_map_dims);
+			cmd_bind_descriptor_set(cmd, ubo_desc, frame_index);
+			cmd_bind_pipeline(cmd, shadow_map_pipeline);
+			for (uint32_t i = 0; i < 10; ++i)
+			{
+				cmd_bind_push_constant(cmd, &i);
+				test_mesh.draw(cmd);
+			}
+
+			uint32_t index = 10;
+			cmd_bind_push_constant(cmd, &index);
+			mdl.draw(cmd);
+		}
+		cmd_end_render_pass(cmd);
+
+		yar_render_pass_desc pass_desc{};
+		pass_desc.color_attachment_count = 1;
+		pass_desc.color_attachments[0].target = swapchain->render_targets[sc_image];
+		pass_desc.depth_stencil_attachment.target = depth_buffer;
+
+		cmd_begin_render_pass(cmd, &pass_desc);
 		
+		cmd_set_viewport(cmd, 1920, 1080);
 		cmd_bind_pipeline(cmd, graphics_pipeline);
 		cmd_bind_descriptor_set(cmd, ubo_desc, frame_index);
+		cmd_bind_descriptor_set(cmd, shadow_map_ds_desc, 0);
 
 		for (uint32_t i = 0; i < 10; ++i)
 		{

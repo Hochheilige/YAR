@@ -997,6 +997,13 @@ void gl_addSampler(yar_sampler_desc* desc, yar_sampler** sampler)
     glSamplerParameteri(id, GL_TEXTURE_WRAP_T, wrap_v);
     glSamplerParameteri(id, GL_TEXTURE_WRAP_R, wrap_w);
 
+    if (desc->wrap_u == yar_wrap_mode_clamp_border || desc->wrap_v == yar_wrap_mode_clamp_border ||
+        desc->wrap_w == yar_wrap_mode_clamp_border)
+    {
+        float border_color[] = { 0.0f, 0.0f, 0.0f, 0.0f };
+        glSamplerParameterfv(id, GL_TEXTURE_BORDER_COLOR, border_color);
+    }
+
     new_sampler->id = id;
     *sampler = new_sampler;
 }
@@ -1061,6 +1068,7 @@ void gl_addShader(yar_shader_desc* desc, yar_shader** out_shader)
         options.es = false;
         options.separate_shader_objects = true;
         glsl_compiler.set_common_options(options);
+        glsl_compiler.build_dummy_sampler_for_combined_images();
         glsl_compiler.build_combined_image_samplers();
 
         // here need to set up bindings for generated combined image samplers
@@ -1589,11 +1597,15 @@ void gl_cmdBeginRenderPass(yar_cmd_buffer* cmd, yar_render_pass_desc* desc)
         else
         {
             glNamedFramebufferDrawBuffers(gl_cmd->fbo, 0, nullptr);
+            glNamedFramebufferReadBuffer(gl_cmd->fbo, GL_NONE);
         }
 
         glBindFramebuffer(GL_FRAMEBUFFER, gl_cmd->fbo);
-        if (glCheckFramebufferStatus(GL_FRAMEBUFFER) == GL_FRAMEBUFFER_COMPLETE)
-            int a = 10;
+        GLenum status = glCheckFramebufferStatus(GL_FRAMEBUFFER);
+        if (status != GL_FRAMEBUFFER_COMPLETE)
+        {
+            printf("Framebuffer incomplete: 0x%x\n", status);
+        }
 
 
         // We must allow to write into depth buffer before clear
@@ -1654,6 +1666,13 @@ void gl_cmdUpdateBuffer(yar_cmd_buffer* cmd, yar_buffer* buffer, size_t offset, 
 
     cmd->commands.push_back([=]() {
         glNamedBufferSubData(buffer->id, offset, size, data_copy.data());
+    });
+}
+
+void gl_cmdSetViewport(yar_cmd_buffer* cmd, uint32_t width, uint32_t height)
+{
+    cmd->commands.push_back([=]() {
+        glViewport(0, 0, width, height);
     });
 }
 
@@ -1747,6 +1766,7 @@ bool gl_init_render(yar_device* device)
     device->cmd_draw_indexed        = gl_cmdDrawIndexed;
     device->cmd_dispatch            = gl_cmdDispatch;
     device->cmd_update_buffer       = gl_cmdUpdateBuffer;
+    device->cmd_set_viewport        = gl_cmdSetViewport;
     device->queue_submit            = gl_queueSubmit;
     device->queue_present           = gl_queuePresent;
 

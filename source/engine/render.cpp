@@ -190,6 +190,12 @@ void cmd_update_buffer(yar_cmd_buffer* cmd, yar_buffer* buffer, size_t offset, s
         device->cmd_update_buffer(cmd, buffer, offset, size, data);
 }
 
+void cmd_set_viewport(yar_cmd_buffer* cmd, uint32_t width, uint32_t height)
+{
+    if (device && device->cmd_set_viewport)
+        device->cmd_set_viewport(cmd, width, height);
+}
+
 void queue_submit(yar_cmd_queue* queue)
 {
     if (device && device->queue_submit)
