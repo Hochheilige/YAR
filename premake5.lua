@@ -15,7 +15,7 @@ project "Engine"
     kind "StaticLib"
     language "C++"
     compileas "C++"
-    cppdialect "C++23"
+    cppdialect "C++latest"
     staticruntime "off"
 
     debugdir (outputdir)
@@ -60,8 +60,8 @@ project "Engine"
             "glfw3",
             "dxcompiler",
             "zlibstaticd",
-            "assimp-vc143-mt",
-            "meshoptimizer"
+            "assimp-vc143-mtd",
+            "meshoptimizer",
         }
         symbols "On"
         runtime "Debug"
@@ -84,7 +84,7 @@ project "Application"
     location "makefiles"
     kind "ConsoleApp"
     language "C++"
-    cppdialect "C++23"
+    cppdialect "C++latest"
     staticruntime "off"
 
     targetdir (outputdir)
@@ -104,7 +104,8 @@ project "Application"
         "external/glm",
         "external/stb",
         "external/assimp/include",
-        "external/meshoptimizer/src"
+        "external/assimp/build/include",
+        "external/meshoptimizer/src",
     }
 
     libdirs {
@@ -117,15 +118,17 @@ project "Application"
     filter { "configurations:Debug" }
         symbols "On"
         runtime "Debug"
-        prebuildcommands {
-            "py \"%{prj.location}/scripts/compile_hlsl_to_spirv.py\" \"%{prj.location}/../source/shaders\" \"%{cfg.targetdir}/shaders\""
+        postbuildcommands {
+            "py \"%{prj.location}/scripts/compile_hlsl_to_spirv.py\" \"%{wks.location}/source/shaders\" \"%{cfg.targetdir}/shaders\"",
+            "{COPY} \"%{wks.location}/assets\" \"%{cfg.targetdir}/assets\""
         }
 
     filter { "configurations:Release" }
         optimize "On"
         runtime "Release"
-        prebuildcommands {
-            "py \"%{prj.location}/scripts/compile_hlsl_to_spirv.py\" \"%{prj.location}/../source/shaders\" \"%{cfg.targetdir}/shaders\""
+        postbuildcommands {
+            "py \"%{prj.location}/scripts/compile_hlsl_to_spirv.py\" \"%{wks.location}/source/shaders\" \"%{cfg.targetdir}/shaders\"",
+            "{COPY} \"%{wks.location}/assets\" \"%{cfg.targetdir}/assets\""
         }
 
         

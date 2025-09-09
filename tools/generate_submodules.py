@@ -138,8 +138,8 @@ build_project(submodules_paths[0], "glfw",
 build_project(submodules_paths[6], "assimp", 
         ["-DBUILD_SHARED_LIBS=OFF",
          "-DASSIMP_BUILD_TESTS=OFF",
-         "-DASSIMP_INSTALL=OFF",
-         "-DASSIMP_INJECT_DEBUG_POSTFIX=OFF",
+         "-DASSIMP_INSTALL=ON",
+         "-DASSIMP_INJECT_DEBUG_POSTFIX=ON",
          "-DASSIMP_BUILD_ASSIMP_VIEW=OFF"
         ]
 )
