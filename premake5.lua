@@ -49,6 +49,9 @@ project "Engine"
         "external/imgui",
         "external/spirv-reflect",
         "external/spirv-cross",
+        "external/stb",
+        "external/assimp/include",
+        "external/meshoptimizer/src"
     }
 
     filter { "configurations:Debug" }

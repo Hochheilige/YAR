@@ -2,6 +2,7 @@
 #include <imgui.h>
 #include <imgui_layer.h>
 #include <render.h>
+#include <asset_manager.h>
 
 #include <glad/glad.h>
 #include <GLFW/glfw3.h>
@@ -27,14 +28,15 @@
 
 yar_texture* load_white_texture()
 {
-	int32_t channels = 4;
+	auto tex_asset = yar_get_builtin(yar_builtin_white);
+	
+	int32_t channels = tex_asset->channels;
 	size_t size = channels;
-	std::vector<uint8_t> white_data(size, 255);
-
+	
 	yar_texture* tex;
 	yar_texture_desc texture_desc{};
-	texture_desc.width = 1;
-	texture_desc.height = 1;
+	texture_desc.width = tex_asset->width;
+	texture_desc.height = tex_asset->height;
 	texture_desc.mip_levels = 1;
 	texture_desc.type = yar_texture_type_2d;
 	texture_desc.format = yar_texture_format_rgba8;
@@ -47,9 +49,9 @@ yar_texture* load_white_texture()
 	resource_update_desc = &tex_update_desc;
 	tex_update_desc.size = size;
 	tex_update_desc.texture = tex;
-	tex_update_desc.data = white_data.data();
+	tex_update_desc.data = tex_asset->pixels;
 	begin_update_resource(resource_update_desc);
-	std::memcpy(tex_update_desc.mapped_data, white_data.data(), tex_update_desc.size);
+	std::memcpy(tex_update_desc.mapped_data, tex_asset->pixels, tex_update_desc.size);
 	end_update_resource(resource_update_desc);
 
 	return tex;
@@ -91,6 +93,52 @@ yar_texture* load_texture(const std::string_view& name)
 		tex_update_desc.data = buf;
 		begin_update_resource(resource_update_desc);
 		std::memcpy(tex_update_desc.mapped_data, buf, tex_update_desc.size);
+		end_update_resource(resource_update_desc);
+	}
+	else
+	{
+		std::cout << "error loading texture: " << name;
+	}
+
+	return tex;
+}
+
+yar_texture* load_texture(yar_asset_texture* asset, const char* name)
+{
+	yar_texture* tex;
+
+	int32_t width = asset->width;
+	int32_t height = asset->height;
+	int32_t channels = asset->channels;
+
+	yar_texture_format format; 
+	if (channels == 1)
+		format = yar_texture_format_r8;
+	if (channels == 3)
+		format = yar_texture_format_rgb8;
+	if (channels == 4)
+		format = yar_texture_format_rgba8;
+
+	if (asset->pixels)
+	{
+		yar_texture_desc texture_desc{};
+		texture_desc.width = width;
+		texture_desc.height = height;
+		texture_desc.mip_levels = 1 + (uint32_t)std::floor(std::log2(std::max(width, height)));;
+		texture_desc.type = yar_texture_type_2d;
+		texture_desc.format = format;
+		texture_desc.usage = yar_texture_usage_shader_resource;
+		texture_desc.name = name;
+		add_texture(&texture_desc, &tex);
+
+		yar_resource_update_desc resource_update_desc;
+		yar_texture_update_desc tex_update_desc{};
+		resource_update_desc = &tex_update_desc;
+		tex_update_desc.size = width * height * channels;
+		tex_update_desc.texture = tex;
+		tex_update_desc.data = asset->pixels;
+		begin_update_resource(resource_update_desc);
+		std::memcpy(tex_update_desc.mapped_data, asset->pixels, tex_update_desc.size);
 		end_update_resource(resource_update_desc);
 	}
 	else
@@ -176,6 +224,50 @@ yar_texture* load_cubemap(const std::array<std::string, 6>& faces, const std::st
 	return tex;
 }
 
+yar_texture* load_cubemap(yar_asset_cubemap* cubemap, const char* name)
+{
+	yar_texture* tex = nullptr;
+
+	int32_t width = cubemap->width;
+	int32_t height = cubemap->height;
+	int32_t channels = cubemap->channels;
+	
+	yar_texture_format format;
+	if (channels == 1)
+		format = yar_texture_format_r8;
+	else if (channels == 3)
+		format = yar_texture_format_rgb8;
+	else if (channels == 4)
+		format = yar_texture_format_rgba8;
+	else
+		return nullptr;
+
+	yar_texture_desc texture_desc{};
+	texture_desc.width = width;
+	texture_desc.height = height;
+	texture_desc.depth = 6; 
+	texture_desc.mip_levels = 1 + (uint32_t)std::floor(std::log2(std::max(width, height)));
+	texture_desc.type = yar_texture_type_cube_map;
+	texture_desc.format = format;
+	texture_desc.usage = yar_texture_usage_shader_resource;
+	texture_desc.name = name;
+	add_texture(&texture_desc, &tex);
+
+	yar_resource_update_desc resource_update_desc;
+	yar_texture_update_desc tex_update_desc{};
+	resource_update_desc = &tex_update_desc;
+
+	tex_update_desc.size = width * height * channels * 6;
+	tex_update_desc.texture = tex;
+	tex_update_desc.data = cubemap->pixels;
+
+	begin_update_resource(resource_update_desc);
+	std::memcpy(tex_update_desc.mapped_data, cubemap->pixels, tex_update_desc.size);
+	end_update_resource(resource_update_desc);
+
+	return tex;
+}
+
 struct Vertex
 {
 	glm::vec3 position;
@@ -188,10 +280,58 @@ struct SkyBoxVertex
 	glm::vec3 position;
 };
 
+struct mesh_texture
+{
+	yar_texture* texture = nullptr;
+	union
+	{
+		char path[256];
+		const char* paths[6];
+	};
+};
+
+yar_texture* load_texture_from_asset_manager(mesh_texture texture)
+{
+	if (texture.texture)
+		return texture.texture;
+
+	auto asset = (yar_asset_texture*)yar_find_loaded_asset(yar_asset_type_texture, texture.path);
+	while (true)
+	{
+		if (asset)
+			break;
+
+		asset = (yar_asset_texture*)yar_find_loaded_asset(yar_asset_type_texture, texture.path);
+	}
+
+	return load_texture(asset, texture.path);
+}
+
+yar_texture* load_cubemap_from_asset_manager(mesh_texture texture)
+{
+	std::string combined;
+	for (int i = 0; i < 6; i++)
+	{
+		combined += texture.paths[i];
+		combined += ";";
+	}
+	auto asset = (yar_asset_cubemap*)yar_find_loaded_asset(yar_asset_type_cubemap, combined.c_str());
+	while (true)
+	{
+		if (asset)
+			break;
+
+		asset = (yar_asset_cubemap*)yar_find_loaded_asset(yar_asset_type_cubemap, combined.c_str());
+	}
+
+	return load_cubemap(asset, "skybox");
+}
+
+
 class Mesh
 {
 public:
-	Mesh(std::vector<Vertex>&& vertices, std::vector<uint32_t>&& indices, std::vector<yar_texture*>&& textures) :
+	Mesh(std::vector<Vertex>&& vertices, std::vector<uint32_t>&& indices, std::vector<mesh_texture>&& textures) :
 		vertices(vertices), indices(indices), textures(textures),
 		gpu_vertex_buffer(nullptr), gpu_index_buffer(nullptr)
 	{
@@ -224,7 +364,7 @@ public:
 	{
 		if (index >= textures.size())
 			return nullptr;
-		return textures[index];
+		return load_texture_from_asset_manager(textures[index]);
 	}
 
 private:
@@ -296,7 +436,7 @@ private:
 private:
 	std::vector<Vertex> vertices;
 	std::vector<uint32_t> indices;
-	std::vector<yar_texture*> textures;
+	std::vector<mesh_texture> textures;
 
 	yar_buffer* gpu_vertex_buffer;
 	yar_buffer* gpu_index_buffer;
@@ -411,7 +551,7 @@ private:
 	{
 		std::vector<Vertex> vertices;
 		std::vector<uint32_t> indices;
-		std::vector<yar_texture*> textures;
+		std::vector<mesh_texture> textures;
 
 		for (uint32_t i = 0; i < mesh->mNumVertices; ++i)
 		{
@@ -449,13 +589,13 @@ private:
 		if (mesh->mMaterialIndex >= 0)
 		{
 			aiMaterial* material = scene->mMaterials[mesh->mMaterialIndex];
-			std::vector<yar_texture*> diffuse_maps = load_material_textures(material,
+			std::vector<mesh_texture> diffuse_maps = load_material_textures(material,
 				aiTextureType_DIFFUSE);
 			textures.insert(textures.end(), diffuse_maps.begin(), diffuse_maps.end());
-			std::vector<yar_texture*> specular_maps = load_material_textures(material,
+			std::vector<mesh_texture> specular_maps = load_material_textures(material,
 				aiTextureType_SPECULAR);
 			textures.insert(textures.end(), specular_maps.begin(), specular_maps.end());
-			std::vector<yar_texture*> normal_maps = load_material_textures(material,
+			std::vector<mesh_texture> normal_maps = load_material_textures(material,
 				aiTextureType_HEIGHT);
 			textures.insert(textures.end(), normal_maps.begin(), normal_maps.end());
 		}
@@ -463,34 +603,29 @@ private:
 		return Mesh(std::move(vertices), std::move(indices), std::move(textures));
 	}
 
-	std::vector<yar_texture*> load_material_textures(aiMaterial* mat, aiTextureType type)
+	std::vector<mesh_texture> load_material_textures(aiMaterial* mat, aiTextureType type)
 	{
-		std::vector<yar_texture*> textures;
+		std::vector<mesh_texture> textures;
 		for (uint32_t i = 0; i < mat->GetTextureCount(type); ++i)
 		{
 			aiString str;
 			mat->GetTexture(type, i, &str);
 			std::string path = directory + '/' + str.C_Str();
-			bool skip = false;
-			auto tex = loaded_textures.find(path);
-			if (tex != loaded_textures.end())
-			{
-				// TODO: optimize this
-				textures.push_back(tex->second);
-				skip = true;
-			}
+			
+			yar_request_asset(yar_asset_type_texture, path.c_str());
 
-			if (!skip)
-			{
-				yar_texture* tex = load_texture(path);
-				textures.push_back(tex);
-				loaded_textures[path] = tex;
-			}
+			mesh_texture tex;
+			strcpy(tex.path, path.c_str());
+			tex.texture = nullptr;
+			textures.push_back(std::move(tex));
 		}
 
 		if (textures.empty())
 		{
-			textures.push_back(load_white_texture());
+			mesh_texture tex;
+			strcpy(tex.path, "__white__");
+			tex.texture = load_white_texture();
+			textures.push_back(std::move(tex));
 		}
 
 		return textures;
@@ -612,6 +747,7 @@ static std::function<void()> app_layer = []()
 auto main() -> int {
 	init_window(app_layer);
 	
+	init_asset_manager();
 	init_render();
 
 	int32_t w, h;
@@ -809,10 +945,12 @@ auto main() -> int {
 	ubo.light_params.color[2] = glm::vec4(1.0f, 0.0f, 1.0f, 0.0f);
 	ubo.light_params.color[2].a = 1.0f; // intensity
 
-	yar_texture* diffuse_map_tex = load_texture("assets/container2.png");
-	yar_texture* specular_map_tex = load_texture("assets/container2_specular.png");
+	mesh_texture diffuse_map_tex{ nullptr, "assets/container2.png" };
+	yar_request_asset(yar_asset_type_texture, diffuse_map_tex.path);
+	mesh_texture specular_map_tex{ nullptr, "assets/container2_specular.png" };
+	yar_request_asset(yar_asset_type_texture, specular_map_tex.path);
 
-	std::array<std::string, 6> cubemap_paths = {
+	const char* cubemap_paths[] = {
 		"assets/px.png",
 		"assets/nx.png",
 		"assets/py.png",
@@ -820,14 +958,22 @@ auto main() -> int {
 		"assets/pz.png",
 		"assets/nz.png",
 	};
-	yar_texture* skybox = load_cubemap(cubemap_paths, "skybox");
+	mesh_texture skybox;
+	skybox.texture = nullptr;
+	skybox.paths[0] = cubemap_paths[0];
+	skybox.paths[1] = cubemap_paths[1];
+	skybox.paths[2] = cubemap_paths[2];
+	skybox.paths[3] = cubemap_paths[3];
+	skybox.paths[4] = cubemap_paths[4];
+	skybox.paths[5] = cubemap_paths[5];
+	yar_request_asset(yar_asset_type_cubemap, cubemap_paths);
 
-	std::vector<yar_texture*> textures = {
+	std::vector<mesh_texture> textures = {
 		diffuse_map_tex,
 		specular_map_tex
 	};
 
-	std::vector<yar_texture*> skybox_textures = { skybox };
+	std::vector<mesh_texture> skybox_textures = { skybox };
 
 	Mesh test_mesh(std::move(cube_vertexes), std::move(indexes), std::move(textures));
 	Mesh skybox_mesh(std::move(skybox_vertexes), std::move(skybox_indices), std::move(skybox_textures));
@@ -847,7 +993,6 @@ auto main() -> int {
 	sampler_desc.mag_filter = yar_filter_type_nearest;
 	sampler_desc.wrap_u = yar_wrap_mode_clamp_border;
 	sampler_desc.wrap_v = yar_wrap_mode_clamp_border;
-	sampler_desc.mip_map_filter = yar_filter_type_linear;
 	add_sampler(&sampler_desc, &sm_sampler);
 
 	yar_sampler* skybox_sampler;
@@ -940,7 +1085,7 @@ auto main() -> int {
 			.name = "diffuse_map",
 			.descriptor =
 			yar_descriptor_info::yar_combined_texture_sample{
-				diffuse_map_tex,
+				load_texture_from_asset_manager(diffuse_map_tex),
 				"samplerState",
 			}
 		},
@@ -948,7 +1093,7 @@ auto main() -> int {
 			.name = "specular_map",
 			.descriptor =
 			yar_descriptor_info::yar_combined_texture_sample{
-				specular_map_tex,
+				load_texture_from_asset_manager(specular_map_tex),
 				"samplerState",
 			}
 		},
@@ -999,7 +1144,7 @@ auto main() -> int {
 			.name = "skybox",
 			.descriptor =
 			yar_descriptor_info::yar_combined_texture_sample{
-				skybox,
+				load_cubemap_from_asset_manager(skybox),
 				"samplerState",
 			}
 		},
