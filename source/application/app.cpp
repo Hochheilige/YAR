@@ -7,9 +7,6 @@
 #include <glad/glad.h>
 #include <GLFW/glfw3.h>
 
-#define STB_IMAGE_IMPLEMENTATION
-#include <stb_image.h>
-
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/type_ptr.hpp>
@@ -26,44 +23,34 @@
 
 #include <cstddef>
 
-yar_texture* load_white_texture()
+struct ITexture // dummy temporary thing
 {
-	auto tex_asset = yar_get_builtin(yar_builtin_white);
-	
-	int32_t channels = tex_asset->channels;
-	size_t size = channels;
-	
-	yar_texture* tex;
-	yar_texture_desc texture_desc{};
-	texture_desc.width = tex_asset->width;
-	texture_desc.height = tex_asset->height;
-	texture_desc.mip_levels = 1;
-	texture_desc.type = yar_texture_type_2d;
-	texture_desc.format = yar_texture_format_rgba8;
-	texture_desc.usage = yar_texture_usage_shader_resource;
-	texture_desc.name = "white_dummy_texture";
-	add_texture(&texture_desc, &tex);
+};
 
-	yar_resource_update_desc resource_update_desc;
-	yar_texture_update_desc tex_update_desc{};
-	resource_update_desc = &tex_update_desc;
-	tex_update_desc.size = size;
-	tex_update_desc.texture = tex;
-	tex_update_desc.data = tex_asset->pixels;
-	begin_update_resource(resource_update_desc);
-	std::memcpy(tex_update_desc.mapped_data, tex_asset->pixels, tex_update_desc.size);
-	end_update_resource(resource_update_desc);
+struct Texture : public ITexture
+{
+	// this gpu texture can be used for different meshes
+	// so it should be shared as well and it has to be checked somehow
+	yar_texture* gpu_texture = nullptr;
+	std::shared_future<std::shared_ptr<TextureAsset>> texture_asset;
+};
 
-	return tex;
-}
+struct CubeMap : public ITexture
+{
+	yar_texture* gpu_texture = nullptr;
+	std::array<std::shared_future<std::shared_ptr<TextureAsset>>, 6 > texture_assets;
+};
 
-yar_texture* load_texture(const std::string_view& name)
+yar_texture* create_gpu_texture(ITexture* itexture)
 {
 	yar_texture* tex;
 
-	int32_t width, height, channels;
-	stbi_set_flip_vertically_on_load(false);
-	uint8_t* buf = stbi_load(name.data(), &width, &height, &channels, 0);
+	auto texture = static_cast<Texture*>(itexture);
+	const auto& asset = texture->texture_asset.get();
+	const uint32_t width = asset->width;
+	const uint32_t height = asset->height;
+	const uint32_t channels = asset->channels;
+	uint8_t* pixels = asset->pixels;
 
 	yar_texture_format format; 
 	if (channels == 1)
@@ -73,7 +60,7 @@ yar_texture* load_texture(const std::string_view& name)
 	if (channels == 4)
 		format = yar_texture_format_rgba8;
 
-	if (buf)
+	if (pixels)
 	{
 		yar_texture_desc texture_desc{};
 		texture_desc.width = width;
@@ -82,7 +69,7 @@ yar_texture* load_texture(const std::string_view& name)
 		texture_desc.type = yar_texture_type_2d;
 		texture_desc.format = format;
 		texture_desc.usage = yar_texture_usage_shader_resource;
-		texture_desc.name = name.data();
+		texture_desc.name = asset->path.c_str();
 		add_texture(&texture_desc, &tex);
 
 		yar_resource_update_desc resource_update_desc;
@@ -90,105 +77,47 @@ yar_texture* load_texture(const std::string_view& name)
 		resource_update_desc = &tex_update_desc;
 		tex_update_desc.size = width * height * channels;
 		tex_update_desc.texture = tex;
-		tex_update_desc.data = buf;
+		tex_update_desc.data = pixels;
 		begin_update_resource(resource_update_desc);
-		std::memcpy(tex_update_desc.mapped_data, buf, tex_update_desc.size);
+		std::memcpy(tex_update_desc.mapped_data, pixels, tex_update_desc.size);
 		end_update_resource(resource_update_desc);
+
+		texture->gpu_texture = tex;
 	}
 	else
 	{
-		std::cout << "error loading texture: " << name;
+		std::cout << "error loading texture: " << asset->path;
+		return nullptr;
 	}
 
 	return tex;
 }
 
-yar_texture* load_texture(yar_asset_texture* asset, const char* name)
+yar_texture* create_gpu_cubemap(ITexture& itexture)
 {
-	yar_texture* tex;
-
-	int32_t width = asset->width;
-	int32_t height = asset->height;
-	int32_t channels = asset->channels;
-
-	yar_texture_format format; 
-	if (channels == 1)
-		format = yar_texture_format_r8;
-	if (channels == 3)
-		format = yar_texture_format_rgb8;
-	if (channels == 4)
-		format = yar_texture_format_rgba8;
-
-	if (asset->pixels)
-	{
-		yar_texture_desc texture_desc{};
-		texture_desc.width = width;
-		texture_desc.height = height;
-		texture_desc.mip_levels = 1 + (uint32_t)std::floor(std::log2(std::max(width, height)));;
-		texture_desc.type = yar_texture_type_2d;
-		texture_desc.format = format;
-		texture_desc.usage = yar_texture_usage_shader_resource;
-		texture_desc.name = name;
-		add_texture(&texture_desc, &tex);
-
-		yar_resource_update_desc resource_update_desc;
-		yar_texture_update_desc tex_update_desc{};
-		resource_update_desc = &tex_update_desc;
-		tex_update_desc.size = width * height * channels;
-		tex_update_desc.texture = tex;
-		tex_update_desc.data = asset->pixels;
-		begin_update_resource(resource_update_desc);
-		std::memcpy(tex_update_desc.mapped_data, asset->pixels, tex_update_desc.size);
-		end_update_resource(resource_update_desc);
-	}
-	else
-	{
-		std::cout << "error loading texture: " << name;
-	}
-
-	return tex;
-}
-
-yar_texture* load_cubemap(const std::array<std::string, 6>& faces, const std::string& name)
-{
+	auto& cube_map = static_cast<CubeMap&>(itexture);
 	yar_texture* tex = nullptr;
+	yar_texture_format format;
+	std::vector<uint8_t> result_pixels;
+	uint32_t width, height, channels;
 
-	int32_t width = 0, height = 0, channels = 0;
-	std::vector<uint8_t> image;
-
-	for (size_t i = 0; i < faces.size(); i++)
+	for (const auto& asset : cube_map.texture_assets)
 	{
-		int32_t w, h, c;
-		stbi_set_flip_vertically_on_load(false); 
-		uint8_t* buf = stbi_load(faces[i].data(), &w, &h, &c, 0);
-		if (!buf)
+		const auto& texture = asset.get();
+		width = texture->width;
+		height = texture->height;
+		channels = texture->channels;
+		uint8_t* pixels = texture->pixels;
+
+		if (result_pixels.empty())
 		{
-			std::cerr << "error loading cubemap face: " << faces[i] << "\n";
-			return nullptr;
+			result_pixels.reserve(6u * width * height * channels);
 		}
 
-		if (i == 0)
-		{
-			width = w;
-			height = h;
-			channels = c;
-			image.reserve(6 * w * h * c);
-		}
-		else
-		{
-			if (w != width || h != height || c != channels)
-			{
-				std::cerr << "cubemap face size mismatch: " << faces[i] << "\n";
-				stbi_image_free(buf);
-				return nullptr;
-			}
-		}
-
-		image.insert(image.end(), buf, buf + w * h * c);
-		stbi_image_free(buf);
+		result_pixels.insert(result_pixels.end(),
+			pixels, pixels + width * height * channels);
 	}
 
-	yar_texture_format format;
 	if (channels == 1)
 		format = yar_texture_format_r8;
 	else if (channels == 3)
@@ -206,64 +135,22 @@ yar_texture* load_cubemap(const std::array<std::string, 6>& faces, const std::st
 	texture_desc.type = yar_texture_type_cube_map;
 	texture_desc.format = format;
 	texture_desc.usage = yar_texture_usage_shader_resource;
-	texture_desc.name = name.c_str();
+	texture_desc.name = "cube_map"; // TODO: fixme
 	add_texture(&texture_desc, &tex);
 
 	yar_resource_update_desc resource_update_desc;
 	yar_texture_update_desc tex_update_desc{};
 	resource_update_desc = &tex_update_desc;
 
-	tex_update_desc.size = static_cast<uint32_t>(image.size());
+	tex_update_desc.size = static_cast<uint32_t>(result_pixels.size());
 	tex_update_desc.texture = tex;
-	tex_update_desc.data = image.data();
+	tex_update_desc.data = result_pixels.data();
 
 	begin_update_resource(resource_update_desc);
-	std::memcpy(tex_update_desc.mapped_data, image.data(), tex_update_desc.size);
+	std::memcpy(tex_update_desc.mapped_data, result_pixels.data(), tex_update_desc.size);
 	end_update_resource(resource_update_desc);
 
-	return tex;
-}
-
-yar_texture* load_cubemap(yar_asset_cubemap* cubemap, const char* name)
-{
-	yar_texture* tex = nullptr;
-
-	int32_t width = cubemap->width;
-	int32_t height = cubemap->height;
-	int32_t channels = cubemap->channels;
-	
-	yar_texture_format format;
-	if (channels == 1)
-		format = yar_texture_format_r8;
-	else if (channels == 3)
-		format = yar_texture_format_rgb8;
-	else if (channels == 4)
-		format = yar_texture_format_rgba8;
-	else
-		return nullptr;
-
-	yar_texture_desc texture_desc{};
-	texture_desc.width = width;
-	texture_desc.height = height;
-	texture_desc.depth = 6; 
-	texture_desc.mip_levels = 1 + (uint32_t)std::floor(std::log2(std::max(width, height)));
-	texture_desc.type = yar_texture_type_cube_map;
-	texture_desc.format = format;
-	texture_desc.usage = yar_texture_usage_shader_resource;
-	texture_desc.name = name;
-	add_texture(&texture_desc, &tex);
-
-	yar_resource_update_desc resource_update_desc;
-	yar_texture_update_desc tex_update_desc{};
-	resource_update_desc = &tex_update_desc;
-
-	tex_update_desc.size = width * height * channels * 6;
-	tex_update_desc.texture = tex;
-	tex_update_desc.data = cubemap->pixels;
-
-	begin_update_resource(resource_update_desc);
-	std::memcpy(tex_update_desc.mapped_data, cubemap->pixels, tex_update_desc.size);
-	end_update_resource(resource_update_desc);
+	cube_map.gpu_texture = tex;
 
 	return tex;
 }
@@ -280,60 +167,12 @@ struct SkyBoxVertex
 	glm::vec3 position;
 };
 
-struct mesh_texture
-{
-	yar_texture* texture = nullptr;
-	union
-	{
-		char path[256];
-		const char* paths[6];
-	};
-};
-
-yar_texture* load_texture_from_asset_manager(mesh_texture texture)
-{
-	if (texture.texture)
-		return texture.texture;
-
-	auto asset = (yar_asset_texture*)yar_find_loaded_asset(yar_asset_type_texture, texture.path);
-	while (true)
-	{
-		if (asset)
-			break;
-
-		asset = (yar_asset_texture*)yar_find_loaded_asset(yar_asset_type_texture, texture.path);
-	}
-
-	return load_texture(asset, texture.path);
-}
-
-yar_texture* load_cubemap_from_asset_manager(mesh_texture texture)
-{
-	std::string combined;
-	for (int i = 0; i < 6; i++)
-	{
-		combined += texture.paths[i];
-		combined += ";";
-	}
-	auto asset = (yar_asset_cubemap*)yar_find_loaded_asset(yar_asset_type_cubemap, combined.c_str());
-	while (true)
-	{
-		if (asset)
-			break;
-
-		asset = (yar_asset_cubemap*)yar_find_loaded_asset(yar_asset_type_cubemap, combined.c_str());
-	}
-
-	return load_cubemap(asset, "skybox");
-}
-
-
 class Mesh
 {
 public:
-	Mesh(std::vector<Vertex>&& vertices, std::vector<uint32_t>&& indices, std::vector<mesh_texture>&& textures) :
+	Mesh(std::vector<Vertex>&& vertices, std::vector<uint32_t>&& indices, std::vector<ITexture*>&& textures, std::string name) :
 		vertices(vertices), indices(indices), textures(textures),
-		gpu_vertex_buffer(nullptr), gpu_index_buffer(nullptr)
+		gpu_vertex_buffer(nullptr), gpu_index_buffer(nullptr), name(name)
 	{
 		optimize_mesh();
 		upload_buffers();
@@ -360,11 +199,11 @@ public:
 		cmd_draw_indexed(cmd, indices.size(), 0, 0);
 	}
 
-	yar_texture* get_texture(uint32_t index) const
+	yar_texture* get_texture(uint32_t index)
 	{
 		if (index >= textures.size())
 			return nullptr;
-		return load_texture_from_asset_manager(textures[index]);
+		return create_gpu_texture(textures[index]);
 	}
 
 private:
@@ -436,10 +275,12 @@ private:
 private:
 	std::vector<Vertex> vertices;
 	std::vector<uint32_t> indices;
-	std::vector<mesh_texture> textures;
+	std::vector<ITexture*> textures;
 
 	yar_buffer* gpu_vertex_buffer;
 	yar_buffer* gpu_index_buffer;
+
+	std::string name;
 
 	const uint32_t attrib_count = 3u;
 };
@@ -471,7 +312,7 @@ public:
 		add_descriptor_set(&set_desc, &set);
 
 		uint32_t index = 0;
-		for (const auto& mesh : meshes)
+		for (auto& mesh : meshes)
 		{
 			// It is incorrect we can't garauntee that 
 			// 0th texture is diffuse_map,
@@ -551,7 +392,7 @@ private:
 	{
 		std::vector<Vertex> vertices;
 		std::vector<uint32_t> indices;
-		std::vector<mesh_texture> textures;
+		std::vector<ITexture*> textures;
 
 		for (uint32_t i = 0; i < mesh->mNumVertices; ++i)
 		{
@@ -589,42 +430,40 @@ private:
 		if (mesh->mMaterialIndex >= 0)
 		{
 			aiMaterial* material = scene->mMaterials[mesh->mMaterialIndex];
-			std::vector<mesh_texture> diffuse_maps = load_material_textures(material,
+			std::vector<ITexture*> diffuse_maps = load_material_textures(material,
 				aiTextureType_DIFFUSE);
 			textures.insert(textures.end(), diffuse_maps.begin(), diffuse_maps.end());
-			std::vector<mesh_texture> specular_maps = load_material_textures(material,
+			std::vector<ITexture*> specular_maps = load_material_textures(material,
 				aiTextureType_SPECULAR);
 			textures.insert(textures.end(), specular_maps.begin(), specular_maps.end());
-			std::vector<mesh_texture> normal_maps = load_material_textures(material,
+			std::vector<ITexture*> normal_maps = load_material_textures(material,
 				aiTextureType_HEIGHT);
 			textures.insert(textures.end(), normal_maps.begin(), normal_maps.end());
 		}
 
-		return Mesh(std::move(vertices), std::move(indices), std::move(textures));
+		return Mesh(std::move(vertices), std::move(indices), std::move(textures), mesh->mName.C_Str());
 	}
 
-	std::vector<mesh_texture> load_material_textures(aiMaterial* mat, aiTextureType type)
+	std::vector<ITexture*> load_material_textures(aiMaterial* mat, aiTextureType type)
 	{
-		std::vector<mesh_texture> textures;
+		std::vector<ITexture*> textures;
 		for (uint32_t i = 0; i < mat->GetTextureCount(type); ++i)
 		{
 			aiString str;
 			mat->GetTexture(type, i, &str);
 			std::string path = directory + '/' + str.C_Str();
 			
-			yar_request_asset(yar_asset_type_texture, path.c_str());
-
-			mesh_texture tex;
-			strcpy(tex.path, path.c_str());
-			tex.texture = nullptr;
+			Texture* tex = new Texture();
+			tex->gpu_texture = nullptr;
+			tex->texture_asset = load_texture(path);
 			textures.push_back(std::move(tex));
 		}
 
 		if (textures.empty())
 		{
-			mesh_texture tex;
-			strcpy(tex.path, "__white__");
-			tex.texture = load_white_texture();
+			Texture* tex = new Texture();
+			tex->gpu_texture = nullptr;
+			tex->texture_asset = load_texture(WHITE_TEXTURE);
 			textures.push_back(std::move(tex));
 		}
 
@@ -945,11 +784,15 @@ auto main() -> int {
 	ubo.light_params.color[2] = glm::vec4(1.0f, 0.0f, 1.0f, 0.0f);
 	ubo.light_params.color[2].a = 1.0f; // intensity
 
-	mesh_texture diffuse_map_tex{ nullptr, "assets/container2.png" };
-	yar_request_asset(yar_asset_type_texture, diffuse_map_tex.path);
-	mesh_texture specular_map_tex{ nullptr, "assets/container2_specular.png" };
-	yar_request_asset(yar_asset_type_texture, specular_map_tex.path);
-
+	Texture diffuse_map_tex{
+		.gpu_texture = nullptr,
+		.texture_asset = load_texture("assets/container2.png")
+	};
+	Texture specular_map_tex{ 
+		.gpu_texture = nullptr,
+		.texture_asset = load_texture("assets/container2_specular.png")
+	};
+	
 	const char* cubemap_paths[] = {
 		"assets/px.png",
 		"assets/nx.png",
@@ -958,25 +801,30 @@ auto main() -> int {
 		"assets/pz.png",
 		"assets/nz.png",
 	};
-	mesh_texture skybox;
-	skybox.texture = nullptr;
-	skybox.paths[0] = cubemap_paths[0];
-	skybox.paths[1] = cubemap_paths[1];
-	skybox.paths[2] = cubemap_paths[2];
-	skybox.paths[3] = cubemap_paths[3];
-	skybox.paths[4] = cubemap_paths[4];
-	skybox.paths[5] = cubemap_paths[5];
-	yar_request_asset(yar_asset_type_cubemap, cubemap_paths);
 
-	std::vector<mesh_texture> textures = {
-		diffuse_map_tex,
-		specular_map_tex
+	CubeMap skybox{
+		.gpu_texture = nullptr,
+		.texture_assets = {
+			load_texture(cubemap_paths[0]),
+			load_texture(cubemap_paths[1]),
+			load_texture(cubemap_paths[2]),
+			load_texture(cubemap_paths[3]),
+			load_texture(cubemap_paths[4]),
+			load_texture(cubemap_paths[5]),
+		}
+	};
+	
+	std::vector<ITexture*> textures = {
+		&diffuse_map_tex,
+		&specular_map_tex
 	};
 
-	std::vector<mesh_texture> skybox_textures = { skybox };
+	std::vector<ITexture*> skybox_textures = {
+		&skybox
+	};
 
-	Mesh test_mesh(std::move(cube_vertexes), std::move(indexes), std::move(textures));
-	Mesh skybox_mesh(std::move(skybox_vertexes), std::move(skybox_indices), std::move(skybox_textures));
+	Mesh test_mesh(std::move(cube_vertexes), std::move(indexes), std::move(textures), "Cube");
+	Mesh skybox_mesh(std::move(skybox_vertexes), std::move(skybox_indices), std::move(skybox_textures), "Skybox");
 	Model mdl("assets/sponza/sponza.obj");
 
 	yar_sampler* sampler;
@@ -1085,7 +933,7 @@ auto main() -> int {
 			.name = "diffuse_map",
 			.descriptor =
 			yar_descriptor_info::yar_combined_texture_sample{
-				load_texture_from_asset_manager(diffuse_map_tex),
+				test_mesh.get_texture(0),
 				"samplerState",
 			}
 		},
@@ -1093,18 +941,19 @@ auto main() -> int {
 			.name = "specular_map",
 			.descriptor =
 			yar_descriptor_info::yar_combined_texture_sample{
-				load_texture_from_asset_manager(specular_map_tex),
+				test_mesh.get_texture(1),
 				"samplerState",
 			}
 		},
-		{
+		// There is no normal map for Cubes
+		/*{
 			.name = "normal_map",
 			.descriptor =
 			yar_descriptor_info::yar_combined_texture_sample{
-				load_white_texture(),
+				create_gpu_texture(),
 				"samplerState",
 			}
-		},
+		},*/
 		{
 			.name = "samplerState",
 			.descriptor = sampler
@@ -1144,7 +993,7 @@ auto main() -> int {
 			.name = "skybox",
 			.descriptor =
 			yar_descriptor_info::yar_combined_texture_sample{
-				load_cubemap_from_asset_manager(skybox),
+				create_gpu_cubemap(skybox),
 				"samplerState",
 			}
 		},

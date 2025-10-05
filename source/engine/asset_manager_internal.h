@@ -2,39 +2,41 @@
 
 #include "asset_manager.h"
 
-#include <thread>
-#include <mutex>
-#include <queue>
+#include <unordered_map>
+#include <memory>
+#include <string_view>
 
-struct yar_asset_entry
+constexpr uint64_t hash_fnv1a(std::string_view str)
 {
-	uint64_t hash;
-	yar_asset_type type;
-	void* asset;
+	uint64_t hash = 1469598103934665603ull; // offset basis
+	for (char c : str)
+	{
+		hash ^= static_cast<unsigned char>(c);
+		hash *= 1099511628211ull; // FNV prime
+	}
+	return hash;
+}
+
+struct BasicStringHash
+{
+	size_t operator()(std::string_view str) const noexcept
+	{
+		return static_cast<size_t>(hash_fnv1a(str));
+	}
 };
 
-struct yar_asset_ready {
-	yar_asset_type type;
-	void* asset;
-	uint64_t hash;
-};
-
-struct yar_asset_manager
+struct AssetManager
 {
-	static constexpr uint32_t MaxAssetsCount = 4096u;
+	AssetManager()
+	{
+		textures.reserve(MaxTextureCount);
+	}
 
-	yar_asset_entry assets[MaxAssetsCount];
-	uint32_t count;
+	std::unordered_map<
+		std::string, 
+		std::shared_future<std::shared_ptr<TextureAsset>>,
+		BasicStringHash> textures;
 
-	yar_asset_entry builtin[yar_builtin_count];
-
-	std::queue<yar_asset_request> requests;
-	std::mutex req_mutex;
-	std::condition_variable req_cv;
-
-	std::queue<yar_asset_ready> ready;
-	std::mutex ready_mutex;
-
-	std::vector<std::thread> workers;
-	std::atomic<bool> running;
+private:
+	static constexpr size_t MaxTextureCount = 2048ull;
 };
