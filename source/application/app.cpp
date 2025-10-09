@@ -23,137 +23,10 @@
 
 #include <cstddef>
 
-struct ITexture // dummy temporary thing
+struct Texture 
 {
-};
-
-struct Texture : public ITexture
-{
-	// this gpu texture can be used for different meshes
-	// so it should be shared as well and it has to be checked somehow
-	yar_texture* gpu_texture = nullptr;
 	std::shared_future<std::shared_ptr<TextureAsset>> texture_asset;
 };
-
-struct CubeMap : public ITexture
-{
-	yar_texture* gpu_texture = nullptr;
-	std::array<std::shared_future<std::shared_ptr<TextureAsset>>, 6 > texture_assets;
-};
-
-yar_texture* create_gpu_texture(ITexture* itexture)
-{
-	yar_texture* tex;
-
-	auto texture = static_cast<Texture*>(itexture);
-	const auto& asset = texture->texture_asset.get();
-	const uint32_t width = asset->width;
-	const uint32_t height = asset->height;
-	const uint32_t channels = asset->channels;
-	uint8_t* pixels = asset->pixels;
-
-	yar_texture_format format; 
-	if (channels == 1)
-		format = yar_texture_format_r8;
-	if (channels == 3)
-		format = yar_texture_format_rgb8;
-	if (channels == 4)
-		format = yar_texture_format_rgba8;
-
-	if (pixels)
-	{
-		yar_texture_desc texture_desc{};
-		texture_desc.width = width;
-		texture_desc.height = height;
-		texture_desc.mip_levels = 1 + (uint32_t)std::floor(std::log2(std::max(width, height)));;
-		texture_desc.type = yar_texture_type_2d;
-		texture_desc.format = format;
-		texture_desc.usage = yar_texture_usage_shader_resource;
-		texture_desc.name = asset->path.c_str();
-		add_texture(&texture_desc, &tex);
-
-		yar_resource_update_desc resource_update_desc;
-		yar_texture_update_desc tex_update_desc{};
-		resource_update_desc = &tex_update_desc;
-		tex_update_desc.size = width * height * channels;
-		tex_update_desc.texture = tex;
-		tex_update_desc.data = pixels;
-		begin_update_resource(resource_update_desc);
-		std::memcpy(tex_update_desc.mapped_data, pixels, tex_update_desc.size);
-		end_update_resource(resource_update_desc);
-
-		texture->gpu_texture = tex;
-	}
-	else
-	{
-		std::cout << "error loading texture: " << asset->path;
-		return nullptr;
-	}
-
-	return tex;
-}
-
-yar_texture* create_gpu_cubemap(ITexture& itexture)
-{
-	auto& cube_map = static_cast<CubeMap&>(itexture);
-	yar_texture* tex = nullptr;
-	yar_texture_format format;
-	std::vector<uint8_t> result_pixels;
-	uint32_t width, height, channels;
-
-	for (const auto& asset : cube_map.texture_assets)
-	{
-		const auto& texture = asset.get();
-		width = texture->width;
-		height = texture->height;
-		channels = texture->channels;
-		uint8_t* pixels = texture->pixels;
-
-		if (result_pixels.empty())
-		{
-			result_pixels.reserve(6u * width * height * channels);
-		}
-
-		result_pixels.insert(result_pixels.end(),
-			pixels, pixels + width * height * channels);
-	}
-
-	if (channels == 1)
-		format = yar_texture_format_r8;
-	else if (channels == 3)
-		format = yar_texture_format_rgb8;
-	else if (channels == 4)
-		format = yar_texture_format_rgba8;
-	else
-		return nullptr;
-
-	yar_texture_desc texture_desc{};
-	texture_desc.width = width;
-	texture_desc.height = height;
-	texture_desc.depth = 6; 
-	texture_desc.mip_levels = 1 + (uint32_t)std::floor(std::log2(std::max(width, height)));
-	texture_desc.type = yar_texture_type_cube_map;
-	texture_desc.format = format;
-	texture_desc.usage = yar_texture_usage_shader_resource;
-	texture_desc.name = "cube_map"; // TODO: fixme
-	add_texture(&texture_desc, &tex);
-
-	yar_resource_update_desc resource_update_desc;
-	yar_texture_update_desc tex_update_desc{};
-	resource_update_desc = &tex_update_desc;
-
-	tex_update_desc.size = static_cast<uint32_t>(result_pixels.size());
-	tex_update_desc.texture = tex;
-	tex_update_desc.data = result_pixels.data();
-
-	begin_update_resource(resource_update_desc);
-	std::memcpy(tex_update_desc.mapped_data, result_pixels.data(), tex_update_desc.size);
-	end_update_resource(resource_update_desc);
-
-	cube_map.gpu_texture = tex;
-
-	return tex;
-}
 
 struct Vertex
 {
@@ -170,7 +43,7 @@ struct SkyBoxVertex
 class Mesh
 {
 public:
-	Mesh(std::vector<Vertex>&& vertices, std::vector<uint32_t>&& indices, std::vector<ITexture*>&& textures, std::string name) :
+	Mesh(std::vector<Vertex>&& vertices, std::vector<uint32_t>&& indices, std::vector<Texture*>&& textures, std::string name) :
 		vertices(vertices), indices(indices), textures(textures),
 		gpu_vertex_buffer(nullptr), gpu_index_buffer(nullptr), name(name)
 	{
@@ -203,7 +76,7 @@ public:
 	{
 		if (index >= textures.size())
 			return nullptr;
-		return create_gpu_texture(textures[index]);
+		return get_gpu_texture(static_cast<Texture*>(textures[index])->texture_asset, yar_texture_type_2d);
 	}
 
 private:
@@ -275,7 +148,7 @@ private:
 private:
 	std::vector<Vertex> vertices;
 	std::vector<uint32_t> indices;
-	std::vector<ITexture*> textures;
+	std::vector<Texture*> textures;
 
 	yar_buffer* gpu_vertex_buffer;
 	yar_buffer* gpu_index_buffer;
@@ -392,7 +265,7 @@ private:
 	{
 		std::vector<Vertex> vertices;
 		std::vector<uint32_t> indices;
-		std::vector<ITexture*> textures;
+		std::vector<Texture*> textures;
 
 		for (uint32_t i = 0; i < mesh->mNumVertices; ++i)
 		{
@@ -430,13 +303,13 @@ private:
 		if (mesh->mMaterialIndex >= 0)
 		{
 			aiMaterial* material = scene->mMaterials[mesh->mMaterialIndex];
-			std::vector<ITexture*> diffuse_maps = load_material_textures(material,
+			std::vector<Texture*> diffuse_maps = load_material_textures(material,
 				aiTextureType_DIFFUSE);
 			textures.insert(textures.end(), diffuse_maps.begin(), diffuse_maps.end());
-			std::vector<ITexture*> specular_maps = load_material_textures(material,
+			std::vector<Texture*> specular_maps = load_material_textures(material,
 				aiTextureType_SPECULAR);
 			textures.insert(textures.end(), specular_maps.begin(), specular_maps.end());
-			std::vector<ITexture*> normal_maps = load_material_textures(material,
+			std::vector<Texture*> normal_maps = load_material_textures(material,
 				aiTextureType_HEIGHT);
 			textures.insert(textures.end(), normal_maps.begin(), normal_maps.end());
 		}
@@ -444,9 +317,9 @@ private:
 		return Mesh(std::move(vertices), std::move(indices), std::move(textures), mesh->mName.C_Str());
 	}
 
-	std::vector<ITexture*> load_material_textures(aiMaterial* mat, aiTextureType type)
+	std::vector<Texture*> load_material_textures(aiMaterial* mat, aiTextureType type)
 	{
-		std::vector<ITexture*> textures;
+		std::vector<Texture*> textures;
 		for (uint32_t i = 0; i < mat->GetTextureCount(type); ++i)
 		{
 			aiString str;
@@ -454,7 +327,6 @@ private:
 			std::string path = directory + '/' + str.C_Str();
 			
 			Texture* tex = new Texture();
-			tex->gpu_texture = nullptr;
 			tex->texture_asset = load_texture(path);
 			textures.push_back(std::move(tex));
 		}
@@ -462,7 +334,6 @@ private:
 		if (textures.empty())
 		{
 			Texture* tex = new Texture();
-			tex->gpu_texture = nullptr;
 			tex->texture_asset = load_texture(WHITE_TEXTURE);
 			textures.push_back(std::move(tex));
 		}
@@ -785,15 +656,14 @@ auto main() -> int {
 	ubo.light_params.color[2].a = 1.0f; // intensity
 
 	Texture diffuse_map_tex{
-		.gpu_texture = nullptr,
 		.texture_asset = load_texture("assets/container2.png")
 	};
 	Texture specular_map_tex{ 
-		.gpu_texture = nullptr,
 		.texture_asset = load_texture("assets/container2_specular.png")
 	};
-	
-	const char* cubemap_paths[] = {
+
+	// TODO: remake this stupid thing
+	std::array<std::string, 6> paths = {
 		"assets/px.png",
 		"assets/nx.png",
 		"assets/py.png",
@@ -801,25 +671,20 @@ auto main() -> int {
 		"assets/pz.png",
 		"assets/nz.png",
 	};
+	std::array<std::string_view, 6> cubemap_paths;
+	for (int i = 0; i < 6; ++i)
+		cubemap_paths[i] = paths[i];
 
-	CubeMap skybox{
-		.gpu_texture = nullptr,
-		.texture_assets = {
-			load_texture(cubemap_paths[0]),
-			load_texture(cubemap_paths[1]),
-			load_texture(cubemap_paths[2]),
-			load_texture(cubemap_paths[3]),
-			load_texture(cubemap_paths[4]),
-			load_texture(cubemap_paths[5]),
-		}
+	Texture skybox {
+		.texture_asset = load_cubemap(cubemap_paths)
 	};
 	
-	std::vector<ITexture*> textures = {
+	std::vector<Texture*> textures = {
 		&diffuse_map_tex,
 		&specular_map_tex
 	};
 
-	std::vector<ITexture*> skybox_textures = {
+	std::vector<Texture*> skybox_textures = {
 		&skybox
 	};
 
@@ -993,7 +858,7 @@ auto main() -> int {
 			.name = "skybox",
 			.descriptor =
 			yar_descriptor_info::yar_combined_texture_sample{
-				create_gpu_cubemap(skybox),
+				get_gpu_texture(skybox.texture_asset, yar_texture_type_cube_map),
 				"samplerState",
 			}
 		},
