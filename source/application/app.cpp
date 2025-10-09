@@ -1027,7 +1027,7 @@ auto main() -> int {
 
 			uint32_t index = 10;
 			cmd_bind_push_constant(cmd, &index);
-			mdl.draw(cmd);
+			mdl.draw(cmd, true);
 		}
 		cmd_end_render_pass(cmd);
 
