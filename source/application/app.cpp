@@ -65,6 +65,7 @@ struct Vertex
 	glm::vec3 position;
 	glm::vec3 normal;
 	glm::vec2 tex_coord;
+	glm::vec2 tex_coord1;
 };
 
 struct SkyBoxVertex
@@ -92,7 +93,7 @@ public:
 
 	void setup_vertex_layout(yar_vertex_layout& layout)
 	{
-		layout.attrib_count = 3u;
+		layout.attrib_count = 4u;
 		layout.attribs[0].size = 3u;
 		layout.attribs[0].format = yar_attrib_format_float;
 		layout.attribs[0].offset = offsetof(Vertex, position);
@@ -102,6 +103,9 @@ public:
 		layout.attribs[2].size = 2u;
 		layout.attribs[2].format = yar_attrib_format_float;
 		layout.attribs[2].offset = offsetof(Vertex, tex_coord);
+		layout.attribs[3].size = 2u;
+		layout.attribs[3].format = yar_attrib_format_float;
+		layout.attribs[3].offset = offsetof(Vertex, tex_coord1);
 	}
 
 	void draw(yar_cmd_buffer* cmd)
@@ -116,8 +120,13 @@ public:
 		if (index >= textures.size())
 			return nullptr;
 		// HACK
+		if (name == "Skybox")
+			return get_gpu_texture(static_cast<Texture*>(textures[index])->texture_asset, yar_texture_type_cube_map);
 		if (index == 1 || index == 2)
 			return get_gpu_texture(static_cast<Texture*>(textures[index])->texture_asset, yar_texture_type_2d, 1);
+		else if (index == 3)
+			return get_gpu_texture(static_cast<Texture*>(textures[index])->texture_asset, yar_texture_type_2d, 3);
+
 		return get_gpu_texture(static_cast<Texture*>(textures[index])->texture_asset, yar_texture_type_2d);
 	}
 
@@ -337,6 +346,18 @@ private:
 			{
 				vertex.tex_coord.x = mesh->mTextureCoords[0][i].x;
 				vertex.tex_coord.y = mesh->mTextureCoords[0][i].y;
+			}
+
+			if (mesh->HasTextureCoords(1))
+			{
+				vertex.tex_coord1.x = mesh->mTextureCoords[1][i].x;
+				vertex.tex_coord1.y = mesh->mTextureCoords[1][i].y;
+			}
+
+			if (mesh->HasTangentsAndBitangents())
+			{
+				auto tan = mesh->mTangents[i];
+				auto bitan = mesh->mBitangents[i];
 			}
 
 			vertices.push_back(vertex);
@@ -728,12 +749,12 @@ auto main() -> int {
 
 	// TODO: remake this stupid thing
 	std::array<std::string, 6> paths = {
-		"assets/px.png",
-		"assets/nx.png",
-		"assets/py.png",
-		"assets/ny.png",
 		"assets/pz.png",
 		"assets/nz.png",
+		"assets/py.png",
+		"assets/ny.png",
+		"assets/px.png",
+		"assets/nx.png",
 	};
 	std::array<std::string_view, 6> cubemap_paths;
 	for (int i = 0; i < 6; ++i)
@@ -939,7 +960,7 @@ auto main() -> int {
 			.name = "skybox",
 			.descriptor =
 			yar_descriptor_info::yar_combined_texture_sample{
-				get_gpu_texture(skybox.texture_asset, yar_texture_type_cube_map),
+				skybox_mesh.get_texture(0),
 				"samplerState",
 			}
 		},

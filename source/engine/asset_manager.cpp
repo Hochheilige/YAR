@@ -89,6 +89,8 @@ yar_texture* get_gpu_texture(std::shared_future<std::shared_ptr<TextureAsset>>& 
 		texture_desc.height = height;
 		texture_desc.mip_levels = 1 + (uint32_t)std::floor(std::log2(std::max(width, height)));;
 		texture_desc.type = type;
+		if (type == yar_texture_type_cube_map)
+			texture_desc.depth = 6;
 		texture_desc.format = format;
 		texture_desc.usage = yar_texture_usage_shader_resource;
 		texture_desc.name = asset->path.c_str();
@@ -97,7 +99,10 @@ yar_texture* get_gpu_texture(std::shared_future<std::shared_ptr<TextureAsset>>& 
 		yar_resource_update_desc resource_update_desc;
 		yar_texture_update_desc tex_update_desc{};
 		resource_update_desc = &tex_update_desc;
-		tex_update_desc.size = width * height * cur_channels;
+		if (type == yar_texture_type_cube_map)
+			tex_update_desc.size = width * height * cur_channels * 6;
+		else
+			tex_update_desc.size = width * height * cur_channels;
 		tex_update_desc.texture = tex;
 		tex_update_desc.data = pixels;
 		begin_update_resource(resource_update_desc);

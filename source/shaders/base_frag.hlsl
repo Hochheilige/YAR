@@ -3,7 +3,8 @@
 struct PSInput {
     float4 position : SV_POSITION;
     float3 frag_pos : POSITION0;
-    float2 tex_coord : TEXCOORD;
+    float2 tex_coord : TEXCOORD0;
+    float2 tex_coord1 : TEXCOORD1;
     float3 normal : NORMAL;
     float4 frag_pos_light_space : POSITION1;
 };
@@ -148,8 +149,8 @@ float4 main(PSInput input) : SV_TARGET {
     lcp.diffuse_map_color  = diffuse_map.Sample(samplerState, input.tex_coord);
     if (lcp.diffuse_map_color.a < 0.1f)
         discard;
-    lcp.specular_map_color = lerp(0.04f, 1.0f, metalness_map.Sample(samplerState, input.tex_coord).r)
-     * (1.0f - roughness_map.Sample(samplerState, input.tex_coord).r);
+    lcp.specular_map_color = lerp(0.04f, 1.0f, metalness_map.Sample(samplerState, input.tex_coord1).r)
+     * (1.0f - roughness_map.Sample(samplerState, input.tex_coord1).r);
     //lcp.norm               = normal_map.Sample(samplerState, input.tex_coord).rgb;
     lcp.norm               = input.normal;
     lcp.frag_pos           = input.frag_pos;
