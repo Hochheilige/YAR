@@ -9,11 +9,12 @@ struct PSInput {
 };
 
 Texture2D<float4> diffuse_map : register(t0, space0);
-Texture2D<float4> specular_map : register(t1, space0);
-Texture2D<float4> normal_map : register(t2, space0);
+Texture2D<float> roughness_map : register(t1, space0);
+Texture2D<float> metalness_map : register(t2, space0);
+Texture2D<float4> normal_map : register(t3, space0);
 SamplerState samplerState : register(s0, space0);
 
-Texture2D<float> shadow_map : register(t3, space1);
+Texture2D<float> shadow_map : register(t4, space1);
 SamplerState smSampler : register(s1, space1);
 
 struct LightCalculationParams
@@ -147,8 +148,9 @@ float4 main(PSInput input) : SV_TARGET {
     lcp.diffuse_map_color  = diffuse_map.Sample(samplerState, input.tex_coord);
     if (lcp.diffuse_map_color.a < 0.1f)
         discard;
-    lcp.specular_map_color = specular_map.Sample(samplerState, input.tex_coord).r;
-   // lcp.norm               = normal_map.Sample(samplerState, input.tex_coord);
+    lcp.specular_map_color = lerp(0.04f, 1.0f, metalness_map.Sample(samplerState, input.tex_coord).r)
+     * (1.0f - roughness_map.Sample(samplerState, input.tex_coord).r);
+    //lcp.norm               = normal_map.Sample(samplerState, input.tex_coord).rgb;
     lcp.norm               = input.normal;
     lcp.frag_pos           = input.frag_pos;
     lcp.cam_pos            = cam.pos.xyz;

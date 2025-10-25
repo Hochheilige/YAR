@@ -48,6 +48,8 @@ static auto load_texture_async(std::string_view path) -> std::shared_ptr<Texture
 	int32_t width, height, channels;
 	stbi_set_flip_vertically_on_load(false);
 	uint8_t* pixels = stbi_load(path.data(), &width, &height, &channels, 0);
+	if (!pixels)
+		return load_debug_white_texture();
 
 	texture->width = width;
 	texture->height = height;
@@ -57,7 +59,7 @@ static auto load_texture_async(std::string_view path) -> std::shared_ptr<Texture
 	return texture;
 }
 
-yar_texture* get_gpu_texture(std::shared_future<std::shared_ptr<TextureAsset>>& texture_asset, yar_texture_type type)
+yar_texture* get_gpu_texture(std::shared_future<std::shared_ptr<TextureAsset>>& texture_asset, yar_texture_type type, uint32_t channels)
 {
 	yar_texture* tex;
 
@@ -67,15 +69,17 @@ yar_texture* get_gpu_texture(std::shared_future<std::shared_ptr<TextureAsset>>& 
 
 	const uint32_t width = asset->width;
 	const uint32_t height = asset->height;
-	const uint32_t channels = asset->channels;
+	uint32_t cur_channels = channels;
+	if (channels == 0)
+		cur_channels = asset->channels;
 	uint8_t* pixels = asset->pixels;
 
 	yar_texture_format format;
-	if (channels == 1)
+	if (cur_channels == 1)
 		format = yar_texture_format_r8;
-	if (channels == 3)
+	if (cur_channels == 3)
 		format = yar_texture_format_rgb8;
-	if (channels == 4)
+	if (cur_channels == 4)
 		format = yar_texture_format_rgba8;
 
 	if (pixels)
@@ -93,7 +97,7 @@ yar_texture* get_gpu_texture(std::shared_future<std::shared_ptr<TextureAsset>>& 
 		yar_resource_update_desc resource_update_desc;
 		yar_texture_update_desc tex_update_desc{};
 		resource_update_desc = &tex_update_desc;
-		tex_update_desc.size = width * height * channels;
+		tex_update_desc.size = width * height * cur_channels;
 		tex_update_desc.texture = tex;
 		tex_update_desc.data = pixels;
 		begin_update_resource(resource_update_desc);

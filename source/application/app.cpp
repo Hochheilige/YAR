@@ -115,6 +115,9 @@ public:
 	{
 		if (index >= textures.size())
 			return nullptr;
+		// HACK
+		if (index == 1 || index == 2)
+			return get_gpu_texture(static_cast<Texture*>(textures[index])->texture_asset, yar_texture_type_2d, 1);
 		return get_gpu_texture(static_cast<Texture*>(textures[index])->texture_asset, yar_texture_type_2d);
 	}
 
@@ -212,7 +215,7 @@ public:
 		}
 		directory = path.substr(0, path.find_last_of('/'));
 
-		process_node(scene->mRootNode, scene);
+		process_node(scene->mRootNode, scene, glm::mat4(1.0f));
 	}
 
 	void setup_descriptor_set(yar_shader* shader, yar_descriptor_set_update_frequency update_freq, yar_sampler* sampler)
@@ -240,7 +243,7 @@ public:
 					}
 				},
 				{
-					.name = "specular_map",
+					.name = "roughness_map",
 					.descriptor =
 					yar_descriptor_info::yar_combined_texture_sample{
 						mesh.get_texture(1),
@@ -248,10 +251,18 @@ public:
 					}
 				},
 				{
-					.name = "normal_map",
+					.name = "metalness_map",
 					.descriptor =
 					yar_descriptor_info::yar_combined_texture_sample{
 						mesh.get_texture(2),
+						"samplerState",
+					}
+				},
+				{
+					.name = "normal_map",
+					.descriptor =
+					yar_descriptor_info::yar_combined_texture_sample{
+						mesh.get_texture(3),
 						"samplerState",
 					}
 				},
@@ -285,22 +296,24 @@ public:
 	}
 
 private:
-	void process_node(aiNode* node, const aiScene* scene)
+	void process_node(aiNode* node, const aiScene* scene, const glm::mat4& parentTransform)
 	{
-		// process all the node's meshes (if any)
-		for (unsigned int i = 0; i < node->mNumMeshes; i++)
+		glm::mat4 localTransform = glm::transpose(glm::make_mat4(&node->mTransformation.a1));
+		glm::mat4 globalTransform = parentTransform * localTransform;
+
+		for (uint32_t i = 0; i < node->mNumMeshes; i++)
 		{
 			aiMesh* mesh = scene->mMeshes[node->mMeshes[i]];
-			meshes.push_back(process_mesh(mesh, scene));
+			meshes.push_back(process_mesh(mesh, scene, globalTransform));
 		}
-		// then do the same for each of its children
-		for (unsigned int i = 0; i < node->mNumChildren; i++)
+
+		for (uint32_t i = 0; i < node->mNumChildren; i++)
 		{
-			process_node(node->mChildren[i], scene);
+			process_node(node->mChildren[i], scene, globalTransform);
 		}
 	}
-	
-	Mesh process_mesh(aiMesh* mesh, const aiScene* scene)
+
+	Mesh process_mesh(aiMesh* mesh, const aiScene* scene, const glm::mat4& transform)
 	{
 		std::vector<Vertex> vertices;
 		std::vector<uint32_t> indices;
@@ -308,20 +321,16 @@ private:
 
 		for (uint32_t i = 0; i < mesh->mNumVertices; ++i)
 		{
-			Vertex vertex;
+			Vertex vertex{};
 
-			if (mesh->HasPositions())
-			{
-				vertex.position.x = mesh->mVertices[i].x;
-				vertex.position.y = mesh->mVertices[i].y;
-				vertex.position.z = mesh->mVertices[i].z;
-			}
+			glm::vec4 pos = transform * glm::vec4(mesh->mVertices[i].x, mesh->mVertices[i].y, mesh->mVertices[i].z, 1.0f);
+			vertex.position = glm::vec3(pos);
 
 			if (mesh->HasNormals())
 			{
-				vertex.normal.x = mesh->mNormals[i].x;
-				vertex.normal.y = mesh->mNormals[i].y;
-				vertex.normal.z = mesh->mNormals[i].z;
+				glm::mat3 normalMat = glm::transpose(glm::inverse(glm::mat3(transform)));
+				glm::vec3 norm = normalMat * glm::vec3(mesh->mNormals[i].x, mesh->mNormals[i].y, mesh->mNormals[i].z);
+				vertex.normal = glm::normalize(norm);
 			}
 
 			if (mesh->HasTextureCoords(0))
@@ -329,9 +338,10 @@ private:
 				vertex.tex_coord.x = mesh->mTextureCoords[0][i].x;
 				vertex.tex_coord.y = mesh->mTextureCoords[0][i].y;
 			}
+
 			vertices.push_back(vertex);
 		}
-		
+
 		for (uint32_t i = 0; i < mesh->mNumFaces; ++i)
 		{
 			aiFace face = mesh->mFaces[i];
@@ -345,16 +355,20 @@ private:
 			std::vector<Texture*> diffuse_maps = load_material_textures(material,
 				aiTextureType_DIFFUSE);
 			textures.insert(textures.end(), diffuse_maps.begin(), diffuse_maps.end());
-			std::vector<Texture*> specular_maps = load_material_textures(material,
-				aiTextureType_SPECULAR);
-			textures.insert(textures.end(), specular_maps.begin(), specular_maps.end());
+			std::vector<Texture*> roughness_maps = load_material_textures(material,
+				aiTextureType_DIFFUSE_ROUGHNESS);
+			textures.insert(textures.end(), roughness_maps.begin(), roughness_maps.end());
+			std::vector<Texture*> metalness_maps = load_material_textures(material,
+				aiTextureType_METALNESS);
+			textures.insert(textures.end(), metalness_maps.begin(), metalness_maps.end());
 			std::vector<Texture*> normal_maps = load_material_textures(material,
-				aiTextureType_HEIGHT);
+				aiTextureType_NORMALS);
 			textures.insert(textures.end(), normal_maps.begin(), normal_maps.end());
 		}
 
 		return Mesh(std::move(vertices), std::move(indices), std::move(textures), mesh->mName.C_Str());
 	}
+
 
 	std::vector<Texture*> load_material_textures(aiMaterial* mat, aiTextureType type)
 	{
@@ -742,7 +756,7 @@ auto main() -> int {
 
 	Mesh test_mesh(std::move(cube_vertexes), std::move(indexes), std::move(textures), "Cube");
 	Mesh skybox_mesh(std::move(skybox_vertexes), std::move(skybox_indices), std::move(skybox_textures), "Skybox");
-	Model mdl("assets/sponza/sponza.obj");
+	Model mdl("assets/sponza/sponza.gltf");
 
 	yar_sampler* sampler;
 	yar_sampler_desc sampler_desc{};
@@ -895,6 +909,7 @@ auto main() -> int {
 	update_set_desc.index = 0;
 	update_set_desc.infos = std::move(infos);
 	update_descriptor_set(&update_set_desc, texture_set);
+
 
 	infos = {
 		{
@@ -1140,7 +1155,7 @@ auto main() -> int {
 
 		model = glm::mat4(1.0f);
 		model = glm::translate(model, glm::vec3(backpack_pos));
-		model = glm::scale(model, glm::vec3(0.01f, 0.01f, 0.01f));
+		//model = glm::scale(model, glm::vec3(0.01f, 0.01f, 0.01f));
 		ubo.model[10] = model;
 
 		ubo.point_light.position[0] = *light_pos; // update point light pos
