@@ -1,12 +1,14 @@
 #include "common.hlsli"
 
 struct PSInput {
-    float4 position : SV_POSITION;
-    float3 frag_pos : POSITION0;
-    float2 tex_coord : TEXCOORD0;
-    float2 tex_coord1 : TEXCOORD1;
-    float3 normal : NORMAL;
+    float4 position             : SV_POSITION;
+    float3 frag_pos             : POSITION0;
     float4 frag_pos_light_space : POSITION1;
+    float2 tex_coord            : TEXCOORD0;
+    float2 tex_coord1           : TEXCOORD1;
+    float3 tangent              : TEXCOORD2;
+    float3 bitangent            : TEXCOORD3;
+    float3 normal               : TEXCOORD4;
 };
 
 Texture2D<float4> diffuse_map : register(t0, space0);
@@ -151,8 +153,9 @@ float4 main(PSInput input) : SV_TARGET {
         discard;
     lcp.specular_map_color = lerp(0.04f, 1.0f, metalness_map.Sample(samplerState, input.tex_coord1).r)
      * (1.0f - roughness_map.Sample(samplerState, input.tex_coord1).r);
-    //lcp.norm               = normal_map.Sample(samplerState, input.tex_coord).rgb;
-    lcp.norm               = input.normal;
+    lcp.norm = normal_map.Sample(samplerState, input.tex_coord).rgb;
+    float3x3 tbn = float3x3(input.tangent, input.bitangent, input.normal);
+    lcp.norm = normalize(mul(lcp.norm, tbn));
     lcp.frag_pos           = input.frag_pos;
     lcp.cam_pos            = cam.pos.xyz;
     lcp.frag_pos_light_space = input.frag_pos_light_space;

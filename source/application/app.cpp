@@ -64,6 +64,8 @@ struct Vertex
 {
 	glm::vec3 position;
 	glm::vec3 normal;
+	glm::vec3 tangent;
+	glm::vec3 bitangent;
 	glm::vec2 tex_coord;
 	glm::vec2 tex_coord1;
 };
@@ -93,19 +95,25 @@ public:
 
 	void setup_vertex_layout(yar_vertex_layout& layout)
 	{
-		layout.attrib_count = 4u;
+		layout.attrib_count = 6u;
 		layout.attribs[0].size = 3u;
 		layout.attribs[0].format = yar_attrib_format_float;
 		layout.attribs[0].offset = offsetof(Vertex, position);
 		layout.attribs[1].size = 3u;
 		layout.attribs[1].format = yar_attrib_format_float;
 		layout.attribs[1].offset = offsetof(Vertex, normal);
-		layout.attribs[2].size = 2u;
+		layout.attribs[2].size = 3u;
 		layout.attribs[2].format = yar_attrib_format_float;
-		layout.attribs[2].offset = offsetof(Vertex, tex_coord);
-		layout.attribs[3].size = 2u;
+		layout.attribs[2].offset = offsetof(Vertex, tangent);
+		layout.attribs[3].size = 3u;
 		layout.attribs[3].format = yar_attrib_format_float;
-		layout.attribs[3].offset = offsetof(Vertex, tex_coord1);
+		layout.attribs[3].offset = offsetof(Vertex, bitangent);
+		layout.attribs[4].size = 2u;
+		layout.attribs[4].format = yar_attrib_format_float;
+		layout.attribs[4].offset = offsetof(Vertex, tex_coord);
+		layout.attribs[5].size = 2u;
+		layout.attribs[5].format = yar_attrib_format_float;
+		layout.attribs[5].offset = offsetof(Vertex, tex_coord1);
 	}
 
 	void draw(yar_cmd_buffer* cmd)
@@ -206,7 +214,7 @@ private:
 
 	std::string name;
 
-	const uint32_t attrib_count = 3u;
+	const uint32_t attrib_count = 6u;
 };
 
 class Model
@@ -356,8 +364,12 @@ private:
 
 			if (mesh->HasTangentsAndBitangents())
 			{
-				auto tan = mesh->mTangents[i];
-				auto bitan = mesh->mBitangents[i];
+				vertex.tangent.x = mesh->mTangents[i].x;
+				vertex.tangent.y = mesh->mTangents[i].y;
+				vertex.tangent.z = mesh->mTangents[i].z;
+				vertex.bitangent.x = mesh->mBitangents[i].x;
+				vertex.bitangent.y = mesh->mBitangents[i].y;
+				vertex.bitangent.z = mesh->mBitangents[i].z;
 			}
 
 			vertices.push_back(vertex);
@@ -578,42 +590,43 @@ auto main() -> int {
 	add_render_target(&imgui_rt_desc, &imgui_rt);
 
 	auto cube_vertexes = std::vector<Vertex>{
-			// Front face 
-		Vertex{glm::vec3(-0.5f, -0.5f,  0.5f), glm::vec3(0.0f, 0.0f, 1.0f), glm::vec2(0.0f, 0.0f)},
-		Vertex{glm::vec3(0.5f, -0.5f,  0.5f),  glm::vec3(0.0f, 0.0f, 1.0f), glm::vec2(1.0f, 0.0f)},
-		Vertex{glm::vec3(0.5f,  0.5f,  0.5f),  glm::vec3(0.0f, 0.0f, 1.0f), glm::vec2(1.0f, 1.0f)},
-		Vertex{glm::vec3(-0.5f,  0.5f,  0.5f), glm::vec3(0.0f, 0.0f, 1.0f), glm::vec2(0.0f, 1.0f)},
+		// Front face
+		Vertex{{-0.5f, -0.5f,  0.5f}, {0,0,1}, {1,0,0}, {0,1,0}, {0,0},   {0,0}},
+		Vertex{{ 0.5f, -0.5f,  0.5f}, {0,0,1}, {1,0,0}, {0,1,0}, { 1,0 }, {1,0}},
+		Vertex{{ 0.5f,  0.5f,  0.5f}, {0,0,1}, {1,0,0}, {0,1,0}, { 1,1 }, {1,1}},
+		Vertex{{-0.5f,  0.5f,  0.5f}, {0,0,1}, {1,0,0}, {0,1,0}, { 0,1 }, {0,1}},
 
-			// Back face 
-		Vertex{glm::vec3(0.5f, -0.5f, -0.5f),  glm::vec3(0.0f, 0.0f, -1.0f), glm::vec2(1.0f, 0.0f)},
-		Vertex{glm::vec3(-0.5f, -0.5f, -0.5f), glm::vec3(0.0f, 0.0f, -1.0f), glm::vec2(0.0f, 0.0f)},
-		Vertex{glm::vec3(-0.5f,  0.5f, -0.5f), glm::vec3(0.0f, 0.0f, -1.0f), glm::vec2(0.0f, 1.0f)},
-		Vertex{glm::vec3(0.5f,  0.5f, -0.5f),  glm::vec3(0.0f, 0.0f, -1.0f), glm::vec2(1.0f, 1.0f)},
+		// Back face
+		Vertex{{ 0.5f, -0.5f, -0.5f}, {0,0,-1}, {-1,0,0}, {0,1,0}, {1,0}, {1,0}},
+		Vertex{{-0.5f, -0.5f, -0.5f}, {0,0,-1}, {-1,0,0}, {0,1,0}, {0,0}, {0,0}},
+		Vertex{{-0.5f,  0.5f, -0.5f}, {0,0,-1}, {-1,0,0}, {0,1,0}, {0,1}, {0,1}},
+		Vertex{{ 0.5f,  0.5f, -0.5f}, {0,0,-1}, {-1,0,0}, {0,1,0}, {1,1}, {1,1}},
 
-			// Left face 
-		Vertex{glm::vec3(-0.5f, -0.5f, -0.5f), glm::vec3(-1.0f, 0.0f, 0.0f), glm::vec2(0.0f, 0.0f)},
-		Vertex{glm::vec3(-0.5f, -0.5f,  0.5f), glm::vec3(-1.0f, 0.0f, 0.0f), glm::vec2(1.0f, 0.0f)},
-		Vertex{glm::vec3(-0.5f,  0.5f,  0.5f), glm::vec3(-1.0f, 0.0f, 0.0f), glm::vec2(1.0f, 1.0f)},
-		Vertex{glm::vec3(-0.5f,  0.5f, -0.5f), glm::vec3(-1.0f, 0.0f, 0.0f), glm::vec2(0.0f, 1.0f)},
+		// Left face
+		Vertex{{-0.5f, -0.5f, -0.5f}, {-1,0,0}, {0,0,-1}, {0,1,0}, {0,0}, {0,0}},
+		Vertex{{-0.5f, -0.5f,  0.5f}, {-1,0,0}, {0,0,-1}, {0,1,0}, {1,0}, {1,0}},
+		Vertex{{-0.5f,  0.5f,  0.5f}, {-1,0,0}, {0,0,-1}, {0,1,0}, {1,1}, {1,1}},
+		Vertex{{-0.5f,  0.5f, -0.5f}, {-1,0,0}, {0,0,-1}, {0,1,0}, {0,1}, {0,1}},
 
-			// Right face 
-		Vertex{glm::vec3(0.5f, -0.5f,  0.5f), glm::vec3(1.0f, 0.0f, 0.0f), glm::vec2(0.0f, 0.0f)},
-		Vertex{glm::vec3(0.5f, -0.5f, -0.5f), glm::vec3(1.0f, 0.0f, 0.0f), glm::vec2(1.0f, 0.0f)},
-		Vertex{glm::vec3(0.5f,  0.5f, -0.5f), glm::vec3(1.0f, 0.0f, 0.0f), glm::vec2(1.0f, 1.0f)},
-		Vertex{glm::vec3(0.5f,  0.5f,  0.5f), glm::vec3(1.0f, 0.0f, 0.0f), glm::vec2(0.0f, 1.0f)},
+		// Right face
+		Vertex{{ 0.5f, -0.5f,  0.5f}, {1,0,0}, {0,0,1}, {0,1,0}, {0,0}, {0,0}},
+		Vertex{{ 0.5f, -0.5f, -0.5f}, {1,0,0}, {0,0,1}, {0,1,0}, {1,0}, {1,0}},
+		Vertex{{ 0.5f,  0.5f, -0.5f}, {1,0,0}, {0,0,1}, {0,1,0}, {1,1}, {1,1}},
+		Vertex{{ 0.5f,  0.5f,  0.5f}, {1,0,0}, {0,0,1}, {0,1,0}, {0,1}, {0,1}},
 
-			// Bottom face 
-		Vertex{glm::vec3(-0.5f, -0.5f, -0.5f), glm::vec3(0.0f, -1.0f, 0.0f), glm::vec2(0.0f, 1.0f)},
-		Vertex{glm::vec3(0.5f, -0.5f, -0.5f),  glm::vec3(0.0f, -1.0f, 0.0f), glm::vec2(1.0f, 1.0f)},
-		Vertex{glm::vec3(0.5f, -0.5f,  0.5f),  glm::vec3(0.0f, -1.0f, 0.0f), glm::vec2(1.0f, 0.0f)},
-		Vertex{glm::vec3(-0.5f, -0.5f,  0.5f), glm::vec3(0.0f, -1.0f, 0.0f), glm::vec2(0.0f, 0.0f)},
+		// Bottom face
+		Vertex{{-0.5f, -0.5f, -0.5f}, {0,-1,0}, {1,0,0}, {0,0,1}, {0,1}, {0,1}},
+		Vertex{{ 0.5f, -0.5f, -0.5f}, {0,-1,0}, {1,0,0}, {0,0,1}, {1,1}, {1,1}},
+		Vertex{{ 0.5f, -0.5f,  0.5f}, {0,-1,0}, {1,0,0}, {0,0,1}, {1,0}, {1,0}},
+		Vertex{{-0.5f, -0.5f,  0.5f}, {0,-1,0}, {1,0,0}, {0,0,1}, {0,0}, {0,0}},
 
-			// Top face (y = +0.5)
-		Vertex{glm::vec3(-0.5f,  0.5f,  0.5f), glm::vec3(0.0f, 1.0f, 0.0f), glm::vec2(0.0f, 1.0f)},
-		Vertex{glm::vec3(0.5f,  0.5f,  0.5f),  glm::vec3(0.0f, 1.0f, 0.0f), glm::vec2(1.0f, 1.0f)},
-		Vertex{glm::vec3(0.5f,  0.5f, -0.5f),  glm::vec3(0.0f, 1.0f, 0.0f), glm::vec2(1.0f, 0.0f)},
-		Vertex{glm::vec3(-0.5f,  0.5f, -0.5f), glm::vec3(0.0f, 1.0f, 0.0f), glm::vec2(0.0f, 0.0f)},
+		// Top face
+		Vertex{{-0.5f,  0.5f,  0.5f}, {0,1,0}, {1,0,0}, {0,0,-1}, {0,1}, {0,1}},
+		Vertex{{ 0.5f,  0.5f,  0.5f}, {0,1,0}, {1,0,0}, {0,0,-1}, {1,1}, {1,1}},
+		Vertex{{ 0.5f,  0.5f, -0.5f}, {0,1,0}, {1,0,0}, {0,0,-1}, {1,0}, {1,0}},
+		Vertex{{-0.5f,  0.5f, -0.5f}, {0,1,0}, {1,0,0}, {0,0,-1}, {0,0}, {0,0}},
 	};
+
 
 	std::vector<uint32_t> indexes = {
 		0, 1, 2,
@@ -741,10 +754,16 @@ auto main() -> int {
 	ubo.light_params.color[2].a = 1.0f; // intensity
 
 	Texture diffuse_map_tex{
-		.texture_asset = load_texture("assets/container2.png")
+		.texture_asset = load_texture("assets/cube_albedo.png")
 	};
-	Texture specular_map_tex{ 
-		.texture_asset = load_texture("assets/container2_specular.png")
+	Texture roughness_tex{ 
+		.texture_asset = load_texture("assets/cube_roughness.png")
+	};
+	Texture metalness_tex{
+		.texture_asset = load_texture("assets/cube_metallic.png")
+	};
+	Texture normal_map_tex{
+		.texture_asset = load_texture("assets/cube_normal.png")
 	};
 
 	// TODO: remake this stupid thing
@@ -766,7 +785,9 @@ auto main() -> int {
 	
 	std::vector<Texture*> textures = {
 		&diffuse_map_tex,
-		&specular_map_tex
+		&roughness_tex,
+		&metalness_tex,
+		&normal_map_tex
 	};
 
 	std::vector<Texture*> skybox_textures = {
@@ -904,22 +925,29 @@ auto main() -> int {
 			}
 		},
 		{
-			.name = "specular_map",
+			.name = "roughness_map",
 			.descriptor =
 			yar_descriptor_info::yar_combined_texture_sample{
 				test_mesh.get_texture(1),
 				"samplerState",
 			}
 		},
-		// There is no normal map for Cubes
-		/*{
+		{
+			.name = "metalness_map",
+			.descriptor =
+			yar_descriptor_info::yar_combined_texture_sample{
+				test_mesh.get_texture(2),
+				"samplerState",
+			}
+		},
+		{
 			.name = "normal_map",
 			.descriptor =
 			yar_descriptor_info::yar_combined_texture_sample{
-				create_gpu_texture(),
+				test_mesh.get_texture(3),
 				"samplerState",
 			}
-		},*/
+		},
 		{
 			.name = "samplerState",
 			.descriptor = sampler
