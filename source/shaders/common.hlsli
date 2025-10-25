@@ -49,6 +49,7 @@ struct MVP
     float4x4 view_sb;
     float4x4 proj;
     float4x4 light_space;
+    float4x4 ui_ortho;
     float4x4 model[11];
 };
 

@@ -41,10 +41,11 @@ struct yar_device
     void (*cmd_begin_render_pass)(yar_cmd_buffer* cmd, yar_render_pass_desc* desc);
     void (*cmd_end_render_pass)(yar_cmd_buffer* cmd);
     void (*cmd_draw)(yar_cmd_buffer* cmd, uint32_t first_vertex, uint32_t count);
-    void (*cmd_draw_indexed)(yar_cmd_buffer* cmd, uint32_t index_count, uint32_t first_index, uint32_t first_vertex);
+    void (*cmd_draw_indexed)(yar_cmd_buffer* cmd, uint32_t index_count,yar_index_type type, uint32_t first_index, uint32_t first_vertex);
     void (*cmd_dispatch)(yar_cmd_buffer* cmd, uint32_t num_groups_x, uint32_t num_groups_y, uint32_t num_groups_z);
     void (*cmd_update_buffer)(yar_cmd_buffer* cmd, yar_buffer* buffer, size_t offset, size_t size, void* data);
     void (*cmd_set_viewport)(yar_cmd_buffer* cmd, uint32_t width, uint32_t height);
+    void (*cmd_set_scissor)(yar_cmd_buffer* cmd, uint32_t x, uint32_t y, uint32_t width, uint32_t height);
     void (*queue_submit)(yar_cmd_queue* queue);
     void (*queue_present)(yar_cmd_queue* queue, yar_queue_present_desc* desc);
 };

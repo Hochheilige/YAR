@@ -114,6 +114,7 @@ struct yar_gl_cmd_buffer
     GLuint vao;
     GLenum topology;
     GLuint fbo;
+    bool scissor_enabled;
 };
 
 // ======================================= //
@@ -521,8 +522,48 @@ static GLenum util_get_gl_attrib_format(yar_vertex_attrib_format format)
     {
     case yar_attrib_format_float:
         return GL_FLOAT;
+    case yar_attrib_format_half_float:
+        return GL_HALF_FLOAT;
+    case yar_attrib_format_byte:  
+        return GL_BYTE;
+    case yar_attrib_format_ubyte:
+        return GL_UNSIGNED_BYTE;
+    case yar_attrib_format_short:
+        return GL_SHORT;
+    case yar_attrib_format_ushort:
+        return GL_UNSIGNED_SHORT;
+    case yar_attrib_format_int:
+        return GL_INT;
+    case yar_attrib_format_uint:
+        return GL_UNSIGNED_INT;
     default:
         return GL_FLOAT;
+    }
+}
+
+static GLenum util_get_gl_index_type(yar_index_type type)
+{
+    switch (type)
+    {
+    case yar_index_type_uint:
+        return GL_UNSIGNED_INT;
+    case yar_index_type_ushort:
+        return GL_UNSIGNED_SHORT;
+    default:
+        return GL_UNSIGNED_INT;
+    }
+}
+
+static GLsizei util_get_gl_index_stride(yar_index_type type)
+{
+    switch (type)
+    {
+    case yar_index_type_uint:
+        return sizeof(uint32_t);
+    case yar_index_type_ushort:
+        return sizeof(uint16_t);
+    default:
+        return sizeof(uint32_t);
     }
 }
 
@@ -1247,7 +1288,8 @@ void gl_addPipeline(yar_pipeline_desc* desc, yar_pipeline** pipeline)
         GLenum format  = util_get_gl_attrib_format(desc->vertex_layout.attribs[i].format);
         GLuint offset  = desc->vertex_layout.attribs[i].offset;
         GLuint binding = desc->vertex_layout.attribs[i].binding;
-        glVertexArrayAttribFormat(vao, i, size, format, GL_FALSE, offset);
+        GLboolean normalize = format == GL_UNSIGNED_BYTE; // Stupid temp hack to normalize imgui colors
+        glVertexArrayAttribFormat(vao, i, size, format, normalize, offset);
         glVertexArrayAttribBinding(vao, i, binding);
     } 
 
@@ -1632,20 +1674,37 @@ void gl_cmdDraw(yar_cmd_buffer* cmd, uint32_t first_vertex, uint32_t count)
 
         glBindVertexArray(vao);
         glDrawArrays(topology, first_vertex, count);
+
+        if (gl_cmd->scissor_enabled)
+        {
+            glDisable(GL_SCISSOR_TEST);
+            gl_cmd->scissor_enabled = false;
+        }
     });
 }
 
-void gl_cmdDrawIndexed(yar_cmd_buffer* cmd, uint32_t index_count, 
-    [[maybe_unused]] uint32_t first_index, [[maybe_unused]] uint32_t first_vertex)
+void gl_cmdDrawIndexed(yar_cmd_buffer* cmd, uint32_t index_count, yar_index_type type, uint32_t first_index, uint32_t first_vertex)
 {
     // probably need to change function signature
     cmd->commands.push_back([=]() {
         auto gl_cmd = reinterpret_cast<yar_gl_cmd_buffer*>(cmd);
         GLuint vao = gl_cmd->vao;
         GLenum topology = gl_cmd->topology;
+        GLenum gl_type = util_get_gl_index_type(type);
+        GLsizei index_stride = util_get_gl_index_stride(type);
+
+        const void* index_offset = reinterpret_cast<const void*>(
+            static_cast<uintptr_t>(first_index * index_stride)
+        );
 
         glBindVertexArray(vao);
-        glDrawElements(topology, index_count, GL_UNSIGNED_INT, 0);
+        glDrawElementsBaseVertex(topology, index_count, gl_type, index_offset, first_vertex);
+
+        if (gl_cmd->scissor_enabled)
+        {
+            glDisable(GL_SCISSOR_TEST);
+            gl_cmd->scissor_enabled = false;
+        }
     });
 }
 
@@ -1673,6 +1732,16 @@ void gl_cmdSetViewport(yar_cmd_buffer* cmd, uint32_t width, uint32_t height)
 {
     cmd->commands.push_back([=]() {
         glViewport(0, 0, width, height);
+    });
+}
+
+void gl_cmdSetScissor(yar_cmd_buffer* cmd, uint32_t x, uint32_t y, uint32_t width, uint32_t height)
+{
+    cmd->commands.push_back([=]() {
+        auto* gl_cmd = reinterpret_cast<yar_gl_cmd_buffer*>(cmd);
+        gl_cmd->scissor_enabled = true;
+        glEnable(GL_SCISSOR_TEST);
+        glScissor(x, y, width, height);
     });
 }
 
@@ -1767,6 +1836,7 @@ bool gl_init_render(yar_device* device)
     device->cmd_dispatch            = gl_cmdDispatch;
     device->cmd_update_buffer       = gl_cmdUpdateBuffer;
     device->cmd_set_viewport        = gl_cmdSetViewport;
+    device->cmd_set_scissor         = gl_cmdSetScissor;
     device->queue_submit            = gl_queueSubmit;
     device->queue_present           = gl_queuePresent;
 

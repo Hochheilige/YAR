@@ -23,6 +23,38 @@
 
 #include <cstddef>
 
+yar_texture* get_imgui_fonts()
+{
+	auto& font_atlas = ImGui::GetIO().Fonts;
+	uint8_t* pixels;
+	int32_t width, height, bpp;
+	font_atlas->GetTexDataAsRGBA32(&pixels, &width, &height, &bpp);
+
+	yar_texture_desc desc{};
+	desc.width = width;
+	desc.height = height;
+	desc.mip_levels = 1;
+	desc.format = yar_texture_format_rgba8;
+	desc.name = "ImGui Fonts";
+	desc.type = yar_texture_type_2d;
+	desc.usage = yar_texture_usage_shader_resource;
+
+	yar_texture* font;
+	add_texture(&desc, &font);
+
+	yar_resource_update_desc upd{};
+	yar_texture_update_desc tex_upd{};
+	upd = &tex_upd;
+	tex_upd.data = pixels;
+	tex_upd.size = width * height * bpp;
+	tex_upd.texture = font;
+	begin_update_resource(upd);
+	std::memcpy(tex_upd.mapped_data, pixels, tex_upd.size);
+	end_update_resource(upd);
+
+	return font;
+}
+
 struct Texture 
 {
 	std::shared_future<std::shared_ptr<TextureAsset>> texture_asset;
@@ -39,6 +71,13 @@ struct SkyBoxVertex
 {
 	glm::vec3 position;
 };
+
+struct ImGuiVertex {
+	glm::vec2 position;
+	glm::vec2 uv; 
+	uint32_t color;   
+};
+
 
 class Mesh
 {
@@ -69,7 +108,7 @@ public:
 	{
 		cmd_bind_vertex_buffer(cmd, gpu_vertex_buffer, attrib_count, 0, sizeof(Vertex));
 		cmd_bind_index_buffer(cmd, gpu_index_buffer);
-		cmd_draw_indexed(cmd, indices.size(), 0, 0);
+		cmd_draw_indexed(cmd, indices.size(), yar_index_type_uint, 0, 0);
 	}
 
 	yar_texture* get_texture(uint32_t index)
@@ -398,6 +437,7 @@ struct UBO
 	glm::mat4 view_sb;
 	glm::mat4 proj;
 	glm::mat4 light_space;
+	glm::mat4 ui_ortho;
 	glm::mat4 model[11];
 	DirectLight dir_light;
 	PointLight point_light;
@@ -491,6 +531,16 @@ auto main() -> int {
 	depth_buffer_desc.mip_levels = 1;
 	yar_render_target* shadow_map_target;
 	add_render_target(&depth_buffer_desc, &shadow_map_target);
+
+	yar_render_target_desc imgui_rt_desc{};
+	imgui_rt_desc.format = yar_texture_format_srgb8;
+	imgui_rt_desc.height = h;
+	imgui_rt_desc.width = w;
+	imgui_rt_desc.type = yar_texture_type_2d;
+	imgui_rt_desc.usage = yar_texture_usage_render_target;
+	imgui_rt_desc.mip_levels = 1;
+	yar_render_target* imgui_rt;
+	add_render_target(&imgui_rt_desc, &imgui_rt);
 
 	auto cube_vertexes = std::vector<Vertex>{
 			// Front face 
@@ -688,6 +738,8 @@ auto main() -> int {
 		&skybox
 	};
 
+	yar_texture* umgui_fonts = get_imgui_fonts();
+
 	Mesh test_mesh(std::move(cube_vertexes), std::move(indexes), std::move(textures), "Cube");
 	Mesh skybox_mesh(std::move(skybox_vertexes), std::move(skybox_indices), std::move(skybox_textures), "Skybox");
 	Model mdl("assets/sponza/sponza.obj");
@@ -737,19 +789,33 @@ auto main() -> int {
 	yar_shader* shader;
 	add_shader(shader_desc, &shader);
 
+	// Fix memory leak but need to change logic here on load_shader
+	std::free(shader_desc);
+	shader_desc = nullptr;
+
 	shader_load_desc.stages[0] = { "shaders/skybox_vert.hlsl", "main", yar_shader_stage::yar_shader_stage_vert };
 	shader_load_desc.stages[1] = { "shaders/skybox_pix.hlsl", "main", yar_shader_stage::yar_shader_stage_pixel };
-	shader_desc = nullptr;
 	load_shader(&shader_load_desc, &shader_desc);
 	yar_shader* skybox_shader;
 	add_shader(shader_desc, &skybox_shader);
+	std::free(shader_desc);
+	shader_desc = nullptr;
 
 	shader_load_desc.stages[0] = { "shaders/shadow_map_vert.hlsl", "main", yar_shader_stage::yar_shader_stage_vert };
 	shader_load_desc.stages[1] = {  };
-	shader_desc = nullptr;
 	load_shader(&shader_load_desc, &shader_desc);
 	yar_shader* shadow_map_shader;
 	add_shader(shader_desc, &shadow_map_shader);
+	std::free(shader_desc);
+	shader_desc = nullptr;
+
+	shader_load_desc.stages[0] = { "shaders/imgui_vert.hlsl", "main", yar_shader_stage::yar_shader_stage_vert };
+	shader_load_desc.stages[1] = { "shaders/imgui_pix.hlsl", "main", yar_shader_stage::yar_shader_stage_pixel };
+	load_shader(&shader_load_desc, &shader_desc);
+	yar_shader* imgui_shader;
+	add_shader(shader_desc, &imgui_shader);
+	std::free(shader_desc);
+	shader_desc = nullptr;
 	 
 	yar_vertex_layout layout{};
 	yar_depth_stencil_state depth_stencil{};
@@ -871,6 +937,28 @@ auto main() -> int {
 	update_set_desc.infos = std::move(skybox_infos);
 	update_descriptor_set(&update_set_desc, skybox_texture_set);
 
+	set_desc.max_sets = 1;
+	set_desc.update_freq = yar_update_freq_none;
+	set_desc.shader = imgui_shader;
+	yar_descriptor_set* imgui_set;
+	add_descriptor_set(&set_desc, &imgui_set);
+	std::vector<yar_descriptor_info> imgui_font_info{
+		{
+			.name = "font",
+			.descriptor =
+			yar_descriptor_info::yar_combined_texture_sample{
+				umgui_fonts,
+				"samplerState",
+			}
+		},
+		{
+			.name = "samplerState",
+			.descriptor = skybox_sampler
+		}
+	};
+	update_set_desc.infos = std::move(imgui_font_info);
+	update_descriptor_set(&update_set_desc, imgui_set);
+
 	mdl.setup_descriptor_set(shader, yar_update_freq_none, sampler);
 
 	yar_pipeline_desc pipeline_desc{};
@@ -914,6 +1002,42 @@ auto main() -> int {
 	yar_pipeline* shadow_map_pipeline;
 	add_pipeline(&pipeline_desc, &shadow_map_pipeline);
 
+	yar_vertex_layout imgui_layout{};
+	imgui_layout.attrib_count = 3;
+	imgui_layout.attribs[0] = { .size = 2, .format = yar_attrib_format_float, .offset = offsetof(ImGuiVertex, position) };
+	imgui_layout.attribs[1] = { .size = 2, .format = yar_attrib_format_float, .offset = offsetof(ImGuiVertex, uv) };
+	imgui_layout.attribs[2] = { .size = 4, .format = yar_attrib_format_ubyte, .offset = offsetof(ImGuiVertex, color) };
+
+	pipeline_desc.shader = imgui_shader;
+	pipeline_desc.vertex_layout = imgui_layout;
+	pipeline_desc.topology = yar_primitive_topology_triangle_list;
+
+	yar_depth_stencil_state imgui_depth{};
+	imgui_depth.depth_enable = false;                       
+	imgui_depth.depth_write = false;                       
+	imgui_depth.stencil_enable = false;                    
+	imgui_depth.depth_func = yar_depth_stencil_func_never;
+	pipeline_desc.depth_stencil_state = imgui_depth;
+
+	yar_blend_state imgui_blend{};
+	imgui_blend.blend_enable = true;
+	imgui_blend.src_factor = yar_blend_factor_src_alpha;
+	imgui_blend.dst_factor = yar_blend_factor_one_minus_src_alpha;
+	imgui_blend.op = yar_blend_op_add;
+	imgui_blend.src_alpha_factor = yar_blend_factor_one;
+	imgui_blend.dst_alpha_factor = yar_blend_factor_one_minus_src_alpha;
+	imgui_blend.alpha_op = yar_blend_op_add;
+	pipeline_desc.blend_state = imgui_blend;
+
+	yar_rasterizer_state imgui_raster{};
+	imgui_raster.fill_mode = yar_fill_mode_solid;  
+	imgui_raster.cull_mode = yar_cull_mode_none;   
+	imgui_raster.front_counter_clockwise = false;
+	pipeline_desc.rasterizer_state = imgui_raster;
+
+	yar_pipeline* imgui_pipeline;
+	add_pipeline(&pipeline_desc, &imgui_pipeline);
+
 	yar_cmd_queue_desc queue_desc;
 	yar_cmd_queue* queue;
 	add_queue(&queue_desc, &queue);
@@ -948,6 +1072,23 @@ auto main() -> int {
 	float far_plane = 100.0f;
 	glm::mat4 light_projection = glm::ortho(-10.0f, 10.0f, -10.0f, 10.0f, near_plane, far_plane);
 
+	yar_buffer* imgui_vb;
+	yar_buffer* imgui_ib;
+	yar_buffer_desc imgui_buffer_desc{};
+
+	imgui_buffer_desc.size = 5000 * sizeof(ImDrawVert);
+	imgui_buffer_desc.usage = yar_buffer_usage_vertex_buffer;
+	imgui_buffer_desc.name = "imgui_vertex_buffer";
+	imgui_buffer_desc.flags = yar_buffer_flag_dynamic;
+	add_buffer(&imgui_buffer_desc, &imgui_vb);
+
+	imgui_buffer_desc.size = 10000 * sizeof(ImDrawIdx);
+	imgui_buffer_desc.usage = yar_buffer_usage_index_buffer;
+	imgui_buffer_desc.name = "imgui_index_buffer";
+	add_buffer(&imgui_buffer_desc, &imgui_ib);
+
+	imgui_get_new_frame_data();
+	
 	while(update_window())
 	{
 		float currentFrame = static_cast<float>(glfwGetTime());
@@ -956,7 +1097,20 @@ auto main() -> int {
 
 		process_input((GLFWwindow*)get_window());
 
-		imgui_begin_frame();
+		auto* draw_data = imgui_get_new_frame_data();
+		int32_t fb_width = static_cast<int32_t>(draw_data->DisplaySize.x * draw_data->FramebufferScale.x);
+		int32_t fb_height = static_cast<int32_t>(draw_data->DisplaySize.y * draw_data->FramebufferScale.y);
+		ImVec2 clip_off = draw_data->DisplayPos;         // (0,0) unless using multi-viewports
+		ImVec2 clip_scale = draw_data->FramebufferScale; // (1,1) unless using retina display which are often (2,2)
+
+		glm::mat4 ortho = glm::ortho(
+			draw_data->DisplayPos.x,                           
+			draw_data->DisplayPos.x + draw_data->DisplaySize.x,
+			draw_data->DisplayPos.y + draw_data->DisplaySize.y,
+			draw_data->DisplayPos.y,                           
+			-1.0f,
+			1.0f  
+		);
 
 		glm::vec3 light_dir = glm::vec3(ubo.dir_light.direction->x, ubo.dir_light.direction->y, ubo.dir_light.direction->z);
 		glm::mat4 dir_light_view = glm::lookAt(
@@ -997,7 +1151,7 @@ auto main() -> int {
 		ubo.proj = glm::perspective(glm::radians(fov), 1920.0f / 1080.0f, 0.1f, 100.0f);
 		ubo.spot_light.position[0] = ubo.view_pos;
 		ubo.spot_light.direction[0] = glm::vec4(camera.front, 0.0f);
-
+		ubo.ui_ortho = ortho;
 
 		yar_resource_update_desc resource_update_desc;
 		yar_buffer_update_desc update;
@@ -1048,7 +1202,6 @@ auto main() -> int {
 			cmd_bind_descriptor_set(cmd, texture_set, 0);
 			cmd_bind_push_constant(cmd, &i);
 			test_mesh.draw(cmd);
-			//cmd_draw_indexed(cmd, 36, 0, 0);
 		}
 
 		uint32_t index = 10;
@@ -1059,11 +1212,32 @@ auto main() -> int {
 		cmd_bind_descriptor_set(cmd, skybox_texture_set, 0);
 		skybox_mesh.draw(cmd);
 
-		// HACK for Imgui, but need to move it to separate render pass
-		cmd->commands.push_back([]() {
-			imgui_render();
-			imgui_end_frame();
-			});
+		// render imgui to swapchain rt tmp solution
+		cmd_bind_pipeline(cmd, imgui_pipeline);
+		cmd_bind_descriptor_set(cmd, imgui_set, 0);
+		cmd_bind_vertex_buffer(cmd, imgui_vb, imgui_layout.attrib_count, 0, sizeof(ImDrawVert));
+		cmd_bind_index_buffer(cmd, imgui_ib);
+		cmd_set_viewport(cmd, fb_width, fb_height);
+		for (int i = 0; i < draw_data->CmdListsCount; ++i)
+		{
+			const ImDrawList* cmd_list = draw_data->CmdLists[i];
+			cmd_update_buffer(cmd, imgui_vb, 0, cmd_list->VtxBuffer.Size * sizeof(ImDrawVert), cmd_list->VtxBuffer.Data);
+			cmd_update_buffer(cmd, imgui_ib, 0, cmd_list->IdxBuffer.Size * sizeof(ImDrawIdx), cmd_list->IdxBuffer.Data);
+			for (uint32_t j = 0; j < cmd_list->CmdBuffer.Size; ++j)
+			{
+				const ImDrawCmd* draw_cmd = &cmd_list->CmdBuffer[j];
+
+				// Project scissor/clipping rectangles into framebuffer space
+				ImVec2 clip_min((draw_cmd->ClipRect.x - clip_off.x)* clip_scale.x, (draw_cmd->ClipRect.y - clip_off.y)* clip_scale.y);
+				ImVec2 clip_max((draw_cmd->ClipRect.z - clip_off.x)* clip_scale.x, (draw_cmd->ClipRect.w - clip_off.y)* clip_scale.y);
+				if (clip_max.x <= clip_min.x || clip_max.y <= clip_min.y)
+					continue;
+
+				cmd_set_scissor(cmd, (int)clip_min.x, (int)((float)fb_height - clip_max.y), (int)(clip_max.x - clip_min.x), (int)(clip_max.y - clip_min.y));
+				cmd_draw_indexed(cmd, draw_cmd->ElemCount, yar_index_type_ushort, draw_cmd->IdxOffset, draw_cmd->VtxOffset);
+			}
+		}
+
 
 		cmd_end_render_pass(cmd);
 

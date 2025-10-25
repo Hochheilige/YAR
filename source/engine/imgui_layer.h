@@ -5,7 +5,6 @@
 extern float gBackGroundColor[3];
 
 void imgui_init(void* window, const std::function<void()>& layer = nullptr);
-void imgui_begin_frame();
-void imgui_render();
-void imgui_end_frame();
+struct ImDrawData;
+ImDrawData* imgui_get_new_frame_data();
 void imgui_terminate();

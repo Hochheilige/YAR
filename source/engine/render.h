@@ -187,6 +187,13 @@ MAKE_ENUM_FLAG(uint8_t, yar_resource_type);
 enum yar_vertex_attrib_format : uint8_t
 {
     yar_attrib_format_float = 0,
+    yar_attrib_format_half_float,
+    yar_attrib_format_byte,
+    yar_attrib_format_ubyte,
+    yar_attrib_format_short,
+    yar_attrib_format_ushort,
+    yar_attrib_format_int,
+    yar_attrib_format_uint
 };
 
 enum yar_depth_stencil_func : uint8_t
@@ -270,6 +277,12 @@ enum yar_descriptor_set_update_frequency : uint8_t
     yar_update_freq_per_frame = 1,
     yar_update_freq_per_draw = 2,
     yar_update_freq_max = 3
+};
+
+enum yar_index_type : uint8_t
+{
+    yar_index_type_uint = 0,
+    yar_index_type_ushort
 };
 
 struct yar_texture_desc
@@ -628,10 +641,11 @@ DECLARE_YAR_RENDER_FUNC(void, cmd_begin_render_pass, yar_cmd_buffer* cmd, yar_re
 DECLARE_YAR_RENDER_FUNC(void, cmd_end_render_pass, yar_cmd_buffer* cmd);
 DECLARE_YAR_RENDER_FUNC(void, cmd_end_render_pass, yar_cmd_buffer* cmd);
 DECLARE_YAR_RENDER_FUNC(void, cmd_draw, yar_cmd_buffer* cmd, uint32_t first_vertex, uint32_t count);
-DECLARE_YAR_RENDER_FUNC(void, cmd_draw_indexed, yar_cmd_buffer* cmd, uint32_t index_count, uint32_t first_index, uint32_t first_vertex);
+DECLARE_YAR_RENDER_FUNC(void, cmd_draw_indexed, yar_cmd_buffer* cmd, uint32_t index_count, yar_index_type type, uint32_t first_index, uint32_t first_vertex);
 DECLARE_YAR_RENDER_FUNC(void, cmd_dispatch, yar_cmd_buffer* cmd, uint32_t num_groups_x, uint32_t num_groups_y, uint32_t num_groups_z);
 DECLARE_YAR_RENDER_FUNC(void, cmd_update_buffer, yar_cmd_buffer* cmd, yar_buffer* buffer, size_t offset, size_t size, void* data);
 DECLARE_YAR_RENDER_FUNC(void, cmd_set_viewport, yar_cmd_buffer* cmd, uint32_t width, uint32_t height);
+DECLARE_YAR_RENDER_FUNC(void, cmd_set_scissor, yar_cmd_buffer* cmd, uint32_t x, uint32_t y, uint32_t width, uint32_t height);
 DECLARE_YAR_RENDER_FUNC(void, queue_submit, yar_cmd_queue* queue);
 DECLARE_YAR_RENDER_FUNC(void, queue_present, yar_cmd_queue* queue, yar_queue_present_desc* desc);
 

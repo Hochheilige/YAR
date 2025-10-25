@@ -172,10 +172,10 @@ void cmd_draw(yar_cmd_buffer* cmd, uint32_t first_vertex, uint32_t count)
         device->cmd_draw(cmd, first_vertex, count);
 }
 
-void cmd_draw_indexed(yar_cmd_buffer* cmd, uint32_t index_count, uint32_t first_index, uint32_t first_vertex)
+void cmd_draw_indexed(yar_cmd_buffer* cmd, uint32_t index_count, yar_index_type type, uint32_t first_index, uint32_t first_vertex)
 {
     if (device && device->cmd_draw_indexed)
-        device->cmd_draw_indexed(cmd, index_count, first_index, first_vertex);
+        device->cmd_draw_indexed(cmd, index_count, type, first_index, first_vertex);
 }
 
 void cmd_dispatch(yar_cmd_buffer* cmd, uint32_t num_groups_x, uint32_t num_groups_y, uint32_t num_groups_z)
@@ -194,6 +194,12 @@ void cmd_set_viewport(yar_cmd_buffer* cmd, uint32_t width, uint32_t height)
 {
     if (device && device->cmd_set_viewport)
         device->cmd_set_viewport(cmd, width, height);
+}
+
+void cmd_set_scissor(yar_cmd_buffer* cmd, uint32_t x, uint32_t y, uint32_t width, uint32_t height)
+{
+    if (device && device->cmd_set_scissor)
+        device->cmd_set_scissor(cmd, x, y, width, height);
 }
 
 void queue_submit(yar_cmd_queue* queue)

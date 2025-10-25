@@ -63,7 +63,6 @@ void imgui_init(void* window, const std::function<void()>& layer)
 	ImGui::StyleColorsDark();
 
 	ImGui_ImplGlfw_InitForOpenGL(wnd, false);
-	ImGui_ImplOpenGL3_Init("#version 460");
 
 	glfwSetMouseButtonCallback(wnd, ImGui_ImplGlfw_MouseButtonCallback);
 	glfwSetScrollCallback(wnd, ImGui_ImplGlfw_ScrollCallback);
@@ -71,29 +70,21 @@ void imgui_init(void* window, const std::function<void()>& layer)
 	glfwSetCharCallback(wnd, ImGui_ImplGlfw_CharCallback);
 }
 
-void imgui_begin_frame()
+ImDrawData* imgui_get_new_frame_data()
 {
-	ImGui_ImplOpenGL3_NewFrame();
 	ImGui_ImplGlfw_NewFrame();
 	ImGui::NewFrame();
-}
 
-void imgui_render()
-{
 	default_layer();
 	if (app_layer)
 		app_layer();
-}
 
-void imgui_end_frame()
-{
 	ImGui::Render();
-	ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
+	return ImGui::GetDrawData();
 }
 
 void imgui_terminate()
 {
-	ImGui_ImplOpenGL3_Shutdown();
 	ImGui_ImplGlfw_Shutdown();
 	ImGui::DestroyContext();
 }
