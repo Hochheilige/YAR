@@ -1209,7 +1209,8 @@ void gl_addPipeline(yar_pipeline_desc* desc, yar_pipeline** pipeline)
         std::calloc(1, sizeof(yar_gl_pipeline))
     );
     *pipeline = &new_pipeline->pipeline;
-
+    
+    new_pipeline->pipeline.type = desc->type;
     new_pipeline->shader = reinterpret_cast<yar_gl_shader*>(desc->shader);
     glGenProgramPipelines(1, &new_pipeline->program_pipeline);
     for (size_t i = 0; i < yar_shader_stage_max; ++i)
@@ -1248,52 +1249,55 @@ void gl_addPipeline(yar_pipeline_desc* desc, yar_pipeline** pipeline)
         glUseProgramStages(new_pipeline->program_pipeline, stage, *gl_shader);
     }
 
-    new_pipeline->fill_mode = util_get_gl_fill_mode(desc->rasterizer_state.fill_mode);
-    new_pipeline->cull_mode = util_get_gl_cull_mode(desc->rasterizer_state.cull_mode);
-    new_pipeline->cull_enable = new_pipeline->cull_mode;
-    new_pipeline->front_counter_clockwise = desc->rasterizer_state.front_counter_clockwise;
-    new_pipeline->depth_write = desc->depth_stencil_state.depth_write;
-
-    new_pipeline->depth_enable = desc->depth_stencil_state.depth_enable;
-    if (new_pipeline->depth_enable)
+    if (desc->type != yar_pipeline_type_compute)
     {
-        new_pipeline->depth_func = util_get_gl_depth_stencil_func(desc->depth_stencil_state.depth_func);
+        new_pipeline->fill_mode = util_get_gl_fill_mode(desc->rasterizer_state.fill_mode);
+        new_pipeline->cull_mode = util_get_gl_cull_mode(desc->rasterizer_state.cull_mode);
+        new_pipeline->cull_enable = new_pipeline->cull_mode;
+        new_pipeline->front_counter_clockwise = desc->rasterizer_state.front_counter_clockwise;
+        new_pipeline->depth_write = desc->depth_stencil_state.depth_write;
+
+        new_pipeline->depth_enable = desc->depth_stencil_state.depth_enable;
+        if (new_pipeline->depth_enable)
+        {
+            new_pipeline->depth_func = util_get_gl_depth_stencil_func(desc->depth_stencil_state.depth_func);
+        }
+
+        new_pipeline->stencil_enable = desc->depth_stencil_state.stencil_enable;
+        if (new_pipeline->stencil_enable)
+        {
+            new_pipeline->stencil_func = util_get_gl_depth_stencil_func(desc->depth_stencil_state.stencil_func);
+            new_pipeline->fail = desc->depth_stencil_state.sfail;
+            new_pipeline->zfail = desc->depth_stencil_state.dpfail;
+            new_pipeline->zpass = desc->depth_stencil_state.dppass;
+        }
+
+        new_pipeline->blend_enable = desc->blend_state.blend_enable;
+        if (new_pipeline->blend_enable)
+        {
+            new_pipeline->src_factor = util_get_gl_blend_factor(desc->blend_state.src_factor);
+            new_pipeline->dst_factor = util_get_gl_blend_factor(desc->blend_state.dst_factor);
+            new_pipeline->src_alpha_factor = util_get_gl_blend_factor(desc->blend_state.src_alpha_factor);
+            new_pipeline->dst_alpha_factor = util_get_gl_blend_factor(desc->blend_state.dst_alpha_factor);
+            new_pipeline->rgb_equation = util_get_gl_blend_equation(desc->blend_state.op);
+            new_pipeline->alpha_equation = util_get_gl_blend_equation(desc->blend_state.alpha_op);
+        }
+
+        GLuint& vao = new_pipeline->vao;
+        glCreateVertexArrays(1, &vao);
+        for (int i = 0; i < desc->vertex_layout.attrib_count; ++i)
+        {
+            GLint size = desc->vertex_layout.attribs[i].size;
+            GLenum format = util_get_gl_attrib_format(desc->vertex_layout.attribs[i].format);
+            GLuint offset = desc->vertex_layout.attribs[i].offset;
+            GLuint binding = desc->vertex_layout.attribs[i].binding;
+            GLboolean normalize = format == GL_UNSIGNED_BYTE; // Stupid temp hack to normalize imgui colors
+            glVertexArrayAttribFormat(vao, i, size, format, normalize, offset);
+            glVertexArrayAttribBinding(vao, i, binding);
+        }
+
+        new_pipeline->topology = util_get_gl_topology(desc->topology);
     }
-
-    new_pipeline->stencil_enable = desc->depth_stencil_state.stencil_enable;
-    if (new_pipeline->stencil_enable)
-    {
-        new_pipeline->stencil_func = util_get_gl_depth_stencil_func(desc->depth_stencil_state.stencil_func);
-        new_pipeline->fail = desc->depth_stencil_state.sfail;
-        new_pipeline->zfail = desc->depth_stencil_state.dpfail;
-        new_pipeline->zpass = desc->depth_stencil_state.dppass;
-    }
-
-    new_pipeline->blend_enable = desc->blend_state.blend_enable;
-    if (new_pipeline->blend_enable)
-    {
-        new_pipeline->src_factor = util_get_gl_blend_factor(desc->blend_state.src_factor);
-        new_pipeline->dst_factor = util_get_gl_blend_factor(desc->blend_state.dst_factor);
-        new_pipeline->src_alpha_factor = util_get_gl_blend_factor(desc->blend_state.src_alpha_factor);
-        new_pipeline->dst_alpha_factor = util_get_gl_blend_factor(desc->blend_state.dst_alpha_factor);
-        new_pipeline->rgb_equation = util_get_gl_blend_equation(desc->blend_state.op);
-        new_pipeline->alpha_equation = util_get_gl_blend_equation(desc->blend_state.alpha_op);
-    }
-
-    GLuint& vao = new_pipeline->vao;
-    glCreateVertexArrays(1, &vao);
-    for (int i = 0; i < desc->vertex_layout.attrib_count; ++i)
-    {
-        GLint size     = desc->vertex_layout.attribs[i].size;
-        GLenum format  = util_get_gl_attrib_format(desc->vertex_layout.attribs[i].format);
-        GLuint offset  = desc->vertex_layout.attribs[i].offset;
-        GLuint binding = desc->vertex_layout.attribs[i].binding;
-        GLboolean normalize = format == GL_UNSIGNED_BYTE; // Stupid temp hack to normalize imgui colors
-        glVertexArrayAttribFormat(vao, i, size, format, normalize, offset);
-        glVertexArrayAttribBinding(vao, i, binding);
-    } 
-
-    new_pipeline->topology = util_get_gl_topology(desc->topology);
 }
 
 void gl_addQueue([[maybe_unused]] yar_cmd_queue_desc* desc, yar_cmd_queue** queue)
@@ -1400,66 +1404,69 @@ void gl_cmdBindPipeline(yar_cmd_buffer* cmd, yar_pipeline* pipeline)
         yar_gl_pipeline* gl_pipeline = reinterpret_cast<yar_gl_pipeline*>(pipeline);
 
         glBindProgramPipeline(gl_pipeline->program_pipeline);
-        
-        if (gl_pipeline->depth_enable)
-        {
-            glEnable(GL_DEPTH_TEST);
-            glDepthFunc(gl_pipeline->depth_func);
-        }
-        else
-        {
-            glDisable(GL_DEPTH_TEST);
-        }
 
-        if (gl_pipeline->depth_write)
+        if (gl_pipeline->pipeline.type != yar_pipeline_type_compute)
         {
-            glDepthMask(GL_TRUE);
-        }
-        else
-        {
-            glDepthMask(GL_FALSE);
-        }
+            if (gl_pipeline->depth_enable)
+            {
+                glEnable(GL_DEPTH_TEST);
+                glDepthFunc(gl_pipeline->depth_func);
+            }
+            else
+            {
+                glDisable(GL_DEPTH_TEST);
+            }
 
-        if (gl_pipeline->stencil_enable)
-        {
-            glEnable(GL_STENCIL_TEST);
-            // Ref and Mask usually 1 and 0xFF 
-            glStencilFunc(gl_pipeline->stencil_func, 1, 0xFF);
-            glStencilOp(gl_pipeline->fail, gl_pipeline->zfail, gl_pipeline->zpass);
-        }
-        else
-        {
-            glDisable(GL_STENCIL_TEST);
-        }
+            if (gl_pipeline->depth_write)
+            {
+                glDepthMask(GL_TRUE);
+            }
+            else
+            {
+                glDepthMask(GL_FALSE);
+            }
 
-        if (gl_pipeline->blend_enable)
-        {
-            glEnable(GL_BLEND);
-            glBlendFuncSeparate(gl_pipeline->src_factor, gl_pipeline->dst_factor,
-                gl_pipeline->src_alpha_factor, gl_pipeline->dst_alpha_factor);
-            glBlendEquationSeparate(gl_pipeline->rgb_equation, gl_pipeline->alpha_equation);
-        }
-        else
-        {
-            glDisable(GL_BLEND);
-        }
+            if (gl_pipeline->stencil_enable)
+            {
+                glEnable(GL_STENCIL_TEST);
+                // Ref and Mask usually 1 and 0xFF 
+                glStencilFunc(gl_pipeline->stencil_func, 1, 0xFF);
+                glStencilOp(gl_pipeline->fail, gl_pipeline->zfail, gl_pipeline->zpass);
+            }
+            else
+            {
+                glDisable(GL_STENCIL_TEST);
+            }
 
-        glPolygonMode(GL_FRONT_AND_BACK, gl_pipeline->fill_mode);
-        if (gl_pipeline->cull_enable)
-        {
-            glEnable(GL_CULL_FACE);
-            glCullFace(gl_pipeline->cull_mode);
-        }
-        else
-        {
-            glDisable(GL_CULL_FACE);
-        }
+            if (gl_pipeline->blend_enable)
+            {
+                glEnable(GL_BLEND);
+                glBlendFuncSeparate(gl_pipeline->src_factor, gl_pipeline->dst_factor,
+                    gl_pipeline->src_alpha_factor, gl_pipeline->dst_alpha_factor);
+                glBlendEquationSeparate(gl_pipeline->rgb_equation, gl_pipeline->alpha_equation);
+            }
+            else
+            {
+                glDisable(GL_BLEND);
+            }
 
-        gl_pipeline->front_counter_clockwise ? glFrontFace(GL_CCW) : glFrontFace(GL_CW);
+            glPolygonMode(GL_FRONT_AND_BACK, gl_pipeline->fill_mode);
+            if (gl_pipeline->cull_enable)
+            {
+                glEnable(GL_CULL_FACE);
+                glCullFace(gl_pipeline->cull_mode);
+            }
+            else
+            {
+                glDisable(GL_CULL_FACE);
+            }
 
-        yar_gl_cmd_buffer* gl_cmd = reinterpret_cast<yar_gl_cmd_buffer*>(cmd);
-        gl_cmd->vao = gl_pipeline->vao;
-        gl_cmd->topology = gl_pipeline->topology;
+            gl_pipeline->front_counter_clockwise ? glFrontFace(GL_CCW) : glFrontFace(GL_CW);
+
+            yar_gl_cmd_buffer* gl_cmd = reinterpret_cast<yar_gl_cmd_buffer*>(cmd);
+            gl_cmd->vao = gl_pipeline->vao;
+            gl_cmd->topology = gl_pipeline->topology;
+        }
     });
 }
 
@@ -1714,8 +1721,7 @@ void gl_cmdDispatch(yar_cmd_buffer* cmd, uint32_t num_group_x, uint32_t num_grou
         glDispatchCompute(num_group_x, num_group_y, num_group_z);
         // TODO: there is probably should be separate function for barriers
         glMemoryBarrier(GL_SHADER_IMAGE_ACCESS_BARRIER_BIT | GL_TEXTURE_FETCH_BARRIER_BIT);
-        }
-    );
+    });
 }
 
 void gl_cmdUpdateBuffer(yar_cmd_buffer* cmd, yar_buffer* buffer, size_t offset, size_t size, void* data)

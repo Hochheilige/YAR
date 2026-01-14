@@ -11,12 +11,52 @@
 #include <glm/gtc/type_ptr.hpp>
 
 #include <random>
+#include <iostream>
+#include <stddef.h>
+
+struct ImGuiVertex {
+	glm::vec2 position;
+	glm::vec2 uv;
+	uint32_t color;
+};
 
 inline uint32_t random_uint() 
 {
 	static std::uniform_int_distribution<uint32_t> distribution(0, UINT32_MAX);
 	static std::mt19937 generator(std::random_device{}());
 	return distribution(generator);
+}
+
+yar_texture* get_imgui_fonts()
+{
+	auto& font_atlas = ImGui::GetIO().Fonts;
+	uint8_t* pixels;
+	int32_t width, height, bpp;
+	font_atlas->GetTexDataAsRGBA32(&pixels, &width, &height, &bpp);
+
+	yar_texture_desc desc{};
+	desc.width = width;
+	desc.height = height;
+	desc.mip_levels = 1;
+	desc.format = yar_texture_format_rgba8;
+	desc.name = "ImGui Fonts";
+	desc.type = yar_texture_type_2d;
+	desc.usage = yar_texture_usage_shader_resource;
+
+	yar_texture* font;
+	add_texture(&desc, &font);
+
+	yar_resource_update_desc upd{};
+	yar_texture_update_desc tex_upd{};
+	upd = &tex_upd;
+	tex_upd.data = pixels;
+	tex_upd.size = width * height * bpp;
+	tex_upd.texture = font;
+	begin_update_resource(upd);
+	std::memcpy(tex_upd.mapped_data, pixels, tex_upd.size);
+	end_update_resource(upd);
+
+	return font;
 }
 
 void process_input(GLFWwindow* window);
@@ -78,6 +118,7 @@ constexpr uint32_t kSpheresCount = 5u;
 struct UBO
 {
 	glm::mat4 invViewProj;
+	glm::mat4 ui_ortho;
 	glm::vec4 cameraPos;
 	Sphere spheres[kSpheresCount];
 	Material mats[kSpheresCount];
@@ -100,15 +141,15 @@ float lastX = 1920.0f / 2.0;
 float lastY = 1080.0 / 2.0;
 float fov = 45.0f;
 
-Texture* create_texture(const uint32_t width, const uint32_t height)
+yar_texture* create_texture(const uint32_t width, const uint32_t height)
 {
-	Texture* tex;
-	TextureDesc texture_desc{};
+	yar_texture* tex;
+	yar_texture_desc texture_desc{};
 	texture_desc.width = width;
 	texture_desc.height = height;
 	texture_desc.mip_levels = 1;
-	texture_desc.type = kTextureType2D;
-	texture_desc.format = kTextureFormatRGBA32F;
+	texture_desc.type = yar_texture_type_2d;
+	texture_desc.format = yar_texture_format_rgba32f;
 	add_texture(&texture_desc, &tex);
 
 	return tex;
@@ -131,11 +172,21 @@ auto main() -> int
 	init_window(imgui_layer);
 	init_render();
 
-	SwapChain* swapchain;
-	add_swapchain(true, &swapchain);
+	int32_t w, h;
+	glfwGetFramebufferSize((GLFWwindow*)get_window(), &w, &h);
+
+	yar_swapchain_desc swapchain_desc{};
+	swapchain_desc.buffer_count = 2;
+	swapchain_desc.format = yar_texture_format_srgba8;
+	swapchain_desc.height = h;
+	swapchain_desc.width = w;
+	swapchain_desc.vsync = false;
+	swapchain_desc.window_handle = get_window();
+	yar_swapchain* swapchain;
+	add_swapchain(&swapchain_desc, &swapchain);
 
 	auto dims = get_window_dims();
-	Texture* quad = create_texture(dims.width, dims.height);
+	yar_texture* quad = create_texture(dims.width, dims.height);
 
 	float quad_vertices[] = {
 		-1.0f, -1.0f,   0.0f, 0.0f,
@@ -145,32 +196,36 @@ auto main() -> int
 	};
 
 
-	Sampler* sampler;
-	SamplerDesc sampler_desc{};
-	sampler_desc.min_filter = kFilterTypeNearest;
-	sampler_desc.mag_filter = kFilterTypeNearest;
-	sampler_desc.wrap_u = kWrapModeRepeat;
-	sampler_desc.wrap_v = kWrapModeRepeat;
+	yar_sampler* sampler;
+	yar_sampler_desc sampler_desc{};
+	sampler_desc.min_filter = yar_filter_type_nearest;
+	sampler_desc.mag_filter = yar_filter_type_nearest;
+	sampler_desc.wrap_u = yar_wrap_mode_repeat;
+	sampler_desc.wrap_v = yar_wrap_mode_repeat;
 	add_sampler(&sampler_desc, &sampler);
 
-	BufferDesc buffer_desc;
+	yar_buffer_desc buffer_desc;
 	buffer_desc.size = sizeof(quad_vertices);
-	buffer_desc.flags = kBufferFlagGPUOnly;
-	Buffer* vbo = nullptr;
+	buffer_desc.flags = yar_buffer_flag_gpu_only;
+	buffer_desc.name = "quad_vertex_buffer";
+	yar_buffer* vbo = nullptr;
 	add_buffer(&buffer_desc, &vbo);
+
+	yar_texture* imgui_fonts = get_imgui_fonts();
 
 	constexpr uint32_t image_count = 2;
 	uint32_t frame_index = 0;
 
 	buffer_desc.size = sizeof(ubo);
-	buffer_desc.flags = kBufferFlagMapWrite;
-	Buffer* ubo_buf[image_count] = { nullptr, nullptr };
+	buffer_desc.flags = yar_buffer_flag_map_write;
+	buffer_desc.name = "UBO";
+	yar_buffer* ubo_buf[image_count] = { nullptr, nullptr };
 	for (auto& buf : ubo_buf)
 		add_buffer(&buffer_desc, &buf);
 
-	ResourceUpdateDesc resource_update_desc;
+	yar_resource_update_desc resource_update_desc;
 	{ // update buffers data
-		BufferUpdateDesc update_desc{};
+		yar_buffer_update_desc update_desc{};
 		resource_update_desc = &update_desc;
 		update_desc.buffer = vbo;
 		update_desc.size = sizeof(quad_vertices);
@@ -179,50 +234,63 @@ auto main() -> int
 		end_update_resource(resource_update_desc);
 	}
 
-	ShaderLoadDesc shader_load_desc = {};
-	shader_load_desc.stages[0] = { "shaders/quad_vert.hlsl", "main", ShaderStage::kShaderStageVert };
-	shader_load_desc.stages[1] = { "shaders/quad_frag.hlsl", "main", ShaderStage::kShaderStageFrag };
-	ShaderDesc* shader_desc = nullptr;
+	yar_shader_load_desc shader_load_desc = {};
+	shader_load_desc.stages[0] = { "shaders/quad_vert.hlsl", "main", yar_shader_stage::yar_shader_stage_vert };
+	shader_load_desc.stages[1] = { "shaders/quad_frag.hlsl", "main", yar_shader_stage::yar_shader_stage_pixel };
+	yar_shader_desc* shader_desc = nullptr;
 	load_shader(&shader_load_desc, &shader_desc);
-	Shader* shader;
+	yar_shader* shader;
 	add_shader(shader_desc, &shader);
+	std::free(shader_desc);
+	shader_desc = nullptr;
 	
 	shader_load_desc = {};
 	std::free(shader_desc); shader_desc = nullptr;
-	shader_load_desc.stages[0] = { "shaders/raytracing_comp.hlsl", "main", ShaderStage::kShaderStageComp };
+	shader_load_desc.stages[0] = { "shaders/raytracing_comp.hlsl", "main", yar_shader_stage::yar_shader_stage_comp };
 	load_shader(&shader_load_desc, &shader_desc);
-	Shader* compute_shader;
+	yar_shader* compute_shader;
 	add_shader(shader_desc, &compute_shader);
+	std::free(shader_desc);
+	shader_desc = nullptr;
 
-	DescriptorSetDesc set_desc;
+	shader_load_desc.stages[0] = { "shaders/imgui_vert_rt.hlsl", "main", yar_shader_stage::yar_shader_stage_vert };
+	shader_load_desc.stages[1] = { "shaders/imgui_pix.hlsl", "main", yar_shader_stage::yar_shader_stage_pixel };
+	load_shader(&shader_load_desc, &shader_desc);
+	yar_shader* imgui_shader;
+	add_shader(shader_desc, &imgui_shader);
+	std::free(shader_desc);
+	shader_desc = nullptr;
+
+
+	yar_descriptor_set_desc set_desc;
 	set_desc.max_sets = 1;
-	set_desc.update_freq = kUpdateFreqNone;
+	set_desc.update_freq = yar_update_freq_none;
 	set_desc.shader = compute_shader;
-	DescriptorSet* uav_set;
+	yar_descriptor_set* uav_set;
 	add_descriptor_set(&set_desc, &uav_set);
 
-	DescriptorSet* srv_set;
+	yar_descriptor_set* srv_set;
 	set_desc.shader = shader;
 	add_descriptor_set(&set_desc, &srv_set);
 
-	std::vector<DescriptorInfo> infos{
+	std::vector<yar_descriptor_info> infos{
 		{
 			.name = "quad_tex",
 			.descriptor = quad
 		},
 	};
 
-	UpdateDescriptorSetDesc update_set_desc{};
+	yar_update_descriptor_set_desc update_set_desc{};
 	update_set_desc = {};
 	update_set_desc.index = 0;
 	update_set_desc.infos = std::move(infos);
 	update_descriptor_set(&update_set_desc, uav_set);
 
-	infos = std::vector<DescriptorInfo>{
+	infos = std::vector<yar_descriptor_info>{
 		{
 			.name = "quad_tex",
 			.descriptor =
-				DescriptorInfo::CombinedTextureSample{
+				yar_descriptor_info::yar_combined_texture_sample{
 					quad,
 					"samplerState",
 				}
@@ -238,14 +306,14 @@ auto main() -> int
 
 	set_desc.max_sets = image_count;
 	set_desc.shader = compute_shader;
-	set_desc.update_freq = kUpdateFreqPerFrame;
-	DescriptorSet* ubo_desc;
+	set_desc.update_freq = yar_update_freq_per_frame;
+	yar_descriptor_set* ubo_desc;
 	add_descriptor_set(&set_desc, &ubo_desc);
 
 	update_set_desc = {};
 	for (uint32_t i = 0; i < image_count; ++i)
 	{
-		std::vector<DescriptorInfo> infos{
+		std::vector<yar_descriptor_info> infos{
 			{
 				.name = "ubo",
 				.descriptor = ubo_buf[i]
@@ -256,30 +324,114 @@ auto main() -> int
 		update_descriptor_set(&update_set_desc, ubo_desc);
 	}
 
-	VertexLayout layout = { 0 };
+	set_desc.max_sets = 1;
+	set_desc.update_freq = yar_update_freq_none;
+	set_desc.shader = imgui_shader;
+	yar_descriptor_set* imgui_set;
+	add_descriptor_set(&set_desc, &imgui_set);
+	std::vector<yar_descriptor_info> imgui_font_info{
+		{
+			.name = "font",
+			.descriptor =
+			yar_descriptor_info::yar_combined_texture_sample{
+				imgui_fonts,
+				"samplerState",
+			}
+		},
+		{
+			.name = "samplerState",
+			.descriptor = sampler
+		}
+	};
+	update_set_desc.infos = std::move(imgui_font_info);
+	update_set_desc.index = 0;
+	update_descriptor_set(&update_set_desc, imgui_set);
+
+	yar_vertex_layout layout = { 0 };
 	layout.attrib_count = 2;
 	layout.attribs[0].size = 2;
-	layout.attribs[0].format = kAttribFormatFloat;
+	layout.attribs[0].format = yar_attrib_format_float;
 	layout.attribs[0].offset = 0u;
 	layout.attribs[1].size = 2;
-	layout.attribs[1].format = kAttribFormatFloat;
+	layout.attribs[1].format = yar_attrib_format_float;
 	layout.attribs[1].offset = 2 * sizeof(float);
 
-	PipelineDesc pipeline_desc = { 0 };
+	yar_pipeline_desc pipeline_desc = { };
+	pipeline_desc.type = yar_pipeline_type_graphics;
 	pipeline_desc.shader = shader;
-	pipeline_desc.vertex_layout = &layout;
+	pipeline_desc.vertex_layout = layout;
+	pipeline_desc.topology = yar_primitive_topology_triangle_strip;
 
-	Pipeline* graphics_pipeline;
+	yar_pipeline* graphics_pipeline;
 	add_pipeline(&pipeline_desc, &graphics_pipeline);
 
-	CmdQueueDesc queue_desc;
-	CmdQueue* queue;
+	pipeline_desc.type = yar_pipeline_type_compute;
+	pipeline_desc.shader = compute_shader;
+	yar_pipeline* compute_pipeline;
+	add_pipeline(&pipeline_desc, &compute_pipeline);
+
+	yar_vertex_layout imgui_layout{};
+	imgui_layout.attrib_count = 3;
+	imgui_layout.attribs[0] = { .size = 2, .format = yar_attrib_format_float, .offset = offsetof(ImGuiVertex, position) };
+	imgui_layout.attribs[1] = { .size = 2, .format = yar_attrib_format_float, .offset = offsetof(ImGuiVertex, uv) };
+	imgui_layout.attribs[2] = { .size = 4, .format = yar_attrib_format_ubyte, .offset = offsetof(ImGuiVertex, color) };
+
+	pipeline_desc.shader = imgui_shader;
+	pipeline_desc.vertex_layout = imgui_layout;
+	pipeline_desc.topology = yar_primitive_topology_triangle_list;
+	pipeline_desc.type = yar_pipeline_type_graphics;
+
+	yar_depth_stencil_state imgui_depth{};
+	imgui_depth.depth_enable = false;
+	imgui_depth.depth_write = false;
+	imgui_depth.stencil_enable = false;
+	imgui_depth.depth_func = yar_depth_stencil_func_never;
+	pipeline_desc.depth_stencil_state = imgui_depth;
+
+	yar_blend_state imgui_blend{};
+	imgui_blend.blend_enable = true;
+	imgui_blend.src_factor = yar_blend_factor_src_alpha;
+	imgui_blend.dst_factor = yar_blend_factor_one_minus_src_alpha;
+	imgui_blend.op = yar_blend_op_add;
+	imgui_blend.src_alpha_factor = yar_blend_factor_one;
+	imgui_blend.dst_alpha_factor = yar_blend_factor_one_minus_src_alpha;
+	imgui_blend.alpha_op = yar_blend_op_add;
+	pipeline_desc.blend_state = imgui_blend;
+
+	yar_rasterizer_state imgui_raster{};
+	imgui_raster.fill_mode = yar_fill_mode_solid;
+	imgui_raster.cull_mode = yar_cull_mode_none;
+	imgui_raster.front_counter_clockwise = false;
+	pipeline_desc.rasterizer_state = imgui_raster;
+
+	yar_pipeline* imgui_pipeline;
+	add_pipeline(&pipeline_desc, &imgui_pipeline);
+
+	yar_buffer* imgui_vb;
+	yar_buffer* imgui_ib;
+	yar_buffer_desc imgui_buffer_desc{};
+
+	imgui_buffer_desc.size = 5000 * sizeof(ImDrawVert);
+	imgui_buffer_desc.usage = yar_buffer_usage_vertex_buffer;
+	imgui_buffer_desc.name = "imgui_vertex_buffer";
+	imgui_buffer_desc.flags = yar_buffer_flag_dynamic;
+	add_buffer(&imgui_buffer_desc, &imgui_vb);
+
+	imgui_buffer_desc.size = 10000 * sizeof(ImDrawIdx);
+	imgui_buffer_desc.usage = yar_buffer_usage_index_buffer;
+	imgui_buffer_desc.name = "imgui_index_buffer";
+	add_buffer(&imgui_buffer_desc, &imgui_ib);
+
+	imgui_get_new_frame_data();
+
+	yar_cmd_queue_desc queue_desc;
+	yar_cmd_queue* queue;
 	add_queue(&queue_desc, &queue);
 
-	CmdBufferDesc cmd_desc;
+	yar_cmd_buffer_desc cmd_desc;
 	cmd_desc.current_queue = queue;
 	cmd_desc.use_push_constant = false;
-	CmdBuffer* cmd;
+	yar_cmd_buffer* cmd;
 	add_cmd(&cmd_desc, &cmd);
 
 	camera.pos = glm::vec3(0.0f, 0.0f, 0.0f);
@@ -314,7 +466,20 @@ auto main() -> int
 
 		process_input((GLFWwindow*)get_window());
 
-		imgui_begin_frame();
+		auto* draw_data = imgui_get_new_frame_data();
+		int32_t fb_width = static_cast<int32_t>(draw_data->DisplaySize.x * draw_data->FramebufferScale.x);
+		int32_t fb_height = static_cast<int32_t>(draw_data->DisplaySize.y * draw_data->FramebufferScale.y);
+		ImVec2 clip_off = draw_data->DisplayPos;         // (0,0) unless using multi-viewports
+		ImVec2 clip_scale = draw_data->FramebufferScale; // (1,1) unless using retina display which are often (2,2)
+
+		glm::mat4 ortho = glm::ortho(
+			draw_data->DisplayPos.x,
+			draw_data->DisplayPos.x + draw_data->DisplaySize.x,
+			draw_data->DisplayPos.y + draw_data->DisplaySize.y,
+			draw_data->DisplayPos.y,
+			-1.0f,
+			1.0f
+		);
 
 		ubo.cameraPos = glm::vec4(camera.pos, 0.0f);
 		glm::mat4 projectionMatrix = glm::perspective(glm::radians(90.0f), dims.width / (float)dims.height, 0.1f, 100.0f);
@@ -324,9 +489,10 @@ auto main() -> int
 		ubo.max_ray_depth = max_ray_depth;
 		// Not sure that I really need to pass random number every frame here
 		ubo.seed = 42u;// random_uint();
+		ubo.ui_ortho = ortho;
 
 
-		BufferUpdateDesc update;
+		yar_buffer_update_desc update;
 		update.buffer = ubo_buf[frame_index];
 		update.size = sizeof(ubo);
 		resource_update_desc = &update;
@@ -334,25 +500,59 @@ auto main() -> int
 		std::memcpy(update.mapped_data, &ubo, sizeof(ubo));
 		end_update_resource(resource_update_desc);
 
-		glUseProgram(compute_shader->program);
+		uint32_t sc_image;
+		acquire_next_image(swapchain, sc_image);
+
+		cmd_bind_pipeline(cmd, compute_pipeline);
 		cmd_bind_descriptor_set(cmd, uav_set, 0);
 		cmd_bind_descriptor_set(cmd, ubo_desc, frame_index);
 		cmd_dispatch(cmd, group_x, group_y, 1);
 
-		glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
-		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+		yar_render_pass_desc fullscreen_quad_pass{};
+		fullscreen_quad_pass.color_attachment_count = 1;
+		fullscreen_quad_pass.color_attachments[0].target = swapchain->render_targets[sc_image];
+
+		cmd_begin_render_pass(cmd, &fullscreen_quad_pass);
 
 		cmd_bind_pipeline(cmd, graphics_pipeline);
 		cmd_bind_vertex_buffer(cmd, vbo, layout.attrib_count, 0, sizeof(float) * 4);
 		cmd_bind_descriptor_set(cmd, srv_set, 0);
 		cmd_draw(cmd, 0, 4);
 
+		// render imgui to swapchain rt tmp solution
+		cmd_bind_pipeline(cmd, imgui_pipeline);
+		cmd_bind_descriptor_set(cmd, imgui_set, 0);
+		cmd_bind_vertex_buffer(cmd, imgui_vb, imgui_layout.attrib_count, 0, sizeof(ImDrawVert));
+		cmd_bind_index_buffer(cmd, imgui_ib);
+		cmd_set_viewport(cmd, fb_width, fb_height);
+		for (int i = 0; i < draw_data->CmdListsCount; ++i)
+		{
+			const ImDrawList* cmd_list = draw_data->CmdLists[i];
+			cmd_update_buffer(cmd, imgui_vb, 0, cmd_list->VtxBuffer.Size * sizeof(ImDrawVert), cmd_list->VtxBuffer.Data);
+			cmd_update_buffer(cmd, imgui_ib, 0, cmd_list->IdxBuffer.Size * sizeof(ImDrawIdx), cmd_list->IdxBuffer.Data);
+			for (uint32_t j = 0; j < cmd_list->CmdBuffer.Size; ++j)
+			{
+				const ImDrawCmd* draw_cmd = &cmd_list->CmdBuffer[j];
+
+				// Project scissor/clipping rectangles into framebuffer space
+				ImVec2 clip_min((draw_cmd->ClipRect.x - clip_off.x) * clip_scale.x, (draw_cmd->ClipRect.y - clip_off.y) * clip_scale.y);
+				ImVec2 clip_max((draw_cmd->ClipRect.z - clip_off.x) * clip_scale.x, (draw_cmd->ClipRect.w - clip_off.y) * clip_scale.y);
+				if (clip_max.x <= clip_min.x || clip_max.y <= clip_min.y)
+					continue;
+
+				cmd_set_scissor(cmd, (int)clip_min.x, (int)((float)fb_height - clip_max.y), (int)(clip_max.x - clip_min.x), (int)(clip_max.y - clip_min.y));
+				cmd_draw_indexed(cmd, draw_cmd->ElemCount, yar_index_type_ushort, draw_cmd->IdxOffset, draw_cmd->VtxOffset);
+			}
+		}
+
+		cmd_end_render_pass(cmd);
+
 		queue_submit(queue);
 
-		imgui_render();
-		imgui_end_frame();
+		yar_queue_present_desc present_desc{};
+		present_desc.swapchain = swapchain;
+		queue_present(queue, &present_desc);
 
-		swapchain->swap_buffers(swapchain->window);
 		glfwPollEvents();
 
 		frame_index = (frame_index + 1) % image_count;

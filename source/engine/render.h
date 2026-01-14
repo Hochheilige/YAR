@@ -540,6 +540,7 @@ struct yar_push_constant
 struct yar_pipeline_desc
 {
     // Split shader to vertex and pixel
+    yar_pipeline_type       type;
     yar_shader*             shader;
     yar_rasterizer_state    rasterizer_state;
     yar_depth_stencil_state depth_stencil_state;
