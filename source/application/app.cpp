@@ -794,7 +794,7 @@ auto main() -> int {
 		&skybox
 	};
 
-	yar_texture* umgui_fonts = get_imgui_fonts();
+	yar_texture* imgui_fonts = get_imgui_fonts();
 
 	Mesh test_mesh(std::move(cube_vertexes), std::move(indexes), std::move(textures), "Cube");
 	Mesh skybox_mesh(std::move(skybox_vertexes), std::move(skybox_indices), std::move(skybox_textures), "Skybox");
@@ -1011,7 +1011,7 @@ auto main() -> int {
 			.name = "font",
 			.descriptor =
 			yar_descriptor_info::yar_combined_texture_sample{
-				umgui_fonts,
+				imgui_fonts,
 				"samplerState",
 			}
 		},
