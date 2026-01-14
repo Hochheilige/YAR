@@ -22,6 +22,7 @@ RWTexture2D<float4> quad_tex : register(u0, space0);
 cbuffer ubo : register(b1, space1)
 {
     float4x4 invViewProj;
+    float4x4 ui_ortho;
     float4 camera_pos;
     Sphere spheres[SPHERES_COUNT];
     Material mats[SPHERES_COUNT];
