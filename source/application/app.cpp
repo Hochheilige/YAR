@@ -23,6 +23,8 @@
 
 #include <cstddef>
 
+#include "math/Vector3.h"
+
 yar_texture* get_imgui_fonts()
 {
 	auto& font_atlas = ImGui::GetIO().Fonts;
