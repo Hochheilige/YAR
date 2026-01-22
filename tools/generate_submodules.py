@@ -111,6 +111,7 @@ submodules_urls = [
     "https://github.com/g-truc/glm.git",
     "https://github.com/assimp/assimp",
     "https://github.com/zeux/meshoptimizer.git",
+    "https://github.com/microsoft/DirectXMath.git",
 ]
 
 submodules_paths = [
@@ -122,6 +123,7 @@ submodules_paths = [
     "external/glm",
     "external/assimp",
     "external/meshoptimizer",
+    "external/directx-math",
 ]
 
 for url, path in zip(submodules_urls, submodules_paths):

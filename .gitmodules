@@ -22,3 +22,6 @@
 [submodule "external/meshoptimizer"]
 	path = external/meshoptimizer
 	url = https://github.com/zeux/meshoptimizer.git
+[submodule "external/direcx-math"]
+	path = external/direcx-math
+	url = https://github.com/microsoft/DirectXMath.git

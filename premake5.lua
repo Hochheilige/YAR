@@ -25,6 +25,7 @@ project "Engine"
     files {
         "source/engine/**.cpp",
         "source/engine/render_impl/**.cpp",
+        "source/engine/math/**.cpp",
         "external/glad/src/**.c",
         "external/imgui/imgui.cpp",
         "external/imgui/imgui_draw.cpp",
@@ -41,6 +42,7 @@ project "Engine"
         "external/spirv-cross/spirv_cross_parsed_ir.cpp",
         "external/spirv-cross/spirv_cfg.cpp",
         "source/engine/**.h",
+        "source/engine/math/**.h",
     }
 
     includedirs {
@@ -51,7 +53,8 @@ project "Engine"
         "external/spirv-cross",
         "external/stb",
         "external/assimp/include",
-        "external/meshoptimizer/src"
+        "external/meshoptimizer/src",
+        "external/directx-math/Inc",
     }
 
     filter { "configurations:Debug" }
