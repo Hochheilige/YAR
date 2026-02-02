@@ -7,10 +7,9 @@
 #include <glad/glad.h>
 #include <GLFW/glfw3.h>
 
-#include <glm/glm.hpp>
-#include <glm/gtc/matrix_transform.hpp>
-#include <glm/gtc/type_ptr.hpp>
-#include <glm/gtc/random.hpp>
+#include "../shaders/common.h"
+
+#include <random>
 
 #include <assimp/Importer.hpp>
 #include <assimp/scene.h>
@@ -22,8 +21,7 @@
 #include <optional>
 
 #include <cstddef>
-
-#include "math/Vector3.h"
+#include <cmath>
 
 yar_texture* get_imgui_fonts()
 {
@@ -64,25 +62,25 @@ struct Texture
 
 struct Vertex
 {
-	glm::vec3 position;
-	glm::vec3 normal;
-	glm::vec3 tangent;
-	glm::vec3 bitangent;
-	glm::vec2 tex_coord;
-	glm::vec2 tex_coord1;
+	Vector3 position;
+	Vector3 normal;
+	Vector3 tangent;
+	Vector3 bitangent;
+	Vector2 tex_coord;
+	Vector2 tex_coord1;
 };
 
 struct SkyBoxVertex
 {
-	glm::vec3 position;
+	Vector3 position;
 };
 
-struct ImGuiVertex {
-	glm::vec2 position;
-	glm::vec2 uv; 
+struct ImGuiVertex
+{
+	Vector2 position;
+	Vector2 uv; 
 	uint32_t color;   
 };
-
 
 class Mesh
 {
@@ -163,7 +161,7 @@ private:
 		meshopt_optimizeVertexCache(opt_indices.data(), opt_indices.data(), index_count, opt_vertex_count);
 
 		// 4. Overdraw optimization
-		meshopt_optimizeOverdraw(opt_indices.data(), opt_indices.data(), index_count, &(opt_vertices[0].position.x),
+		meshopt_optimizeOverdraw(opt_indices.data(), opt_indices.data(), index_count, &(opt_vertices[0].position[0]),
 			opt_vertex_count, vertex_size, 1.05f);
 
 		// 5. Vertex fetch optimization
@@ -234,7 +232,7 @@ public:
 		}
 		directory = path.substr(0, path.find_last_of('/'));
 
-		process_node(scene->mRootNode, scene, glm::mat4(1.0f));
+		process_node(scene->mRootNode, scene, Matrix4x4::identity());
 	}
 
 	void setup_descriptor_set(yar_shader* shader, yar_descriptor_set_update_frequency update_freq, yar_sampler* sampler)
@@ -315,10 +313,10 @@ public:
 	}
 
 private:
-	void process_node(aiNode* node, const aiScene* scene, const glm::mat4& parentTransform)
+	void process_node(aiNode* node, const aiScene* scene, const Matrix4x4& parentTransform)
 	{
-		glm::mat4 localTransform = glm::transpose(glm::make_mat4(&node->mTransformation.a1));
-		glm::mat4 globalTransform = parentTransform * localTransform;
+		Matrix4x4 localTransform = Matrix4x4(&node->mTransformation.a1).transpose();
+		Matrix4x4 globalTransform = localTransform * parentTransform;
 
 		for (uint32_t i = 0; i < node->mNumMeshes; i++)
 		{
@@ -332,7 +330,7 @@ private:
 		}
 	}
 
-	Mesh process_mesh(aiMesh* mesh, const aiScene* scene, const glm::mat4& transform)
+	Mesh process_mesh(aiMesh* mesh, const aiScene* scene, const Matrix4x4 transform)
 	{
 		std::vector<Vertex> vertices;
 		std::vector<uint32_t> indices;
@@ -342,36 +340,36 @@ private:
 		{
 			Vertex vertex{};
 
-			glm::vec4 pos = transform * glm::vec4(mesh->mVertices[i].x, mesh->mVertices[i].y, mesh->mVertices[i].z, 1.0f);
-			vertex.position = glm::vec3(pos);
+			Vector4 pos = transform * Vector4(mesh->mVertices[i].x, mesh->mVertices[i].y, mesh->mVertices[i].z, 1.0f);
+			vertex.position = Vector3(pos);
 
 			if (mesh->HasNormals())
 			{
-				glm::mat3 normalMat = glm::transpose(glm::inverse(glm::mat3(transform)));
-				glm::vec3 norm = normalMat * glm::vec3(mesh->mNormals[i].x, mesh->mNormals[i].y, mesh->mNormals[i].z);
-				vertex.normal = glm::normalize(norm);
+				Matrix4x4 normal_mat = transform.inverse().transpose();
+				Vector3 norm(mesh->mNormals[i].x, mesh->mNormals[i].y, mesh->mNormals[i].z);
+				vertex.normal = normal_mat.transform_direction(norm).normalized();
 			}
 
 			if (mesh->HasTextureCoords(0))
 			{
-				vertex.tex_coord.x = mesh->mTextureCoords[0][i].x;
-				vertex.tex_coord.y = mesh->mTextureCoords[0][i].y;
+				vertex.tex_coord.x() = mesh->mTextureCoords[0][i].x;
+				vertex.tex_coord.y() = mesh->mTextureCoords[0][i].y;
 			}
 
 			if (mesh->HasTextureCoords(1))
 			{
-				vertex.tex_coord1.x = mesh->mTextureCoords[1][i].x;
-				vertex.tex_coord1.y = mesh->mTextureCoords[1][i].y;
+				vertex.tex_coord1.x() = mesh->mTextureCoords[1][i].x;
+				vertex.tex_coord1.y() = mesh->mTextureCoords[1][i].y;
 			}
 
 			if (mesh->HasTangentsAndBitangents())
 			{
-				vertex.tangent.x = mesh->mTangents[i].x;
-				vertex.tangent.y = mesh->mTangents[i].y;
-				vertex.tangent.z = mesh->mTangents[i].z;
-				vertex.bitangent.x = mesh->mBitangents[i].x;
-				vertex.bitangent.y = mesh->mBitangents[i].y;
-				vertex.bitangent.z = mesh->mBitangents[i].z;
+				vertex.tangent.x() = mesh->mTangents[i].x;
+				vertex.tangent.y() = mesh->mTangents[i].y;
+				vertex.tangent.z() = mesh->mTangents[i].z;
+				vertex.bitangent.x() = mesh->mBitangents[i].x;
+				vertex.bitangent.y() = mesh->mBitangents[i].y;
+				vertex.bitangent.z() = mesh->mBitangents[i].z;
 			}
 
 			vertices.push_back(vertex);
@@ -440,60 +438,20 @@ private:
 
 struct Camera
 {
-	glm::vec3 pos = glm::vec3(0.0f, 0.0f, 3.0f);
-	glm::vec3 front = glm::vec3(0.0f, 0.0f, -1.0f);
-	glm::vec3 up = glm::vec3(0.0f, 1.0f, 0.0f);
+	Vector3 pos = Vector3(0.0f, 0.0f, 3.0f);
+	Vector3 front = Vector3(0.0f, 0.0f, -1.0f);
+	Vector3 up = Vector3(0.0f, 1.0f, 0.0f);
 } camera;
-
-struct Material
-{
-	float shinines;
-	float pad[3];
-} material[11];
-
-static constexpr uint32_t kDirLightCount = 1;
-static constexpr uint32_t kPointLightCount = 1;
-static constexpr uint32_t kSpotLightCount = 1;
-static constexpr uint64_t kLightSourcesCount = kDirLightCount + kPointLightCount +kSpotLightCount;
-
-struct DirectLight
-{
-	glm::vec4 direction[kDirLightCount];
-};
-
-struct PointLight
-{
-	glm::vec4 position[kPointLightCount];
-};
-
-struct SpotLight
-{
-	glm::vec4 position[kSpotLightCount];
-	glm::vec4 direction[kSpotLightCount];
-	// not cool to use vec4 here
-	glm::vec4 cutoff[kSpotLightCount];
-	glm::vec4 attenuation[kPointLightCount];
-};
-
-struct LightParams
-{
-	glm::vec4 color[kLightSourcesCount];
-};
 
 struct UBO
 {
-	glm::mat4 view;
-	glm::mat4 view_sb;
-	glm::mat4 proj;
-	glm::mat4 light_space;
-	glm::mat4 ui_ortho;
-	glm::mat4 model[11];
-	DirectLight dir_light;
+	MVP mvp;
+	DirLight dir_light;
 	PointLight point_light;
 	SpotLight spot_light;
 	LightParams light_params;
-	glm::vec4 view_pos;
-}ubo;
+	CameraData cam;
+} ubo;
 
 float yaw = -90.0f;	
 float pitch = 0.0f;
@@ -504,7 +462,7 @@ float fov = 45.0f;
 float deltaTime = 0.0f;	
 float lastFrame = 0.0f;
 
-glm::vec4* light_pos = nullptr;
+Vector4* light_pos = nullptr;
 
 void framebuffer_size_callback(GLFWwindow* window, int width, int height);
 void mouse_callback(GLFWwindow* window, double xpos, double ypos);
@@ -519,14 +477,13 @@ static std::function<void()> app_layer = []()
 		ImGui::Begin("Light Settings");
 
 		static float dir[3] = {
-			ubo.dir_light.direction[0].x,
-			ubo.dir_light.direction[0].y,
-			ubo.dir_light.direction[0].z
+			ubo.dir_light.direction[0].x(),
+			ubo.dir_light.direction[0].y(),
+			ubo.dir_light.direction[0].z()
 		};
 		if (ImGui::SliderFloat3("Direction Light", dir, -1.0f, 1.0f))
 		{
-			glm::vec3 lightDir = glm::vec3(dir[0], dir[1], dir[2]);
-			ubo.dir_light.direction[0] = glm::vec4(lightDir, 0.0f);
+			ubo.dir_light.direction[0] = Vector4(dir[0], dir[1], dir[2], 0.0f);
 		}
 
 		ImGui::SliderFloat("Direction Light Distance", &dir_light_distance, 0.0f, 100.0f);
@@ -535,9 +492,9 @@ static std::function<void()> app_layer = []()
 		ImGui::Checkbox("Enable Spot Light", &spot_light_enabled);
 		{
 			if (spot_light_enabled)
-				ubo.light_params.color[2].a = 1.0f;
+				ubo.light_params.color[2].w() = 1.0f;
 			else
-				ubo.light_params.color[2].a = 0.0f;
+				ubo.light_params.color[2].w() = 0.0f;
 		}
 
 		ImGui::End();
@@ -650,58 +607,58 @@ auto main() -> int {
 		22, 23, 20
 	};
 
-	glm::vec4 cube_positions[] = {
-		glm::vec4(0.0f,  0.0f,  -5.0f  , 1.0f),
-		glm::vec4(2.0f,  5.0f, 0.0f , 1.0f),
-		glm::vec4(-1.5f, 10.2f, 0.0f , 1.0f),
-		glm::vec4(-3.8f, 7.0f, 0.3f, 1.0f),
-		glm::vec4(2.4f, 9.4f, 0.0f  , 1.0f),
-		glm::vec4(-1.7f,  3.0f, -7.5f , 1.0f),
-		glm::vec4(1.3f, 3.0f, -2.5f  , 1.0f),
-		glm::vec4(1.5f,  2.0f, -2.5f  , 1.0f),
-		glm::vec4(1.5f,  3.2f, -1.5f  , 1.0f),
-		glm::vec4(-1.3f,  3.0f, -1.5f , 1.0f)
+	Vector4 cube_positions[] = {
+		Vector4(0.0f,  0.0f,  -5.0f  , 1.0f),
+		Vector4(2.0f,  5.0f, 0.0f , 1.0f),
+		Vector4(-1.5f, 10.2f, 0.0f , 1.0f),
+		Vector4(-3.8f, 7.0f, 0.3f, 1.0f),
+		Vector4(2.4f, 9.4f, 0.0f  , 1.0f),
+		Vector4(-1.7f,  3.0f, -7.5f , 1.0f),
+		Vector4(1.3f, 3.0f, -2.5f  , 1.0f),
+		Vector4(1.5f,  2.0f, -2.5f  , 1.0f),
+		Vector4(1.5f,  3.2f, -1.5f  , 1.0f),
+		Vector4(-1.3f,  3.0f, -1.5f , 1.0f)
 	};
 
-	glm::vec4 backpack_pos(0.0f);
+	Vector4 backpack_pos(0.0f);
 
 	
-	auto skybox_vertexes = std::vector{
+	auto skybox_vertexes = std::vector<Vertex>{
 		// Front face
-		Vertex{{glm::vec3(-1.0f, -1.0f,  1.0f)}},
-		Vertex{{glm::vec3(1.0f, -1.0f,  1.0f)}},
-		Vertex{{glm::vec3(1.0f,  1.0f,  1.0f)}},
-		Vertex{{glm::vec3(-1.0f,  1.0f,  1.0f)}},
+		Vertex{{-1.0f, -1.0f,  1.0f}},
+		Vertex{{ 1.0f, -1.0f,  1.0f}},
+		Vertex{{ 1.0f,  1.0f,  1.0f}},
+		Vertex{{-1.0f,  1.0f,  1.0f}},
 
 		// Back face
-		Vertex{{glm::vec3(1.0f, -1.0f, -1.0f)}},
-		Vertex{{glm::vec3(-1.0f, -1.0f, -1.0f)}},
-		Vertex{{glm::vec3(-1.0f,  1.0f, -1.0f)}},
-		Vertex{{glm::vec3(1.0f,  1.0f, -1.0f)}},
+		Vertex{{ 1.0f, -1.0f, -1.0f}},
+		Vertex{{-1.0f, -1.0f, -1.0f}},
+		Vertex{{-1.0f,  1.0f, -1.0f}},
+		Vertex{{ 1.0f,  1.0f, -1.0f}},
 
 		// Left face
-		Vertex{{glm::vec3(-1.0f, -1.0f, -1.0f)}},
-		Vertex{{glm::vec3(-1.0f, -1.0f,  1.0f)}},
-		Vertex{{glm::vec3(-1.0f,  1.0f,  1.0f)}},
-		Vertex{{glm::vec3(-1.0f,  1.0f, -1.0f)}},
+		Vertex{{-1.0f, -1.0f, -1.0f}},
+		Vertex{{-1.0f, -1.0f,  1.0f}},
+		Vertex{{-1.0f,  1.0f,  1.0f}},
+		Vertex{{-1.0f,  1.0f, -1.0f}},
 
 		// Right face
-		Vertex{{glm::vec3(1.0f, -1.0f,  1.0f)}},
-		Vertex{{glm::vec3(1.0f, -1.0f, -1.0f)}},
-		Vertex{{glm::vec3(1.0f,  1.0f, -1.0f)}},
-		Vertex{{glm::vec3(1.0f,  1.0f,  1.0f)}},
+		Vertex{{ 1.0f, -1.0f,  1.0f}},
+		Vertex{{ 1.0f, -1.0f, -1.0f}},
+		Vertex{{ 1.0f,  1.0f, -1.0f}},
+		Vertex{{ 1.0f,  1.0f,  1.0f}},
 
 		// Bottom face
-		Vertex{{glm::vec3(-1.0f, -1.0f, -1.0f)}},
-		Vertex{{glm::vec3(1.0f, -1.0f, -1.0f)}},
-		Vertex{{glm::vec3(1.0f, -1.0f,  1.0f)}},
-		Vertex{{glm::vec3(-1.0f, -1.0f,  1.0f)}},
+		Vertex{{-1.0f, -1.0f, -1.0f}},
+		Vertex{{ 1.0f, -1.0f, -1.0f}},
+		Vertex{{ 1.0f, -1.0f,  1.0f}},
+		Vertex{{-1.0f, -1.0f,  1.0f}},
 
 		// Top face
-		Vertex{{glm::vec3(-1.0f,  1.0f,  1.0f)}},
-		Vertex{{glm::vec3(1.0f,  1.0f,  1.0f)}},
-		Vertex{{glm::vec3(1.0f,  1.0f, -1.0f)}},
-		Vertex{{glm::vec3(-1.0f,  1.0f, -1.0f)}},
+		Vertex{{-1.0f,  1.0f,  1.0f}},
+		Vertex{{ 1.0f,  1.0f,  1.0f}},
+		Vertex{{ 1.0f,  1.0f, -1.0f}},
+		Vertex{{-1.0f,  1.0f, -1.0f}},
 	};
 
 	std::vector<uint32_t> skybox_indices = {
@@ -736,24 +693,21 @@ auto main() -> int {
 	memset(&ubo, 0x00, sizeof(ubo));
 
 	// Dir Light
-	ubo.dir_light.direction[0] = glm::vec4(-0.01f, -1.0f, 0.0f, 0.0f);
-	ubo.light_params.color[0] = glm::vec4(1.0f, 0.95f, 0.9f, 0.0f);
-	ubo.light_params.color[0].a = 1.5f;  // intensity
+	ubo.dir_light.direction[0] = Vector4(-0.01f, -1.0f, 0.0f, 0.0f);
+	ubo.light_params.color[0] = Vector4(1.0f, 0.95f, 0.9f, 1.5f);
 
 	// Point Light
-	ubo.point_light.position[0] = *light_pos; 
-	ubo.light_params.color[1] = glm::vec4(1.0f, 1.0f, 0.0f, 0.0f);
-	ubo.light_params.color[1].a = 1.0f; // intensity
+	ubo.point_light.position[0] = *light_pos;
+	ubo.light_params.color[1] = Vector4(1.0f, 1.0f, 0.0f, 1.0f);
 
 	// Spotlight
-	ubo.spot_light.cutoff[0] = glm::vec4(
-		glm::cos(glm::radians(12.5f)), 
-		glm::cos(glm::radians(17.5f)),
+	ubo.spot_light.cutoff[0] = Vector4(
+		std::cos(radians(12.5f)),
+		std::cos(radians(17.5f)),
 		0.0f, 0.0f
 	);
-	ubo.spot_light.attenuation[0] = glm::vec4(1.0f, 0.007f, 0.0002f, 0.0f);
-	ubo.light_params.color[2] = glm::vec4(1.0f, 0.0f, 1.0f, 0.0f);
-	ubo.light_params.color[2].a = 1.0f; // intensity
+	ubo.spot_light.attenuation[0] = Vector4(1.0f, 0.007f, 0.0002f, 0.0f);
+	ubo.light_params.color[2] = Vector4(1.0f, 0.0f, 1.0f, 1.0f);
 
 	Texture diffuse_map_tex{
 		.texture_asset = load_texture("assets/cube_albedo.png")
@@ -1041,7 +995,7 @@ auto main() -> int {
 	skybox_layout.attrib_count = 1u;
 	skybox_layout.attribs[0].size = 3u;
 	skybox_layout.attribs[0].format = yar_attrib_format_float;
-	skybox_layout.attribs[0].offset = offsetof(SkyBoxVertex, position);
+	skybox_layout.attribs[0].offset = offsetof(Vertex, position);
 	pipeline_desc.shader = skybox_shader;
 	pipeline_desc.vertex_layout = skybox_layout;
 	pipeline_desc.depth_stencil_state.depth_enable = true;
@@ -1119,24 +1073,21 @@ auto main() -> int {
 	yar_cmd_buffer* cmd;
 	add_cmd(&cmd_desc, &cmd);
 
-	glm::mat4 model = glm::mat4(1.0f);
-	
+	Matrix4x4 model;
+
 	float max_cube_scale = 0.5f;
-	glm::vec3 cube_scales[] = {
-		glm::vec3(glm::linearRand(0.08f, max_cube_scale)),
-		glm::vec3(glm::linearRand(0.08f, max_cube_scale)),
-		glm::vec3(glm::linearRand(0.08f, max_cube_scale)),
-		glm::vec3(glm::linearRand(0.08f, max_cube_scale)),
-		glm::vec3(glm::linearRand(0.08f, max_cube_scale)),
-		glm::vec3(glm::linearRand(0.08f, max_cube_scale)),
-		glm::vec3(glm::linearRand(0.08f, max_cube_scale)),
-		glm::vec3(glm::linearRand(0.08f, max_cube_scale)),
-		glm::vec3(glm::linearRand(0.08f, max_cube_scale))
+	std::random_device rd;
+	std::mt19937 gen(rd());
+	std::uniform_real_distribution<float> dist(0.08f, max_cube_scale);
+	Vector3 cube_scales[] = {
+		Vector3(dist(gen)), Vector3(dist(gen)), Vector3(dist(gen)),
+		Vector3(dist(gen)), Vector3(dist(gen)), Vector3(dist(gen)),
+		Vector3(dist(gen)), Vector3(dist(gen)), Vector3(dist(gen))
 	};
 
 	float near_plane = 0.1f;
 	float far_plane = 100.0f;
-	glm::mat4 light_projection = glm::ortho(-10.0f, 10.0f, -10.0f, 10.0f, near_plane, far_plane);
+	Matrix4x4 light_projection = Matrix4x4::ortho_off_center_rh_gl(-10.0f, 10.0f, -10.0f, 10.0f, near_plane, far_plane);
 
 	yar_buffer* imgui_vb;
 	yar_buffer* imgui_ib;
@@ -1169,55 +1120,58 @@ auto main() -> int {
 		ImVec2 clip_off = draw_data->DisplayPos;         // (0,0) unless using multi-viewports
 		ImVec2 clip_scale = draw_data->FramebufferScale; // (1,1) unless using retina display which are often (2,2)
 
-		glm::mat4 ortho = glm::ortho(
-			draw_data->DisplayPos.x,                           
+		Matrix4x4 ortho = Matrix4x4::ortho_off_center_rh_gl(
+			draw_data->DisplayPos.x,
 			draw_data->DisplayPos.x + draw_data->DisplaySize.x,
 			draw_data->DisplayPos.y + draw_data->DisplaySize.y,
-			draw_data->DisplayPos.y,                           
+			draw_data->DisplayPos.y,
 			-1.0f,
-			1.0f  
+			1.0f
 		);
 
-		glm::vec3 light_dir = glm::vec3(ubo.dir_light.direction->x, ubo.dir_light.direction->y, ubo.dir_light.direction->z);
-		glm::mat4 dir_light_view = glm::lookAt(
+		Vector3 light_dir = ubo.dir_light.direction[0].xyz();
+		Matrix4x4 dir_light_view = Matrix4x4::look_at_rh(
 			-light_dir * dir_light_distance,
-			glm::vec3(0.0f, 0.0f, 0.0f),
-			glm::vec3(0.0f, 1.0f, 0.0f)
-		); 
-		glm::mat4 light_space_mat = light_projection * dir_light_view;
-		ubo.light_space = light_space_mat;
+			Vector3(0.0f, 0.0f, 0.0f),
+			Vector3(0.0f, 1.0f, 0.0f)
+		);
+		// v*M order: view first, then projection
+		Matrix4x4 light_space_mat = dir_light_view * light_projection;
+		ubo.mvp.light_space = light_space_mat;
 
 		for (uint32_t i = 0; i < 10; ++i)
 		{
-			model = glm::mat4(1.0f);
-			model = glm::translate(model, glm::vec3(cube_positions[i]));
 			if (i != 0) // i == 0 light position
 			{
-				float angle = 20.0f;// *(i + 1);
-				model = glm::rotate(model, (float)glfwGetTime() * glm::radians(angle), glm::vec3(1.0f, 0.3f, 0.5f));
-				model = glm::scale(model, cube_scales[i - 1]);
+				float angle = 20.0f;
+				// v*M order: scale, then rotate, then translate
+				model = Matrix4x4::scaling(cube_scales[i - 1])
+					* Matrix4x4::rotation_axis(Vector3(1.0f, 0.3f, 0.5f), (float)glfwGetTime() * radians(angle))
+					* Matrix4x4::translation(cube_positions[i].xyz());
 			}
 			else
 			{
-				model = glm::scale(model, glm::vec3(0.5f, 0.5f, 0.5f));
+				model = Matrix4x4::scaling(Vector3(0.5f))
+					* Matrix4x4::translation(cube_positions[i].xyz());
 			}
-			ubo.model[i] = model;
+			ubo.mvp.model[i] = model;
 		}
 
-		model = glm::mat4(1.0f);
-		model = glm::translate(model, glm::vec3(backpack_pos));
-		//model = glm::scale(model, glm::vec3(0.01f, 0.01f, 0.01f));
-		ubo.model[10] = model;
+		model = Matrix4x4::translation(backpack_pos.xyz());
+		ubo.mvp.model[10] = model;
 
-		ubo.point_light.position[0] = *light_pos; // update point light pos
-		ubo.view_pos = glm::vec4(camera.pos, 0.0f);
-		ubo.view = glm::mat4(1.0f);
-		ubo.view = glm::lookAt(camera.pos, camera.pos + camera.front, camera.up);
-		ubo.view_sb = glm::mat4(glm::mat3(ubo.view));
-		ubo.proj = glm::perspective(glm::radians(fov), 1920.0f / 1080.0f, 0.1f, 100.0f);
-		ubo.spot_light.position[0] = ubo.view_pos;
-		ubo.spot_light.direction[0] = glm::vec4(camera.front, 0.0f);
-		ubo.ui_ortho = ortho;
+		ubo.point_light.position[0] = *light_pos;
+		ubo.cam.pos = Vector4(camera.pos, 0.0f);
+		ubo.mvp.view = Matrix4x4::look_at_rh(camera.pos, camera.pos + camera.front, camera.up);
+		Matrix4x4 view_sb = ubo.mvp.view;
+		view_sb.data._41 = 0.0f;
+		view_sb.data._42 = 0.0f;
+		view_sb.data._43 = 0.0f;
+		ubo.mvp.view_sb = view_sb;
+		ubo.mvp.proj = Matrix4x4::perspective_fov_rh_gl(radians(fov), 1920.0f / 1080.0f, 0.1f, 100.0f);
+		ubo.spot_light.position[0] = ubo.cam.pos;
+		ubo.spot_light.direction[0] = Vector4(camera.front, 0.0f);
+		ubo.mvp.ui_ortho = ortho;
 
 		yar_resource_update_desc resource_update_desc;
 		yar_buffer_update_desc update;
@@ -1332,9 +1286,9 @@ void process_input(GLFWwindow* window)
 	if (glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS)
 		camera.pos -= speed * camera.front;
 	if (glfwGetKey(window, GLFW_KEY_A) == GLFW_PRESS)
-		camera.pos -= glm::normalize(glm::cross(camera.front, camera.up)) * speed;
+		camera.pos -= camera.front.cross(camera.up).normalized() * speed;
 	if (glfwGetKey(window, GLFW_KEY_D) == GLFW_PRESS)
-		camera.pos += glm::normalize(glm::cross(camera.front, camera.up)) * speed;
+		camera.pos += camera.front.cross(camera.up).normalized() * speed;
 	if (glfwGetKey(window, GLFW_KEY_E) == GLFW_PRESS)
 		camera.pos += camera.up * speed;
 	if (glfwGetKey(window, GLFW_KEY_Q) == GLFW_PRESS)
@@ -1345,22 +1299,22 @@ void process_input(GLFWwindow* window)
 	if (glfwGetKey(window, GLFW_KEY_LEFT_ALT) != GLFW_PRESS)
 	{
 		if (glfwGetKey(window, GLFW_KEY_UP) == GLFW_PRESS)
-			light_pos->y += speed;
+			light_pos->y() += speed;
 		if (glfwGetKey(window, GLFW_KEY_DOWN) == GLFW_PRESS)
-			light_pos->y -= speed;
+			light_pos->y() -= speed;
 	}
 	else
 	{
 		if (glfwGetKey(window, GLFW_KEY_UP) == GLFW_PRESS)
-			light_pos->z -= speed;
+			light_pos->z() -= speed;
 		if (glfwGetKey(window, GLFW_KEY_DOWN) == GLFW_PRESS)
-			light_pos->z += speed;
+			light_pos->z() += speed;
 	}
 
 	if (glfwGetKey(window, GLFW_KEY_LEFT) == GLFW_PRESS)
-		light_pos->x -= speed;
+		light_pos->x() -= speed;
 	if (glfwGetKey(window, GLFW_KEY_RIGHT) == GLFW_PRESS)
-		light_pos->x += speed;
+		light_pos->x() += speed;
 }
 
 void framebuffer_size_callback(GLFWwindow* window, int width, int height)
@@ -1407,11 +1361,12 @@ void mouse_callback(GLFWwindow* window, double xposIn, double yposIn)
 	if (pitch < -89.0f)
 		pitch = -89.0f;
 
-	glm::vec3 front;
-	front.x = cos(glm::radians(yaw)) * cos(glm::radians(pitch));
-	front.y = sin(glm::radians(pitch));
-	front.z = sin(glm::radians(yaw)) * cos(glm::radians(pitch));
-	camera.front = glm::normalize(front);
+	Vector3 new_front(
+		std::cos(radians(yaw)) * std::cos(radians(pitch)),
+		std::sin(radians(pitch)),
+		std::sin(radians(yaw)) * std::cos(radians(pitch))
+	);
+	camera.front = new_front.normalized();
 }
 
 void scroll_callback(GLFWwindow* window, double xoffset, double yoffset)
