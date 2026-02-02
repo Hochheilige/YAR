@@ -107,7 +107,7 @@ project "Application"
         "external/glad/include",
         "external/glfw/include",
         "external/imgui",
-        "external/glm",
+        "external/directx-math/Inc",
         "external/stb",
         "external/assimp/include",
         "external/assimp/build/include",
