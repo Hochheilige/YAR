@@ -73,6 +73,17 @@ struct Matrix4x4 {
         return Matrix4x4(XMMatrixOrthographicLH(width, height, near_plane, far_plane));
     }
 
+    static Matrix4x4 ortho_off_center(float left, float right, float bottom, float top, float near_plane, float far_plane)
+    {
+        return Matrix4x4(XMMatrixOrthographicOffCenterLH(left, right, bottom, top, near_plane, far_plane));
+    }
+
+    static Matrix4x4 rotation_axis(const Vector3& axis, float angle_radians)
+    {
+        XMVECTOR axis_vec = axis.load();
+        return Matrix4x4(XMMatrixRotationAxis(axis_vec, angle_radians));
+    }
+
     Matrix4x4 operator*(const Matrix4x4& other) const
     {
         XMMATRIX m1 = load();
