@@ -2,16 +2,16 @@
 #include <DirectXMath.h>
 #include <string>
 
-#include "Vector3.h"
-
 using namespace DirectX;
+
+struct Vector3; // forward declaration to break circular include
 
 struct Vector4 {
     XMFLOAT4 data;
 
     Vector4() : data(0.0f, 0.0f, 0.0f, 0.0f) {}
     Vector4(float x, float y, float z, float w) : data(x, y, z, w) {}
-    Vector4(const Vector3& v, float w) : data(v.x(), v.y(), v.z(), w) {}
+    Vector4(const Vector3& v, float w); // defined in Vector3.h after Vector3 is complete
     explicit Vector4(float scalar) : data(scalar, scalar, scalar, scalar) {}
     explicit Vector4(const XMFLOAT4& xm) : data(xm) {}
     explicit Vector4(FXMVECTOR v) { XMStoreFloat4(&data, v); }
@@ -26,8 +26,7 @@ struct Vector4 {
     float z() const { return data.z; }
     float w() const { return data.w; }
 
-    // Extract xyz as Vector3
-    Vector3 xyz() const { return Vector3(data.x, data.y, data.z); }
+    Vector3 xyz() const; // defined in Vector3.h after Vector3 is complete
 
     float& operator[](size_t index) {
         return (&data.x)[index];

@@ -7,11 +7,14 @@
 
 using namespace DirectX;
 
+struct Vector4; // forward declaration
+
 struct Vector3 {
     XMFLOAT3 data;
 
     Vector3() : data(0.0f, 0.0f, 0.0f) {}
     Vector3(float x, float y, float z) : data(x, y, z) {}
+    Vector3(const Vector4& vec); // defined in yar_math.h
     explicit Vector3(float scalar) : data(scalar, scalar, scalar) {}
     explicit Vector3(const XMFLOAT3& xm) : data(xm) {}
     explicit Vector3(FXMVECTOR v) { XMStoreFloat3(&data, v); }
