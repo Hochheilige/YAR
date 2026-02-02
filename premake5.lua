@@ -66,7 +66,7 @@ project "Engine"
             "glfw3",
             "dxcompiler",
             "zlibstaticd",
-            "assimp-vc143-mtd",
+            "assimp-vc143-mt",
             "meshoptimizer",
         }
         symbols "On"
