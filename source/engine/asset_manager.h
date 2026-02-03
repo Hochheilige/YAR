@@ -1,11 +1,10 @@
 #pragma once
 
-#include <future>
 #include <memory>
 #include <string_view>
-#include <vector>
+#include <array>
 
-// TODO: move idea with creating gpu resources to render thread
+#include "asset_handle.h"
 #include "render.h"
 
 #define WHITE_TEXTURE "DEBUG_WHITE_TEXTURE"
@@ -21,6 +20,7 @@ struct TextureAsset
 };
 
 void init_asset_manager();
-auto load_texture(std::string_view path) -> std::shared_future<std::shared_ptr<TextureAsset>>;
-auto load_cubemap(const std::array<std::string_view, 6>& paths) -> std::shared_future<std::shared_ptr<TextureAsset>>;
-auto get_gpu_texture(std::shared_future<std::shared_ptr<TextureAsset>>& texture_asset, yar_texture_type type, uint32_t channels = 0) -> yar_texture*;
+void shutdown_asset_manager();
+auto load_texture(std::string_view path) -> AssetHandle<TextureAsset>;
+auto load_cubemap(const std::array<std::string_view, 6>& paths) -> AssetHandle<TextureAsset>;
+auto get_gpu_texture(AssetHandle<TextureAsset>& texture_asset, yar_texture_type type, uint32_t channels = 0) -> yar_texture*;

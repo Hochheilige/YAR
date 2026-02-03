@@ -57,7 +57,7 @@ yar_texture* get_imgui_fonts()
 
 struct Texture 
 {
-	std::shared_future<std::shared_ptr<TextureAsset>> texture_asset;
+	AssetHandle<TextureAsset> texture_asset;
 };
 
 struct Vertex

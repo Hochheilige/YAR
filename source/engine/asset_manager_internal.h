@@ -5,6 +5,8 @@
 #include <unordered_map>
 #include <memory>
 #include <string_view>
+#include <future>
+#include <mutex>
 
 constexpr uint64_t hash_fnv1a(std::string_view str)
 {
@@ -33,9 +35,11 @@ struct AssetManager
 	}
 
 	std::unordered_map<
-		std::string, 
+		std::string,
 		std::shared_future<std::shared_ptr<TextureAsset>>,
 		BasicStringHash> textures;
+
+	std::mutex textures_mutex;
 
 private:
 	static constexpr size_t MaxTextureCount = 2048ull;

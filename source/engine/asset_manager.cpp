@@ -1,5 +1,6 @@
 #include "asset_manager.h"
 #include "asset_manager_internal.h"
+#include "thread_pool.h"
 
 #include <memory>
 #include <future>
@@ -9,13 +10,21 @@
 #include <stb_image.h>
 
 static std::unique_ptr<AssetManager> asset_manager{ nullptr };
+static std::unique_ptr<ThreadPool> asset_thread_pool{ nullptr };
 
 void init_asset_manager()
 {
 	if (asset_manager == nullptr)
 	{
 		asset_manager = std::make_unique<AssetManager>();
+		asset_thread_pool = std::make_unique<ThreadPool>();
 	}
+}
+
+void shutdown_asset_manager()
+{
+	asset_thread_pool.reset();
+	asset_manager.reset();
 }
 
 // It must be just one white texture for every needs
@@ -59,11 +68,17 @@ static auto load_texture_async(std::string_view path) -> std::shared_ptr<Texture
 	return texture;
 }
 
-yar_texture* get_gpu_texture(std::shared_future<std::shared_ptr<TextureAsset>>& texture_asset, yar_texture_type type, uint32_t channels)
+yar_texture* get_gpu_texture(AssetHandle<TextureAsset>& texture_asset, yar_texture_type type, uint32_t channels)
 {
+	if (!texture_asset.wait())
+		return nullptr;
+
 	yar_texture* tex;
 
-	auto& asset = texture_asset.get();
+	auto asset = texture_asset.get_shared();
+	if (!asset)
+		return nullptr;
+
 	if (asset->gpu_texture)
 		return asset->gpu_texture;
 
@@ -123,20 +138,18 @@ yar_texture* get_gpu_texture(std::shared_future<std::shared_ptr<TextureAsset>>& 
 	return tex;
 }
 
-auto load_texture(std::string_view path) 
--> std::shared_future<std::shared_ptr<TextureAsset>>
+auto load_texture(std::string_view path) -> AssetHandle<TextureAsset>
 {
 	auto it = asset_manager->textures.find(std::string(path));
 	if (it != asset_manager->textures.end())
-		return it->second;
+		return AssetHandle(it->second);
 
-	// TODO: add thread pool or job system for this
-	auto result = std::async(std::launch::async, 
+	auto result = asset_thread_pool.get()->submit(
 		[path = std::string(path)]() { return load_texture_async(path); }
-	).share();
+	);
 
 	asset_manager->textures.emplace(path, result);
-	return result;
+	return AssetHandle(result);
 }
 
 static std::string make_cubemap_key(const std::array<std::string_view, 6>& paths) {
@@ -197,17 +210,15 @@ static auto load_cubemap_async(const std::array<std::string_view, 6>& paths) -> 
 	return texture;
 }
 
-auto load_cubemap(const std::array<std::string_view, 6>& paths) -> std::shared_future<std::shared_ptr<TextureAsset>>
+auto load_cubemap(const std::array<std::string_view, 6>& paths) -> AssetHandle<TextureAsset>
 {
 	auto key = make_cubemap_key(paths);
 	auto it = asset_manager->textures.find(key);
 	if (it != asset_manager->textures.end())
-		return it->second;
+		return AssetHandle(it->second);
 
-	auto result = std::async(std::launch::async,
-		[=]() { return load_cubemap_async(paths); }
-	).share();
+	auto result = asset_thread_pool.get()->submit([=]() { return load_cubemap_async(paths); });
 
 	asset_manager->textures.emplace(key, result);
-	return result;
+	return AssetHandle(result);
 }
