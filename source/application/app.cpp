@@ -3,6 +3,7 @@
 #include <imgui_layer.h>
 #include <render.h>
 #include <asset_manager.h>
+#include <vertex.h>
 
 #include <glad/glad.h>
 #include <GLFW/glfw3.h>
@@ -60,32 +61,11 @@ struct Texture
 	AssetHandle<TextureAsset> texture_asset;
 };
 
-struct Vertex
-{
-	Vector3 position;
-	Vector3 normal;
-	Vector3 tangent;
-	Vector3 bitangent;
-	Vector2 tex_coord;
-	Vector2 tex_coord1;
-};
-
-struct SkyBoxVertex
-{
-	Vector3 position;
-};
-
-struct ImGuiVertex
-{
-	Vector2 position;
-	Vector2 uv; 
-	uint32_t color;   
-};
 
 class Mesh
 {
 public:
-	Mesh(std::vector<Vertex>&& vertices, std::vector<uint32_t>&& indices, std::vector<Texture*>&& textures, std::string name) :
+	Mesh(std::vector<VertexStatic>&& vertices, std::vector<uint32_t>&& indices, std::vector<Texture*>&& textures, std::string name) :
 		vertices(vertices), indices(indices), textures(textures),
 		gpu_vertex_buffer(nullptr), gpu_index_buffer(nullptr), name(name)
 	{
@@ -98,27 +78,27 @@ public:
 		layout.attrib_count = 6u;
 		layout.attribs[0].size = 3u;
 		layout.attribs[0].format = yar_attrib_format_float;
-		layout.attribs[0].offset = offsetof(Vertex, position);
+		layout.attribs[0].offset = offsetof(VertexStatic, position);
 		layout.attribs[1].size = 3u;
 		layout.attribs[1].format = yar_attrib_format_float;
-		layout.attribs[1].offset = offsetof(Vertex, normal);
+		layout.attribs[1].offset = offsetof(VertexStatic, normal);
 		layout.attribs[2].size = 3u;
 		layout.attribs[2].format = yar_attrib_format_float;
-		layout.attribs[2].offset = offsetof(Vertex, tangent);
+		layout.attribs[2].offset = offsetof(VertexStatic, tangent);
 		layout.attribs[3].size = 3u;
 		layout.attribs[3].format = yar_attrib_format_float;
-		layout.attribs[3].offset = offsetof(Vertex, bitangent);
+		layout.attribs[3].offset = offsetof(VertexStatic, bitangent);
 		layout.attribs[4].size = 2u;
 		layout.attribs[4].format = yar_attrib_format_float;
-		layout.attribs[4].offset = offsetof(Vertex, tex_coord);
+		layout.attribs[4].offset = offsetof(VertexStatic, uv0);
 		layout.attribs[5].size = 2u;
 		layout.attribs[5].format = yar_attrib_format_float;
-		layout.attribs[5].offset = offsetof(Vertex, tex_coord1);
+		layout.attribs[5].offset = offsetof(VertexStatic, uv1);
 	}
 
 	void draw(yar_cmd_buffer* cmd)
 	{
-		cmd_bind_vertex_buffer(cmd, gpu_vertex_buffer, attrib_count, 0, sizeof(Vertex));
+		cmd_bind_vertex_buffer(cmd, gpu_vertex_buffer, attrib_count, 0, sizeof(VertexStatic));
 		cmd_bind_index_buffer(cmd, gpu_index_buffer);
 		cmd_draw_indexed(cmd, indices.size(), yar_index_type_uint, 0, 0);
 	}
@@ -141,7 +121,7 @@ public:
 private:
 	void optimize_mesh()
 	{
-		uint32_t vertex_size = sizeof(Vertex);
+		uint32_t vertex_size = sizeof(VertexStatic);
 		uint32_t index_count = indices.size();
 		uint32_t vertex_count = vertices.size();
 
@@ -151,7 +131,7 @@ private:
 			vertices.data(), vertex_count, vertex_size);
 
 		std::vector<uint32_t> opt_indices(index_count);
-		std::vector<Vertex> opt_vertices(opt_vertex_count);
+		std::vector<VertexStatic> opt_vertices(opt_vertex_count);
 
 		// 2. Remove duplicate vertices
 		meshopt_remapIndexBuffer(opt_indices.data(), indices.data(), index_count, remap.data());
@@ -175,7 +155,7 @@ private:
 	void upload_buffers()
 	{
 		yar_buffer_desc buffer_desc;
-		uint32_t vertexes_size = vertices.size() * sizeof(Vertex);
+		uint32_t vertexes_size = vertices.size() * sizeof(VertexStatic);
 		buffer_desc.size = vertexes_size;
 		buffer_desc.flags = yar_buffer_flag_gpu_only;
 		buffer_desc.name = "vertex_buffer";
@@ -205,7 +185,7 @@ private:
 	}
 
 private:
-	std::vector<Vertex> vertices;
+	std::vector<VertexStatic> vertices;
 	std::vector<uint32_t> indices;
 	std::vector<Texture*> textures;
 
@@ -332,13 +312,13 @@ private:
 
 	Mesh process_mesh(aiMesh* mesh, const aiScene* scene, const Matrix4x4 transform)
 	{
-		std::vector<Vertex> vertices;
+		std::vector<VertexStatic> vertices;
 		std::vector<uint32_t> indices;
 		std::vector<Texture*> textures;
 
 		for (uint32_t i = 0; i < mesh->mNumVertices; ++i)
 		{
-			Vertex vertex{};
+			VertexStatic vertex{};
 
 			Vector4 pos = transform * Vector4(mesh->mVertices[i].x, mesh->mVertices[i].y, mesh->mVertices[i].z, 1.0f);
 			vertex.position = Vector3(pos);
@@ -352,14 +332,14 @@ private:
 
 			if (mesh->HasTextureCoords(0))
 			{
-				vertex.tex_coord.x() = mesh->mTextureCoords[0][i].x;
-				vertex.tex_coord.y() = mesh->mTextureCoords[0][i].y;
+				vertex.uv0.x() = mesh->mTextureCoords[0][i].x;
+				vertex.uv0.y() = mesh->mTextureCoords[0][i].y;
 			}
 
 			if (mesh->HasTextureCoords(1))
 			{
-				vertex.tex_coord1.x() = mesh->mTextureCoords[1][i].x;
-				vertex.tex_coord1.y() = mesh->mTextureCoords[1][i].y;
+				vertex.uv1.x() = mesh->mTextureCoords[1][i].x;
+				vertex.uv1.y() = mesh->mTextureCoords[1][i].y;
 			}
 
 			if (mesh->HasTangentsAndBitangents())
@@ -548,42 +528,42 @@ auto main() -> int {
 	yar_render_target* imgui_rt;
 	add_render_target(&imgui_rt_desc, &imgui_rt);
 
-	auto cube_vertexes = std::vector<Vertex>{
+	auto cube_vertexes = std::vector<VertexStatic>{
 		// Front face
-		Vertex{{-0.5f, -0.5f,  0.5f}, {0,0,1}, {1,0,0}, {0,1,0}, {0,0},   {0,0}},
-		Vertex{{ 0.5f, -0.5f,  0.5f}, {0,0,1}, {1,0,0}, {0,1,0}, { 1,0 }, {1,0}},
-		Vertex{{ 0.5f,  0.5f,  0.5f}, {0,0,1}, {1,0,0}, {0,1,0}, { 1,1 }, {1,1}},
-		Vertex{{-0.5f,  0.5f,  0.5f}, {0,0,1}, {1,0,0}, {0,1,0}, { 0,1 }, {0,1}},
+		VertexStatic{{-0.5f, -0.5f,  0.5f}, {0,0,1}, {1,0,0}, {0,1,0}, {0,0},   {0,0}},
+		VertexStatic{{ 0.5f, -0.5f,  0.5f}, {0,0,1}, {1,0,0}, {0,1,0}, { 1,0 }, {1,0}},
+		VertexStatic{{ 0.5f,  0.5f,  0.5f}, {0,0,1}, {1,0,0}, {0,1,0}, { 1,1 }, {1,1}},
+		VertexStatic{{-0.5f,  0.5f,  0.5f}, {0,0,1}, {1,0,0}, {0,1,0}, { 0,1 }, {0,1}},
 
 		// Back face
-		Vertex{{ 0.5f, -0.5f, -0.5f}, {0,0,-1}, {-1,0,0}, {0,1,0}, {1,0}, {1,0}},
-		Vertex{{-0.5f, -0.5f, -0.5f}, {0,0,-1}, {-1,0,0}, {0,1,0}, {0,0}, {0,0}},
-		Vertex{{-0.5f,  0.5f, -0.5f}, {0,0,-1}, {-1,0,0}, {0,1,0}, {0,1}, {0,1}},
-		Vertex{{ 0.5f,  0.5f, -0.5f}, {0,0,-1}, {-1,0,0}, {0,1,0}, {1,1}, {1,1}},
+		VertexStatic{{ 0.5f, -0.5f, -0.5f}, {0,0,-1}, {-1,0,0}, {0,1,0}, {1,0}, {1,0}},
+		VertexStatic{{-0.5f, -0.5f, -0.5f}, {0,0,-1}, {-1,0,0}, {0,1,0}, {0,0}, {0,0}},
+		VertexStatic{{-0.5f,  0.5f, -0.5f}, {0,0,-1}, {-1,0,0}, {0,1,0}, {0,1}, {0,1}},
+		VertexStatic{{ 0.5f,  0.5f, -0.5f}, {0,0,-1}, {-1,0,0}, {0,1,0}, {1,1}, {1,1}},
 
 		// Left face
-		Vertex{{-0.5f, -0.5f, -0.5f}, {-1,0,0}, {0,0,-1}, {0,1,0}, {0,0}, {0,0}},
-		Vertex{{-0.5f, -0.5f,  0.5f}, {-1,0,0}, {0,0,-1}, {0,1,0}, {1,0}, {1,0}},
-		Vertex{{-0.5f,  0.5f,  0.5f}, {-1,0,0}, {0,0,-1}, {0,1,0}, {1,1}, {1,1}},
-		Vertex{{-0.5f,  0.5f, -0.5f}, {-1,0,0}, {0,0,-1}, {0,1,0}, {0,1}, {0,1}},
+		VertexStatic{{-0.5f, -0.5f, -0.5f}, {-1,0,0}, {0,0,-1}, {0,1,0}, {0,0}, {0,0}},
+		VertexStatic{{-0.5f, -0.5f,  0.5f}, {-1,0,0}, {0,0,-1}, {0,1,0}, {1,0}, {1,0}},
+		VertexStatic{{-0.5f,  0.5f,  0.5f}, {-1,0,0}, {0,0,-1}, {0,1,0}, {1,1}, {1,1}},
+		VertexStatic{{-0.5f,  0.5f, -0.5f}, {-1,0,0}, {0,0,-1}, {0,1,0}, {0,1}, {0,1}},
 
 		// Right face
-		Vertex{{ 0.5f, -0.5f,  0.5f}, {1,0,0}, {0,0,1}, {0,1,0}, {0,0}, {0,0}},
-		Vertex{{ 0.5f, -0.5f, -0.5f}, {1,0,0}, {0,0,1}, {0,1,0}, {1,0}, {1,0}},
-		Vertex{{ 0.5f,  0.5f, -0.5f}, {1,0,0}, {0,0,1}, {0,1,0}, {1,1}, {1,1}},
-		Vertex{{ 0.5f,  0.5f,  0.5f}, {1,0,0}, {0,0,1}, {0,1,0}, {0,1}, {0,1}},
+		VertexStatic{{ 0.5f, -0.5f,  0.5f}, {1,0,0}, {0,0,1}, {0,1,0}, {0,0}, {0,0}},
+		VertexStatic{{ 0.5f, -0.5f, -0.5f}, {1,0,0}, {0,0,1}, {0,1,0}, {1,0}, {1,0}},
+		VertexStatic{{ 0.5f,  0.5f, -0.5f}, {1,0,0}, {0,0,1}, {0,1,0}, {1,1}, {1,1}},
+		VertexStatic{{ 0.5f,  0.5f,  0.5f}, {1,0,0}, {0,0,1}, {0,1,0}, {0,1}, {0,1}},
 
 		// Bottom face
-		Vertex{{-0.5f, -0.5f, -0.5f}, {0,-1,0}, {1,0,0}, {0,0,1}, {0,1}, {0,1}},
-		Vertex{{ 0.5f, -0.5f, -0.5f}, {0,-1,0}, {1,0,0}, {0,0,1}, {1,1}, {1,1}},
-		Vertex{{ 0.5f, -0.5f,  0.5f}, {0,-1,0}, {1,0,0}, {0,0,1}, {1,0}, {1,0}},
-		Vertex{{-0.5f, -0.5f,  0.5f}, {0,-1,0}, {1,0,0}, {0,0,1}, {0,0}, {0,0}},
+		VertexStatic{{-0.5f, -0.5f, -0.5f}, {0,-1,0}, {1,0,0}, {0,0,1}, {0,1}, {0,1}},
+		VertexStatic{{ 0.5f, -0.5f, -0.5f}, {0,-1,0}, {1,0,0}, {0,0,1}, {1,1}, {1,1}},
+		VertexStatic{{ 0.5f, -0.5f,  0.5f}, {0,-1,0}, {1,0,0}, {0,0,1}, {1,0}, {1,0}},
+		VertexStatic{{-0.5f, -0.5f,  0.5f}, {0,-1,0}, {1,0,0}, {0,0,1}, {0,0}, {0,0}},
 
 		// Top face
-		Vertex{{-0.5f,  0.5f,  0.5f}, {0,1,0}, {1,0,0}, {0,0,-1}, {0,1}, {0,1}},
-		Vertex{{ 0.5f,  0.5f,  0.5f}, {0,1,0}, {1,0,0}, {0,0,-1}, {1,1}, {1,1}},
-		Vertex{{ 0.5f,  0.5f, -0.5f}, {0,1,0}, {1,0,0}, {0,0,-1}, {1,0}, {1,0}},
-		Vertex{{-0.5f,  0.5f, -0.5f}, {0,1,0}, {1,0,0}, {0,0,-1}, {0,0}, {0,0}},
+		VertexStatic{{-0.5f,  0.5f,  0.5f}, {0,1,0}, {1,0,0}, {0,0,-1}, {0,1}, {0,1}},
+		VertexStatic{{ 0.5f,  0.5f,  0.5f}, {0,1,0}, {1,0,0}, {0,0,-1}, {1,1}, {1,1}},
+		VertexStatic{{ 0.5f,  0.5f, -0.5f}, {0,1,0}, {1,0,0}, {0,0,-1}, {1,0}, {1,0}},
+		VertexStatic{{-0.5f,  0.5f, -0.5f}, {0,1,0}, {1,0,0}, {0,0,-1}, {0,0}, {0,0}},
 	};
 
 
@@ -623,42 +603,42 @@ auto main() -> int {
 	Vector4 backpack_pos(0.0f);
 
 	
-	auto skybox_vertexes = std::vector<Vertex>{
+	auto skybox_vertexes = std::vector<VertexStatic>{
 		// Front face
-		Vertex{{-1.0f, -1.0f,  1.0f}},
-		Vertex{{ 1.0f, -1.0f,  1.0f}},
-		Vertex{{ 1.0f,  1.0f,  1.0f}},
-		Vertex{{-1.0f,  1.0f,  1.0f}},
+		VertexStatic{{-1.0f, -1.0f,  1.0f}},
+		VertexStatic{{ 1.0f, -1.0f,  1.0f}},
+		VertexStatic{{ 1.0f,  1.0f,  1.0f}},
+		VertexStatic{{-1.0f,  1.0f,  1.0f}},
 
 		// Back face
-		Vertex{{ 1.0f, -1.0f, -1.0f}},
-		Vertex{{-1.0f, -1.0f, -1.0f}},
-		Vertex{{-1.0f,  1.0f, -1.0f}},
-		Vertex{{ 1.0f,  1.0f, -1.0f}},
+		VertexStatic{{ 1.0f, -1.0f, -1.0f}},
+		VertexStatic{{-1.0f, -1.0f, -1.0f}},
+		VertexStatic{{-1.0f,  1.0f, -1.0f}},
+		VertexStatic{{ 1.0f,  1.0f, -1.0f}},
 
 		// Left face
-		Vertex{{-1.0f, -1.0f, -1.0f}},
-		Vertex{{-1.0f, -1.0f,  1.0f}},
-		Vertex{{-1.0f,  1.0f,  1.0f}},
-		Vertex{{-1.0f,  1.0f, -1.0f}},
+		VertexStatic{{-1.0f, -1.0f, -1.0f}},
+		VertexStatic{{-1.0f, -1.0f,  1.0f}},
+		VertexStatic{{-1.0f,  1.0f,  1.0f}},
+		VertexStatic{{-1.0f,  1.0f, -1.0f}},
 
 		// Right face
-		Vertex{{ 1.0f, -1.0f,  1.0f}},
-		Vertex{{ 1.0f, -1.0f, -1.0f}},
-		Vertex{{ 1.0f,  1.0f, -1.0f}},
-		Vertex{{ 1.0f,  1.0f,  1.0f}},
+		VertexStatic{{ 1.0f, -1.0f,  1.0f}},
+		VertexStatic{{ 1.0f, -1.0f, -1.0f}},
+		VertexStatic{{ 1.0f,  1.0f, -1.0f}},
+		VertexStatic{{ 1.0f,  1.0f,  1.0f}},
 
 		// Bottom face
-		Vertex{{-1.0f, -1.0f, -1.0f}},
-		Vertex{{ 1.0f, -1.0f, -1.0f}},
-		Vertex{{ 1.0f, -1.0f,  1.0f}},
-		Vertex{{-1.0f, -1.0f,  1.0f}},
+		VertexStatic{{-1.0f, -1.0f, -1.0f}},
+		VertexStatic{{ 1.0f, -1.0f, -1.0f}},
+		VertexStatic{{ 1.0f, -1.0f,  1.0f}},
+		VertexStatic{{-1.0f, -1.0f,  1.0f}},
 
 		// Top face
-		Vertex{{-1.0f,  1.0f,  1.0f}},
-		Vertex{{ 1.0f,  1.0f,  1.0f}},
-		Vertex{{ 1.0f,  1.0f, -1.0f}},
-		Vertex{{-1.0f,  1.0f, -1.0f}},
+		VertexStatic{{-1.0f,  1.0f,  1.0f}},
+		VertexStatic{{ 1.0f,  1.0f,  1.0f}},
+		VertexStatic{{ 1.0f,  1.0f, -1.0f}},
+		VertexStatic{{-1.0f,  1.0f, -1.0f}},
 	};
 
 	std::vector<uint32_t> skybox_indices = {
@@ -995,7 +975,7 @@ auto main() -> int {
 	skybox_layout.attrib_count = 1u;
 	skybox_layout.attribs[0].size = 3u;
 	skybox_layout.attribs[0].format = yar_attrib_format_float;
-	skybox_layout.attribs[0].offset = offsetof(Vertex, position);
+	skybox_layout.attribs[0].offset = offsetof(VertexStatic, position);
 	pipeline_desc.shader = skybox_shader;
 	pipeline_desc.vertex_layout = skybox_layout;
 	pipeline_desc.depth_stencil_state.depth_enable = true;
@@ -1011,7 +991,7 @@ auto main() -> int {
 	shadow_map_layout.attrib_count = 1u;
 	shadow_map_layout.attribs[0].size = 3u;
 	shadow_map_layout.attribs[0].format = yar_attrib_format_float;
-	shadow_map_layout.attribs[0].offset = offsetof(Vertex, position);
+	shadow_map_layout.attribs[0].offset = offsetof(VertexStatic, position);
 	pipeline_desc.shader = shadow_map_shader;
 	pipeline_desc.vertex_layout = shadow_map_layout;
 	pipeline_desc.depth_stencil_state.depth_enable = true;
@@ -1024,9 +1004,9 @@ auto main() -> int {
 
 	yar_vertex_layout imgui_layout{};
 	imgui_layout.attrib_count = 3;
-	imgui_layout.attribs[0] = { .size = 2, .format = yar_attrib_format_float, .offset = offsetof(ImGuiVertex, position) };
-	imgui_layout.attribs[1] = { .size = 2, .format = yar_attrib_format_float, .offset = offsetof(ImGuiVertex, uv) };
-	imgui_layout.attribs[2] = { .size = 4, .format = yar_attrib_format_ubyte, .offset = offsetof(ImGuiVertex, color) };
+	imgui_layout.attribs[0] = { .size = 2, .format = yar_attrib_format_float, .offset = offsetof(ImDrawVert, pos) };
+	imgui_layout.attribs[1] = { .size = 2, .format = yar_attrib_format_float, .offset = offsetof(ImDrawVert, uv) };
+	imgui_layout.attribs[2] = { .size = 4, .format = yar_attrib_format_ubyte, .offset = offsetof(ImDrawVert, col) };
 
 	pipeline_desc.shader = imgui_shader;
 	pipeline_desc.vertex_layout = imgui_layout;
