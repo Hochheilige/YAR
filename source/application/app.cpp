@@ -4,6 +4,9 @@
 #include <render.h>
 #include <asset_manager.h>
 #include <vertex.h>
+#include <mesh_asset.h>
+#include <material.h>
+#include <model_loader.h>
 
 #include <glad/glad.h>
 #include <GLFW/glfw3.h>
@@ -11,15 +14,7 @@
 #include "../shaders/common.h"
 
 #include <random>
-
-#include <assimp/Importer.hpp>
-#include <assimp/scene.h>
-#include <assimp/postprocess.h>
-
-#include <meshoptimizer.h>
-
 #include <iostream>
-#include <optional>
 
 #include <cstddef>
 #include <cmath>
@@ -55,366 +50,6 @@ yar_texture* get_imgui_fonts()
 
 	return font;
 }
-
-struct Texture 
-{
-	AssetHandle<TextureAsset> texture_asset;
-};
-
-
-class Mesh
-{
-public:
-	Mesh(std::vector<VertexStatic>&& vertices, std::vector<uint32_t>&& indices, std::vector<Texture*>&& textures, std::string name) :
-		vertices(vertices), indices(indices), textures(textures),
-		gpu_vertex_buffer(nullptr), gpu_index_buffer(nullptr), name(name)
-	{
-		optimize_mesh();
-		upload_buffers();
-	}
-
-	void setup_vertex_layout(yar_vertex_layout& layout)
-	{
-		layout.attrib_count = 6u;
-		layout.attribs[0].size = 3u;
-		layout.attribs[0].format = yar_attrib_format_float;
-		layout.attribs[0].offset = offsetof(VertexStatic, position);
-		layout.attribs[1].size = 3u;
-		layout.attribs[1].format = yar_attrib_format_float;
-		layout.attribs[1].offset = offsetof(VertexStatic, normal);
-		layout.attribs[2].size = 3u;
-		layout.attribs[2].format = yar_attrib_format_float;
-		layout.attribs[2].offset = offsetof(VertexStatic, tangent);
-		layout.attribs[3].size = 3u;
-		layout.attribs[3].format = yar_attrib_format_float;
-		layout.attribs[3].offset = offsetof(VertexStatic, bitangent);
-		layout.attribs[4].size = 2u;
-		layout.attribs[4].format = yar_attrib_format_float;
-		layout.attribs[4].offset = offsetof(VertexStatic, uv0);
-		layout.attribs[5].size = 2u;
-		layout.attribs[5].format = yar_attrib_format_float;
-		layout.attribs[5].offset = offsetof(VertexStatic, uv1);
-	}
-
-	void draw(yar_cmd_buffer* cmd)
-	{
-		cmd_bind_vertex_buffer(cmd, gpu_vertex_buffer, attrib_count, 0, sizeof(VertexStatic));
-		cmd_bind_index_buffer(cmd, gpu_index_buffer);
-		cmd_draw_indexed(cmd, indices.size(), yar_index_type_uint, 0, 0);
-	}
-
-	yar_texture* get_texture(uint32_t index)
-	{
-		if (index >= textures.size())
-			return nullptr;
-		// HACK
-		if (name == "Skybox")
-			return get_gpu_texture(static_cast<Texture*>(textures[index])->texture_asset, yar_texture_type_cube_map);
-		if (index == 1 || index == 2)
-			return get_gpu_texture(static_cast<Texture*>(textures[index])->texture_asset, yar_texture_type_2d, 1);
-		else if (index == 3)
-			return get_gpu_texture(static_cast<Texture*>(textures[index])->texture_asset, yar_texture_type_2d, 3);
-
-		return get_gpu_texture(static_cast<Texture*>(textures[index])->texture_asset, yar_texture_type_2d);
-	}
-
-private:
-	void optimize_mesh()
-	{
-		uint32_t vertex_size = sizeof(VertexStatic);
-		uint32_t index_count = indices.size();
-		uint32_t vertex_count = vertices.size();
-
-		// 1. Indexing (generate remap table from vertex and index data)
-		std::vector<uint32_t> remap(vertex_count); // temporary remap table
-		size_t opt_vertex_count = meshopt_generateVertexRemap(&remap[0], indices.data(), index_count,
-			vertices.data(), vertex_count, vertex_size);
-
-		std::vector<uint32_t> opt_indices(index_count);
-		std::vector<VertexStatic> opt_vertices(opt_vertex_count);
-
-		// 2. Remove duplicate vertices
-		meshopt_remapIndexBuffer(opt_indices.data(), indices.data(), index_count, remap.data());
-		meshopt_remapVertexBuffer(opt_vertices.data(), vertices.data(), vertex_count, vertex_size, remap.data());
-
-		// 3. Optimize vertex cache
-		meshopt_optimizeVertexCache(opt_indices.data(), opt_indices.data(), index_count, opt_vertex_count);
-
-		// 4. Overdraw optimization
-		meshopt_optimizeOverdraw(opt_indices.data(), opt_indices.data(), index_count, &(opt_vertices[0].position[0]),
-			opt_vertex_count, vertex_size, 1.05f);
-
-		// 5. Vertex fetch optimization
-		meshopt_optimizeVertexFetch(opt_vertices.data(), opt_indices.data(), index_count, opt_vertices.data(),
-			opt_vertex_count, vertex_size);
-
-		vertices = opt_vertices;
-		indices = opt_indices;
-	}
-
-	void upload_buffers()
-	{
-		yar_buffer_desc buffer_desc;
-		uint32_t vertexes_size = vertices.size() * sizeof(VertexStatic);
-		buffer_desc.size = vertexes_size;
-		buffer_desc.flags = yar_buffer_flag_gpu_only;
-		buffer_desc.name = "vertex_buffer";
-		add_buffer(&buffer_desc, &gpu_vertex_buffer);
-
-		uint64_t indexes_size = indices.size() * sizeof(uint32_t);
-		buffer_desc.size = indexes_size;
-		buffer_desc.name = "index_buffer";
-		add_buffer(&buffer_desc, &gpu_index_buffer);
-
-		yar_resource_update_desc resource_update_desc;
-		{ // update buffers data
-			yar_buffer_update_desc update_desc{};
-			resource_update_desc = &update_desc;
-			update_desc.buffer = gpu_vertex_buffer;
-			update_desc.size = vertexes_size;
-			begin_update_resource(resource_update_desc);
-			std::memcpy(update_desc.mapped_data, vertices.data(), vertexes_size);
-			end_update_resource(resource_update_desc);
-
-			update_desc.buffer = gpu_index_buffer;
-			update_desc.size = indexes_size;
-			begin_update_resource(resource_update_desc);
-			std::memcpy(update_desc.mapped_data, indices.data(), indexes_size);
-			end_update_resource(resource_update_desc);
-		}
-	}
-
-private:
-	std::vector<VertexStatic> vertices;
-	std::vector<uint32_t> indices;
-	std::vector<Texture*> textures;
-
-	yar_buffer* gpu_vertex_buffer;
-	yar_buffer* gpu_index_buffer;
-
-	std::string name;
-
-	const uint32_t attrib_count = 6u;
-};
-
-class Model
-{
-public:
-	Model(const std::string_view& path)
-	{
-		Assimp::Importer imp;
-		const aiScene * scene = imp.ReadFile(path.data(), aiProcess_Triangulate | aiProcess_FlipUVs);
-
-		if (!scene || scene->mFlags & AI_SCENE_FLAGS_INCOMPLETE || !scene->mRootNode)
-		{
-			std::cout << "Error [assimp]:" << imp.GetErrorString() << std::endl;
-			return;
-		}
-		directory = path.substr(0, path.find_last_of('/'));
-
-		process_node(scene->mRootNode, scene, Matrix4x4::identity());
-	}
-
-	void setup_descriptor_set(yar_shader* shader, yar_descriptor_set_update_frequency update_freq, yar_sampler* sampler)
-	{
-		yar_descriptor_set_desc set_desc;
-		set_desc.max_sets = meshes.size();
-		set_desc.shader = shader;
-		set_desc.update_freq = update_freq;
-		add_descriptor_set(&set_desc, &set);
-
-		uint32_t index = 0;
-		for (auto& mesh : meshes)
-		{
-			// It is incorrect we can't garauntee that 
-			// 0th texture is diffuse_map,
-			// 1st texture is specular_map, etc
-			// TODO: store info about textures inside Mesh
-			std::vector<yar_descriptor_info> infos{
-				{
-					.name = "diffuse_map",
-					.descriptor =
-					yar_descriptor_info::yar_combined_texture_sample{
-						mesh.get_texture(0),
-						"samplerState",
-					}
-				},
-				{
-					.name = "roughness_map",
-					.descriptor =
-					yar_descriptor_info::yar_combined_texture_sample{
-						mesh.get_texture(1),
-						"samplerState",
-					}
-				},
-				{
-					.name = "metalness_map",
-					.descriptor =
-					yar_descriptor_info::yar_combined_texture_sample{
-						mesh.get_texture(2),
-						"samplerState",
-					}
-				},
-				{
-					.name = "normal_map",
-					.descriptor =
-					yar_descriptor_info::yar_combined_texture_sample{
-						mesh.get_texture(3),
-						"samplerState",
-					}
-				},
-				{
-					.name = "samplerState",
-					.descriptor = sampler
-				},
-			};
-
-			yar_update_descriptor_set_desc update_set_desc = {};
-			update_set_desc.index = index;
-			update_set_desc.infos = std::move(infos);
-			update_descriptor_set(&update_set_desc, set);
-			++index;
-		}
-	}
-
-	void setup_vertex_layout(yar_vertex_layout& layout)
-	{
-		meshes[0].setup_vertex_layout(layout);
-	}
-
-	void draw(yar_cmd_buffer* cmd, bool shadow_map = false)
-	{
-		for (uint32_t i = 0; i < meshes.size(); ++i)
-		{
-			if (!shadow_map)
-				cmd_bind_descriptor_set(cmd, set, i);
-			meshes[i].draw(cmd);
-		}
-	}
-
-private:
-	void process_node(aiNode* node, const aiScene* scene, const Matrix4x4& parentTransform)
-	{
-		Matrix4x4 localTransform = Matrix4x4(&node->mTransformation.a1).transpose();
-		Matrix4x4 globalTransform = localTransform * parentTransform;
-
-		for (uint32_t i = 0; i < node->mNumMeshes; i++)
-		{
-			aiMesh* mesh = scene->mMeshes[node->mMeshes[i]];
-			meshes.push_back(process_mesh(mesh, scene, globalTransform));
-		}
-
-		for (uint32_t i = 0; i < node->mNumChildren; i++)
-		{
-			process_node(node->mChildren[i], scene, globalTransform);
-		}
-	}
-
-	Mesh process_mesh(aiMesh* mesh, const aiScene* scene, const Matrix4x4 transform)
-	{
-		std::vector<VertexStatic> vertices;
-		std::vector<uint32_t> indices;
-		std::vector<Texture*> textures;
-
-		for (uint32_t i = 0; i < mesh->mNumVertices; ++i)
-		{
-			VertexStatic vertex{};
-
-			Vector4 pos = transform * Vector4(mesh->mVertices[i].x, mesh->mVertices[i].y, mesh->mVertices[i].z, 1.0f);
-			vertex.position = Vector3(pos);
-
-			if (mesh->HasNormals())
-			{
-				Matrix4x4 normal_mat = transform.inverse().transpose();
-				Vector3 norm(mesh->mNormals[i].x, mesh->mNormals[i].y, mesh->mNormals[i].z);
-				vertex.normal = normal_mat.transform_direction(norm).normalized();
-			}
-
-			if (mesh->HasTextureCoords(0))
-			{
-				vertex.uv0.x() = mesh->mTextureCoords[0][i].x;
-				vertex.uv0.y() = mesh->mTextureCoords[0][i].y;
-			}
-
-			if (mesh->HasTextureCoords(1))
-			{
-				vertex.uv1.x() = mesh->mTextureCoords[1][i].x;
-				vertex.uv1.y() = mesh->mTextureCoords[1][i].y;
-			}
-
-			if (mesh->HasTangentsAndBitangents())
-			{
-				vertex.tangent.x() = mesh->mTangents[i].x;
-				vertex.tangent.y() = mesh->mTangents[i].y;
-				vertex.tangent.z() = mesh->mTangents[i].z;
-				vertex.bitangent.x() = mesh->mBitangents[i].x;
-				vertex.bitangent.y() = mesh->mBitangents[i].y;
-				vertex.bitangent.z() = mesh->mBitangents[i].z;
-			}
-
-			vertices.push_back(vertex);
-		}
-
-		for (uint32_t i = 0; i < mesh->mNumFaces; ++i)
-		{
-			aiFace face = mesh->mFaces[i];
-			for (uint32_t j = 0; j < face.mNumIndices; ++j)
-				indices.push_back(face.mIndices[j]);
-		}
-		
-		if (mesh->mMaterialIndex >= 0)
-		{
-			aiMaterial* material = scene->mMaterials[mesh->mMaterialIndex];
-			std::vector<Texture*> diffuse_maps = load_material_textures(material,
-				aiTextureType_DIFFUSE);
-			textures.insert(textures.end(), diffuse_maps.begin(), diffuse_maps.end());
-			std::vector<Texture*> roughness_maps = load_material_textures(material,
-				aiTextureType_DIFFUSE_ROUGHNESS);
-			textures.insert(textures.end(), roughness_maps.begin(), roughness_maps.end());
-			std::vector<Texture*> metalness_maps = load_material_textures(material,
-				aiTextureType_METALNESS);
-			textures.insert(textures.end(), metalness_maps.begin(), metalness_maps.end());
-			std::vector<Texture*> normal_maps = load_material_textures(material,
-				aiTextureType_NORMALS);
-			textures.insert(textures.end(), normal_maps.begin(), normal_maps.end());
-		}
-
-		return Mesh(std::move(vertices), std::move(indices), std::move(textures), mesh->mName.C_Str());
-	}
-
-
-	std::vector<Texture*> load_material_textures(aiMaterial* mat, aiTextureType type)
-	{
-		std::vector<Texture*> textures;
-		for (uint32_t i = 0; i < mat->GetTextureCount(type); ++i)
-		{
-			aiString str;
-			mat->GetTexture(type, i, &str);
-			std::string path = directory + '/' + str.C_Str();
-			
-			Texture* tex = new Texture();
-			tex->texture_asset = load_texture(path);
-			textures.push_back(std::move(tex));
-		}
-
-		if (textures.empty())
-		{
-			Texture* tex = new Texture();
-			tex->texture_asset = load_texture(WHITE_TEXTURE);
-			textures.push_back(std::move(tex));
-		}
-
-		return textures;
-	}
-
-private:
-	std::string directory;
-	std::vector<Mesh> meshes;
-
-	yar_descriptor_set* set;
-
-	std::unordered_map<std::string, yar_texture*> loaded_textures;
-};
 
 struct Camera
 {
@@ -689,20 +324,13 @@ auto main() -> int {
 	ubo.spot_light.attenuation[0] = Vector4(1.0f, 0.007f, 0.0002f, 0.0f);
 	ubo.light_params.color[2] = Vector4(1.0f, 0.0f, 1.0f, 1.0f);
 
-	Texture diffuse_map_tex{
-		.texture_asset = load_texture("assets/cube_albedo.png")
-	};
-	Texture roughness_tex{ 
-		.texture_asset = load_texture("assets/cube_roughness.png")
-	};
-	Texture metalness_tex{
-		.texture_asset = load_texture("assets/cube_metallic.png")
-	};
-	Texture normal_map_tex{
-		.texture_asset = load_texture("assets/cube_normal.png")
-	};
+	Material cube_material;
+	cube_material.shading_model = ShadingModel::Lit;
+	cube_material.albedo = load_texture("assets/cube_albedo.png");
+	cube_material.roughness = load_texture("assets/cube_roughness.png");
+	cube_material.metalness = load_texture("assets/cube_metallic.png");
+	cube_material.normal = load_texture("assets/cube_normal.png");
 
-	// TODO: remake this stupid thing
 	std::array<std::string, 6> paths = {
 		"assets/pz.png",
 		"assets/nz.png",
@@ -715,26 +343,24 @@ auto main() -> int {
 	for (int i = 0; i < 6; ++i)
 		cubemap_paths[i] = paths[i];
 
-	Texture skybox {
-		.texture_asset = load_cubemap(cubemap_paths)
-	};
-	
-	std::vector<Texture*> textures = {
-		&diffuse_map_tex,
-		&roughness_tex,
-		&metalness_tex,
-		&normal_map_tex
-	};
-
-	std::vector<Texture*> skybox_textures = {
-		&skybox
-	};
+	Material skybox_material;
+	skybox_material.shading_model = ShadingModel::Skybox;
+	skybox_material.albedo = load_cubemap(cubemap_paths);
 
 	yar_texture* imgui_fonts = get_imgui_fonts();
 
-	Mesh test_mesh(std::move(cube_vertexes), std::move(indexes), std::move(textures), "Cube");
-	Mesh skybox_mesh(std::move(skybox_vertexes), std::move(skybox_indices), std::move(skybox_textures), "Skybox");
-	Model mdl("assets/sponza/sponza.gltf");
+	yar_vertex_layout cube_layout{};
+	VertexStatic::setup_layout(cube_layout);
+	MeshAsset test_mesh = create_mesh_asset(cube_vertexes, indexes, cube_layout);
+
+	yar_vertex_layout skybox_layout{};
+	VertexSkybox::setup_layout(skybox_layout);
+	std::vector<VertexSkybox> skybox_verts;
+	for (const auto& v : skybox_vertexes)
+		skybox_verts.push_back({ v.position });
+	MeshAsset skybox_mesh = create_mesh_asset(skybox_verts, skybox_indices, skybox_layout);
+
+	ModelData sponza = load_model("assets/sponza/sponza.gltf");
 
 	yar_sampler* sampler;
 	yar_sampler_desc sampler_desc{};
@@ -811,7 +437,7 @@ auto main() -> int {
 	 
 	yar_vertex_layout layout{};
 	yar_depth_stencil_state depth_stencil{};
-	mdl.setup_vertex_layout(layout);
+	VertexStatic::setup_layout(layout);
 	depth_stencil.depth_enable = true;
 	depth_stencil.depth_write = true;
 	depth_stencil.depth_func = yar_depth_stencil_func_less;
@@ -846,59 +472,11 @@ auto main() -> int {
 		update_descriptor_set(&update_set_desc, ubo_desc);
 	}
 
-	set_desc.max_sets = 1;
-	set_desc.update_freq = yar_update_freq_none;
-	yar_descriptor_set* texture_set;
-	add_descriptor_set(&set_desc, &texture_set);
+	cube_material.create_descriptor_set(shader, sampler);
 
-	std::vector<yar_descriptor_info> infos{
+	std::vector<yar_descriptor_info> shadow_map_infos{
 		{
-			.name = "diffuse_map",
-			.descriptor =
-			yar_descriptor_info::yar_combined_texture_sample{
-				test_mesh.get_texture(0),
-				"samplerState",
-			}
-		},
-		{
-			.name = "roughness_map",
-			.descriptor =
-			yar_descriptor_info::yar_combined_texture_sample{
-				test_mesh.get_texture(1),
-				"samplerState",
-			}
-		},
-		{
-			.name = "metalness_map",
-			.descriptor =
-			yar_descriptor_info::yar_combined_texture_sample{
-				test_mesh.get_texture(2),
-				"samplerState",
-			}
-		},
-		{
-			.name = "normal_map",
-			.descriptor =
-			yar_descriptor_info::yar_combined_texture_sample{
-				test_mesh.get_texture(3),
-				"samplerState",
-			}
-		},
-		{
-			.name = "samplerState",
-			.descriptor = sampler
-		}
-	};
-
-	update_set_desc = {};
-	update_set_desc.index = 0;
-	update_set_desc.infos = std::move(infos);
-	update_descriptor_set(&update_set_desc, texture_set);
-
-
-	infos = {
-		{
-			.name = "shadow_map", 
+			.name = "shadow_map",
 			.descriptor =
 			yar_descriptor_info::yar_combined_texture_sample{
 				shadow_map_target->texture,
@@ -910,32 +488,11 @@ auto main() -> int {
 			.descriptor = sm_sampler
 		}
 	};
-	update_set_desc.infos = std::move(infos);
+	update_set_desc.index = 0;
+	update_set_desc.infos = std::move(shadow_map_infos);
 	update_descriptor_set(&update_set_desc, shadow_map_ds_desc);
 
-	set_desc.max_sets = 1;
-	set_desc.update_freq = yar_update_freq_none;
-	set_desc.shader = skybox_shader;
-	yar_descriptor_set* skybox_texture_set;
-	add_descriptor_set(&set_desc, &skybox_texture_set);
-
-	std::vector<yar_descriptor_info> skybox_infos{
-		{
-			.name = "skybox",
-			.descriptor =
-			yar_descriptor_info::yar_combined_texture_sample{
-				skybox_mesh.get_texture(0),
-				"samplerState",
-			}
-		},
-		{
-			.name = "samplerState",
-			.descriptor = skybox_sampler
-		}
-	};
-
-	update_set_desc.infos = std::move(skybox_infos);
-	update_descriptor_set(&update_set_desc, skybox_texture_set);
+	skybox_material.create_descriptor_set(skybox_shader, skybox_sampler);
 
 	set_desc.max_sets = 1;
 	set_desc.update_freq = yar_update_freq_none;
@@ -959,7 +516,7 @@ auto main() -> int {
 	update_set_desc.infos = std::move(imgui_font_info);
 	update_descriptor_set(&update_set_desc, imgui_set);
 
-	mdl.setup_descriptor_set(shader, yar_update_freq_none, sampler);
+	sponza.setup_descriptor_set(shader, sampler);
 
 	yar_pipeline_desc pipeline_desc{};
 	pipeline_desc.shader = shader;
@@ -971,13 +528,10 @@ auto main() -> int {
 	yar_pipeline* graphics_pipeline;
 	add_pipeline(&pipeline_desc, &graphics_pipeline);
 
-	yar_vertex_layout skybox_layout{};
-	skybox_layout.attrib_count = 1u;
-	skybox_layout.attribs[0].size = 3u;
-	skybox_layout.attribs[0].format = yar_attrib_format_float;
-	skybox_layout.attribs[0].offset = offsetof(VertexStatic, position);
+	yar_vertex_layout skybox_pipeline_layout{};
+	VertexSkybox::setup_layout(skybox_pipeline_layout);
 	pipeline_desc.shader = skybox_shader;
-	pipeline_desc.vertex_layout = skybox_layout;
+	pipeline_desc.vertex_layout = skybox_pipeline_layout;
 	pipeline_desc.depth_stencil_state.depth_enable = true;
 	pipeline_desc.depth_stencil_state.depth_write = false;
 	pipeline_desc.depth_stencil_state.depth_func = yar_depth_stencil_func_less_equal;
@@ -1176,12 +730,12 @@ auto main() -> int {
 			for (uint32_t i = 0; i < 10; ++i)
 			{
 				cmd_bind_push_constant(cmd, &i);
-				test_mesh.draw(cmd);
+				test_mesh.bind_and_draw(cmd, sizeof(VertexStatic));
 			}
 
 			uint32_t index = 10;
 			cmd_bind_push_constant(cmd, &index);
-			mdl.draw(cmd, true);
+			sponza.draw(cmd, false);
 		}
 		cmd_end_render_pass(cmd);
 
@@ -1199,20 +753,19 @@ auto main() -> int {
 
 		for (uint32_t i = 0; i < 10; ++i)
 		{
-			cmd_bind_descriptor_set(cmd, texture_set, 0);
+			cmd_bind_descriptor_set(cmd, cube_material.descriptor_set, 0);
 			cmd_bind_push_constant(cmd, &i);
-			test_mesh.draw(cmd);
+			test_mesh.bind_and_draw(cmd, sizeof(VertexStatic));
 		}
 
 		uint32_t index = 10;
 		cmd_bind_push_constant(cmd, &index);
-		mdl.draw(cmd);
+		sponza.draw(cmd);
 
 		cmd_bind_pipeline(cmd, skybox_pipeline);
-		cmd_bind_descriptor_set(cmd, skybox_texture_set, 0);
-		skybox_mesh.draw(cmd);
+		cmd_bind_descriptor_set(cmd, skybox_material.descriptor_set, 0);
+		skybox_mesh.bind_and_draw(cmd, sizeof(VertexSkybox));
 
-		// render imgui to swapchain rt tmp solution
 		cmd_bind_pipeline(cmd, imgui_pipeline);
 		cmd_bind_descriptor_set(cmd, imgui_set, 0);
 		cmd_bind_vertex_buffer(cmd, imgui_vb, imgui_layout.attrib_count, 0, sizeof(ImDrawVert));
