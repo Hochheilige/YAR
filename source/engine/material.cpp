@@ -32,7 +32,7 @@ void Material::create_descriptor_set(yar_shader* shader, yar_sampler* sampler)
 	{
 		infos = {
 			{
-				.name = "skybox_map",
+				.name = "skybox",
 				.descriptor = yar_descriptor_info::yar_combined_texture_sample{
 					get_gpu_texture(albedo, tex_type),
 					"samplerState",
