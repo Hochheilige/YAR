@@ -13,6 +13,9 @@ void MeshAsset::draw(yar_cmd_buffer* cmd) const
 
 void MeshAsset::bind_and_draw(yar_cmd_buffer* cmd, uint32_t vertex_stride) const
 {
+	if (!vertex_buffer || !index_buffer || index_count == 0)
+		return;
+
 	bind(cmd, vertex_stride);
 	draw(cmd);
 }
