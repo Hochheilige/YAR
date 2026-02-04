@@ -144,7 +144,7 @@ auto load_texture(std::string_view path) -> AssetHandle<TextureAsset>
 	if (it != asset_manager->textures.end())
 		return AssetHandle(it->second);
 
-	auto result = asset_thread_pool.get()->submit(
+	auto result = asset_thread_pool->submit(
 		[path = std::string(path)]() { return load_texture_async(path); }
 	);
 
@@ -217,7 +217,7 @@ auto load_cubemap(const std::array<std::string_view, 6>& paths) -> AssetHandle<T
 	if (it != asset_manager->textures.end())
 		return AssetHandle(it->second);
 
-	auto result = asset_thread_pool.get()->submit([=]() { return load_cubemap_async(paths); });
+	auto result = asset_thread_pool->submit([=]() { return load_cubemap_async(paths); });
 
 	asset_manager->textures.emplace(key, result);
 	return AssetHandle(result);
