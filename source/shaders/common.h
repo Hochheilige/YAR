@@ -22,11 +22,6 @@ struct MVP
     float4x4 model[11];
 };
 
-struct Material
-{
-    float shinines;
-};
-
 struct DirLight
 {
     float4 direction[DIR_LIGHT_COUNT];
