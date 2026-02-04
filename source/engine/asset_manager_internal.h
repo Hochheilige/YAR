@@ -6,7 +6,6 @@
 #include <memory>
 #include <string_view>
 #include <future>
-#include <mutex>
 
 constexpr uint64_t hash_fnv1a(std::string_view str)
 {
@@ -38,8 +37,6 @@ struct AssetManager
 		std::string,
 		std::shared_future<std::shared_ptr<TextureAsset>>,
 		BasicStringHash> textures;
-
-	std::mutex textures_mutex;
 
 private:
 	static constexpr size_t MaxTextureCount = 2048ull;
