@@ -1,6 +1,7 @@
 #include "asset_manager.h"
 #include "asset_manager_internal.h"
 #include "thread_pool.h"
+#include "model_loader.h"
 
 #include <memory>
 #include <future>
@@ -140,6 +141,8 @@ yar_texture* get_gpu_texture(AssetHandle<TextureAsset>& texture_asset, yar_textu
 
 auto load_texture(std::string_view path) -> AssetHandle<TextureAsset>
 {
+	std::lock_guard<std::mutex> lock(asset_manager->textures_mutex);
+
 	auto it = asset_manager->textures.find(std::string(path));
 	if (it != asset_manager->textures.end())
 		return AssetHandle(it->second);
@@ -212,6 +215,8 @@ static auto load_cubemap_async(const std::array<std::string_view, 6>& paths) -> 
 
 auto load_cubemap(const std::array<std::string_view, 6>& paths) -> AssetHandle<TextureAsset>
 {
+	std::lock_guard<std::mutex> lock(asset_manager->textures_mutex);
+
 	auto key = make_cubemap_key(paths);
 	auto it = asset_manager->textures.find(key);
 	if (it != asset_manager->textures.end())
@@ -221,4 +226,21 @@ auto load_cubemap(const std::array<std::string_view, 6>& paths) -> AssetHandle<T
 
 	asset_manager->textures.emplace(key, result);
 	return AssetHandle(result);
+}
+
+auto load_model_asset(std::string_view path) -> std::shared_ptr<ModelData>
+{
+	std::lock_guard<std::mutex> lock(asset_manager->models_mutex);
+
+	std::string key(path);
+	auto it = asset_manager->models.find(key);
+	if (it != asset_manager->models.end())
+		return it->second;
+
+	// Model loading must be synchronous because it creates GPU resources
+	// (OpenGL context is thread-local, can't use from worker threads)
+	ModelData data = load_model(path);
+	auto model = std::make_shared<ModelData>(std::move(data));
+	asset_manager->models.emplace(key, model);
+	return model;
 }

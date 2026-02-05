@@ -6,6 +6,9 @@
 #include <memory>
 #include <string_view>
 #include <future>
+#include <mutex>
+
+struct ModelData;
 
 constexpr uint64_t hash_fnv1a(std::string_view str)
 {
@@ -31,13 +34,22 @@ struct AssetManager
 	AssetManager()
 	{
 		textures.reserve(MaxTextureCount);
+		models.reserve(MaxModelCount);
 	}
 
+	std::mutex textures_mutex;
 	std::unordered_map<
 		std::string,
 		std::shared_future<std::shared_ptr<TextureAsset>>,
 		BasicStringHash> textures;
 
+	std::mutex models_mutex;
+	std::unordered_map<
+		std::string,
+		std::shared_ptr<ModelData>,
+		BasicStringHash> models;
+
 private:
 	static constexpr size_t MaxTextureCount = 2048ull;
+	static constexpr size_t MaxModelCount = 256ull;
 };

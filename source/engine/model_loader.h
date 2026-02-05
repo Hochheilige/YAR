@@ -21,9 +21,10 @@ struct StaticMesh
 
 struct ModelData
 {
-	std::vector<std::unique_ptr<MeshAsset>> mesh_assets;
-	std::vector<std::unique_ptr<Material>> materials;
+	std::vector<std::shared_ptr<MeshAsset>> mesh_assets;
+	std::vector<std::shared_ptr<Material>> materials;
 	std::vector<StaticMesh> meshes;
+	std::string path;
 
 	yar_descriptor_set* descriptor_set = nullptr;
 

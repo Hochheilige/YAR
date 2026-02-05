@@ -360,7 +360,7 @@ auto main() -> int {
 		skybox_verts.push_back({ v.position });
 	MeshAsset skybox_mesh = create_mesh_asset(skybox_verts, skybox_indices, skybox_layout);
 
-	ModelData sponza = load_model("assets/sponza/sponza.gltf");
+	auto sponza = load_model_asset("assets/sponza/sponza.gltf");
 
 	yar_sampler* sampler;
 	yar_sampler_desc sampler_desc{};
@@ -516,7 +516,7 @@ auto main() -> int {
 	update_set_desc.infos = std::move(imgui_font_info);
 	update_descriptor_set(&update_set_desc, imgui_set);
 
-	sponza.setup_descriptor_set(shader, sampler);
+	sponza->setup_descriptor_set(shader, sampler);
 
 	yar_pipeline_desc pipeline_desc{};
 	pipeline_desc.shader = shader;
@@ -735,7 +735,7 @@ auto main() -> int {
 
 			uint32_t index = 10;
 			cmd_bind_push_constant(cmd, &index);
-			sponza.draw(cmd, false);
+			sponza->draw(cmd, false);
 		}
 		cmd_end_render_pass(cmd);
 
@@ -760,7 +760,7 @@ auto main() -> int {
 
 		uint32_t index = 10;
 		cmd_bind_push_constant(cmd, &index);
-		sponza.draw(cmd);
+		sponza->draw(cmd);
 
 		cmd_bind_pipeline(cmd, skybox_pipeline);
 		cmd_bind_descriptor_set(cmd, skybox_material.descriptor_set, 0);

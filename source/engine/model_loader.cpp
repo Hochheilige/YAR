@@ -178,12 +178,14 @@ ModelData load_model(const std::string_view& path)
 
 	std::string directory(path.substr(0, path.find_last_of('/')));
 
+	model_data.path = path;
+
 	// Load all materials
 	for (uint32_t i = 0; i < scene->mNumMaterials; ++i)
 	{
 		aiMaterial* ai_mat = scene->mMaterials[i];
 
-		auto material = std::make_unique<Material>();
+		auto material = std::make_shared<Material>();
 		material->shading_model = ShadingModel::Lit;
 		material->albedo = load_material_texture(ai_mat, aiTextureType_DIFFUSE, directory);
 		material->roughness = load_material_texture(ai_mat, aiTextureType_DIFFUSE_ROUGHNESS, directory);
@@ -211,7 +213,7 @@ ModelData load_model(const std::string_view& path)
 		if (processed.vertices.empty() || processed.indices.empty())
 			continue;
 
-		auto mesh_asset = std::make_unique<MeshAsset>(
+		auto mesh_asset = std::make_shared<MeshAsset>(
 			create_mesh_asset(processed.vertices, processed.indices, layout));
 
 		StaticMesh static_mesh;
