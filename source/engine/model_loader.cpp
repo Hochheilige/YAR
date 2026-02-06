@@ -144,6 +144,15 @@ void StaticMesh::bind_and_draw(yar_cmd_buffer* cmd) const
 		mesh_asset->bind_and_draw(cmd, sizeof(VertexStatic));
 }
 
+void ModelData::ensure_gpu_resources()
+{
+	for (auto& mesh_asset : mesh_assets)
+	{
+		if (mesh_asset)
+			mesh_asset->ensure_gpu_resources();
+	}
+}
+
 void ModelData::setup_descriptor_set(yar_shader* shader, yar_sampler* sampler)
 {
 	for (auto& material : materials)

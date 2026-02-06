@@ -28,6 +28,7 @@ struct ModelData
 
 	yar_descriptor_set* descriptor_set = nullptr;
 
+	void ensure_gpu_resources();
 	void setup_descriptor_set(yar_shader* shader, yar_sampler* sampler);
 	void draw(yar_cmd_buffer* cmd, bool bind_descriptor = true);
 };

@@ -352,6 +352,7 @@ auto main() -> int {
 	yar_vertex_layout cube_layout{};
 	VertexStatic::setup_layout(cube_layout);
 	MeshAsset test_mesh = create_mesh_asset(cube_vertexes, indexes, cube_layout);
+	test_mesh.ensure_gpu_resources();
 
 	yar_vertex_layout skybox_layout{};
 	VertexSkybox::setup_layout(skybox_layout);
@@ -359,8 +360,9 @@ auto main() -> int {
 	for (const auto& v : skybox_vertexes)
 		skybox_verts.push_back({ v.position });
 	MeshAsset skybox_mesh = create_mesh_asset(skybox_verts, skybox_indices, skybox_layout);
+	skybox_mesh.ensure_gpu_resources();
 
-	auto sponza = load_model_asset("assets/sponza/sponza.gltf");
+	auto sponza_handle = load_model_asset("assets/sponza/sponza.gltf");
 
 	yar_sampler* sampler;
 	yar_sampler_desc sampler_desc{};
@@ -516,6 +518,9 @@ auto main() -> int {
 	update_set_desc.infos = std::move(imgui_font_info);
 	update_descriptor_set(&update_set_desc, imgui_set);
 
+	sponza_handle.wait();
+	auto sponza = sponza_handle.get_shared();
+	sponza->ensure_gpu_resources();
 	sponza->setup_descriptor_set(shader, sampler);
 
 	yar_pipeline_desc pipeline_desc{};

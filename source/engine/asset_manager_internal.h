@@ -46,7 +46,7 @@ struct AssetManager
 	std::mutex models_mutex;
 	std::unordered_map<
 		std::string,
-		std::shared_ptr<ModelData>,
+		std::shared_future<std::shared_ptr<ModelData>>,
 		BasicStringHash> models;
 
 private:

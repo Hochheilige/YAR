@@ -228,19 +228,25 @@ auto load_cubemap(const std::array<std::string_view, 6>& paths) -> AssetHandle<T
 	return AssetHandle(result);
 }
 
-auto load_model_asset(std::string_view path) -> std::shared_ptr<ModelData>
+static auto load_model_async(std::string_view path) -> std::shared_ptr<ModelData>
+{
+	ModelData data = load_model(path);
+	return std::make_shared<ModelData>(std::move(data));
+}
+
+auto load_model_asset(std::string_view path) -> AssetHandle<ModelData>
 {
 	std::lock_guard<std::mutex> lock(asset_manager->models_mutex);
 
 	std::string key(path);
 	auto it = asset_manager->models.find(key);
 	if (it != asset_manager->models.end())
-		return it->second;
+		return AssetHandle(it->second);
 
-	// Model loading must be synchronous because it creates GPU resources
-	// (OpenGL context is thread-local, can't use from worker threads)
-	ModelData data = load_model(path);
-	auto model = std::make_shared<ModelData>(std::move(data));
-	asset_manager->models.emplace(key, model);
-	return model;
+	auto result = asset_thread_pool->submit(
+		[path = std::string(path)]() { return load_model_async(path); }
+	);
+
+	asset_manager->models.emplace(key, result);
+	return AssetHandle(result);
 }
