@@ -3,24 +3,31 @@
 #include <imgui_layer.h>
 #include <render.h>
 
-#include <glad/glad.h>
-#include <GLFW/glfw3.h>
-
-#include <glm/glm.hpp>
-#include <glm/gtc/matrix_transform.hpp>
-#include <glm/gtc/type_ptr.hpp>
+#include <math/yar_math.h>
+#include <Windows.h>
 
 #include <random>
 #include <iostream>
 #include <stddef.h>
+#include <cmath>
+
+static LARGE_INTEGER g_perf_frequency;
+static LARGE_INTEGER g_perf_start;
+
+static double get_time()
+{
+	LARGE_INTEGER now;
+	QueryPerformanceCounter(&now);
+	return (double)(now.QuadPart - g_perf_start.QuadPart) / (double)g_perf_frequency.QuadPart;
+}
 
 struct ImGuiVertex {
-	glm::vec2 position;
-	glm::vec2 uv;
+	Vector2 position;
+	Vector2 uv;
 	uint32_t color;
 };
 
-inline uint32_t random_uint() 
+inline uint32_t random_uint()
 {
 	static std::uniform_int_distribution<uint32_t> distribution(0, UINT32_MAX);
 	static std::mt19937 generator(std::random_device{}());
@@ -59,7 +66,9 @@ yar_texture* get_imgui_fonts()
 	return font;
 }
 
-void process_input(GLFWwindow* window);
+void mouse_callback(double xpos, double ypos);
+void scroll_callback(double xoffset, double yoffset);
+void process_input();
 
 float deltaTime = 0.0f;
 float lastFrame = 0.0f;
@@ -67,13 +76,13 @@ float lastFrame = 0.0f;
 enum MaterialType : uint32_t
 {
 	kLambertian = 0,
-	kMetal, 
+	kMetal,
 	kDielectric
 };
 
 struct Material
 {
-	glm::vec3 albedo;
+	Vector3 albedo;
 	float fuzz; // only for metals
 	float refraction_index; // for dielectircs
 	MaterialType type;
@@ -82,7 +91,7 @@ struct Material
 
 struct Lambertian
 {
-	Lambertian(glm::vec3 albedo)
+	Lambertian(Vector3 albedo)
 		: mat({ albedo, 0.0f, 0.0f, kLambertian }) {
 	}
 
@@ -91,7 +100,7 @@ struct Lambertian
 
 struct Metal
 {
-	Metal(glm::vec3 albedo, float fuzz)
+	Metal(Vector3 albedo, float fuzz)
 		: mat({ albedo, fuzz, 0.0f, kMetal }) {
 	}
 
@@ -101,7 +110,7 @@ struct Metal
 struct Dielectric
 {
 	Dielectric(float refraction_index)
-		: mat({ glm::vec3{}, 0.0f, refraction_index, kDielectric }) {
+		: mat({ Vector3{}, 0.0f, refraction_index, kDielectric }) {
 	}
 
 	Material mat;
@@ -109,7 +118,7 @@ struct Dielectric
 
 struct Sphere
 {
-	glm::vec3 center;
+	Vector3 center;
 	float radius;
 };
 
@@ -117,9 +126,9 @@ constexpr uint32_t kSpheresCount = 5u;
 
 struct UBO
 {
-	glm::mat4 invViewProj;
-	glm::mat4 ui_ortho;
-	glm::vec4 cameraPos;
+	Matrix4x4 invViewProj;
+	Matrix4x4 ui_ortho;
+	Vector4 cameraPos;
 	Sphere spheres[kSpheresCount];
 	Material mats[kSpheresCount];
 	int32_t samples_per_pixel;
@@ -130,9 +139,9 @@ struct UBO
 
 struct Camera
 {
-	glm::vec3 pos = glm::vec3(0.0f, 0.0f, 3.0f);
-	glm::vec3 front = glm::vec3(0.0f, 0.0f, -1.0f);
-	glm::vec3 up = glm::vec3(0.0f, 1.0f, 0.0f);
+	Vector3 pos = Vector3(0.0f, 0.0f, 3.0f);
+	Vector3 front = Vector3(0.0f, 0.0f, -1.0f);
+	Vector3 up = Vector3(0.0f, 1.0f, 0.0f);
 } camera;
 
 float yaw = -90.0f;
@@ -157,9 +166,12 @@ yar_texture* create_texture(const uint32_t width, const uint32_t height)
 
 auto main() -> int
 {
+	QueryPerformanceFrequency(&g_perf_frequency);
+	QueryPerformanceCounter(&g_perf_start);
+
 	int32_t samples_per_pixel = 1u;
 	int32_t max_ray_depth = 1u;
-	
+
 	const auto imgui_layer = [&]()
 		{
 			ImGui::Begin("Raytracer settings");
@@ -170,10 +182,13 @@ auto main() -> int
 
 
 	init_window(imgui_layer);
+	register_mouse_callback(mouse_callback);
+	register_scroll_callback(scroll_callback);
 	init_render();
 
-	int32_t w, h;
-	glfwGetFramebufferSize((GLFWwindow*)get_window(), &w, &h);
+	const auto& win_dims = get_window_dims();
+	int32_t w = win_dims.width;
+	int32_t h = win_dims.height;
 
 	yar_swapchain_desc swapchain_desc{};
 	swapchain_desc.buffer_count = 2;
@@ -243,7 +258,7 @@ auto main() -> int
 	add_shader(shader_desc, &shader);
 	std::free(shader_desc);
 	shader_desc = nullptr;
-	
+
 	shader_load_desc = {};
 	std::free(shader_desc); shader_desc = nullptr;
 	shader_load_desc.stages[0] = { "shaders/raytracing_comp.hlsl", "main", yar_shader_stage::yar_shader_stage_comp };
@@ -434,21 +449,21 @@ auto main() -> int
 	yar_cmd_buffer* cmd;
 	add_cmd(&cmd_desc, &cmd);
 
-	camera.pos = glm::vec3(0.0f, 0.0f, 0.0f);
+	camera.pos = Vector3(0.0f, 0.0f, 0.0f);
 
-	Lambertian ground(glm::vec3(0.8f, 0.8f, 0.0f));
-	Lambertian center(glm::vec3(0.1f, 0.2f, 0.5f));
-	Metal right(glm::vec3(0.8f, 0.6f, 0.2f), 0.7f);
+	Lambertian ground(Vector3(0.8f, 0.8f, 0.0f));
+	Lambertian center(Vector3(0.1f, 0.2f, 0.5f));
+	Metal right(Vector3(0.8f, 0.6f, 0.2f), 0.7f);
 
 	float left_refraction_index = 1.5f;
 	Dielectric left(left_refraction_index);
 	Dielectric inner_bubble(1.0f / left_refraction_index);
 
-	ubo.spheres[0] = Sphere(glm::vec3(0.0f, 0.0f, -1.0f), 0.5f);
-	ubo.spheres[1] = Sphere(glm::vec3(0.0f, -100.5f, -1.0f), 100.0f);
-	ubo.spheres[2] = Sphere(glm::vec3(-1.0f, 0.0f, -1.0f), 0.5f);
-	ubo.spheres[3] = Sphere(glm::vec3(1.0f, 0.0f, -1.0f), 0.5f);
-	ubo.spheres[4] = Sphere(glm::vec3(-1.0f, 0.0f, -1.0f), 0.4f);
+	ubo.spheres[0] = Sphere(Vector3(0.0f, 0.0f, -1.0f), 0.5f);
+	ubo.spheres[1] = Sphere(Vector3(0.0f, -100.5f, -1.0f), 100.0f);
+	ubo.spheres[2] = Sphere(Vector3(-1.0f, 0.0f, -1.0f), 0.5f);
+	ubo.spheres[3] = Sphere(Vector3(1.0f, 0.0f, -1.0f), 0.5f);
+	ubo.spheres[4] = Sphere(Vector3(-1.0f, 0.0f, -1.0f), 0.4f);
 	ubo.mats[0] = center.mat;
 	ubo.mats[1] = ground.mat;
 	ubo.mats[2] = left.mat;
@@ -460,11 +475,11 @@ auto main() -> int
 
 	while (update_window())
 	{
-		float currentFrame = static_cast<float>(glfwGetTime());
+		float currentFrame = static_cast<float>(get_time());
 		deltaTime = currentFrame - lastFrame;
 		lastFrame = currentFrame;
 
-		process_input((GLFWwindow*)get_window());
+		process_input();
 
 		auto* draw_data = imgui_get_new_frame_data();
 		int32_t fb_width = static_cast<int32_t>(draw_data->DisplaySize.x * draw_data->FramebufferScale.x);
@@ -472,7 +487,7 @@ auto main() -> int
 		ImVec2 clip_off = draw_data->DisplayPos;         // (0,0) unless using multi-viewports
 		ImVec2 clip_scale = draw_data->FramebufferScale; // (1,1) unless using retina display which are often (2,2)
 
-		glm::mat4 ortho = glm::ortho(
+		Matrix4x4 ortho = Matrix4x4::ortho_off_center_rh_gl(
 			draw_data->DisplayPos.x,
 			draw_data->DisplayPos.x + draw_data->DisplaySize.x,
 			draw_data->DisplayPos.y + draw_data->DisplaySize.y,
@@ -481,10 +496,10 @@ auto main() -> int
 			1.0f
 		);
 
-		ubo.cameraPos = glm::vec4(camera.pos, 0.0f);
-		glm::mat4 projectionMatrix = glm::perspective(glm::radians(90.0f), dims.width / (float)dims.height, 0.1f, 100.0f);
-		glm::mat4 viewMatrix = glm::lookAt(camera.pos, camera.pos + camera.front, camera.up);
-		ubo.invViewProj = glm::inverse(projectionMatrix * viewMatrix);
+		ubo.cameraPos = Vector4(camera.pos, 0.0f);
+		Matrix4x4 projectionMatrix = Matrix4x4::perspective_fov_rh_gl(radians(90.0f), dims.width / (float)dims.height, 0.1f, 100.0f);
+		Matrix4x4 viewMatrix = Matrix4x4::look_at_rh(camera.pos, camera.pos + camera.front, camera.up);
+		ubo.invViewProj = (viewMatrix * projectionMatrix).inverse();
 		ubo.samples_per_pixel = samples_per_pixel;
 		ubo.max_ray_depth = max_ray_depth;
 		// Not sure that I really need to pass random number every frame here
@@ -553,30 +568,17 @@ auto main() -> int
 		present_desc.swapchain = swapchain;
 		queue_present(queue, &present_desc);
 
-		glfwPollEvents();
-
 		frame_index = (frame_index + 1) % image_count;
 	}
 
 	terminate_window();
 }
 
-void framebuffer_size_callback(GLFWwindow* window, int width, int height)
-{
-	// make sure the viewport matches the new window dimensions; note that width and 
-	// height will be significantly larger than specified on retina displays.
-	glViewport(0, 0, width, height);
-
-	WindowDimensions* dims = static_cast<WindowDimensions*>(glfwGetWindowUserPointer(window));
-	dims->width = width;
-	dims->height = height;
-}
-
 bool isRightMouseButtonPressed = false;
 
-void mouse_callback(GLFWwindow* window, double xposIn, double yposIn)
+void mouse_callback(double xposIn, double yposIn)
 {
-	if (ImGui::GetIO().WantCaptureMouse || glfwGetMouseButton(window, GLFW_MOUSE_BUTTON_RIGHT) != GLFW_PRESS)
+	if (ImGui::GetIO().WantCaptureMouse || !(GetAsyncKeyState(VK_RBUTTON) & 0x8000))
 	{
 		isRightMouseButtonPressed = false;
 		return;
@@ -586,14 +588,14 @@ void mouse_callback(GLFWwindow* window, double xposIn, double yposIn)
 	{
 		lastX = static_cast<float>(xposIn);
 		lastY = static_cast<float>(yposIn);
-		isRightMouseButtonPressed = true; 
+		isRightMouseButtonPressed = true;
 	}
 
 	float xpos = static_cast<float>(xposIn);
 	float ypos = static_cast<float>(yposIn);
 
 	float xoffset = xpos - lastX;
-	float yoffset = lastY - ypos;  
+	float yoffset = lastY - ypos;
 	lastX = xpos;
 	lastY = ypos;
 
@@ -609,35 +611,34 @@ void mouse_callback(GLFWwindow* window, double xposIn, double yposIn)
 	if (pitch < -89.0f)
 		pitch = -89.0f;
 
-	glm::vec3 front;
-	front.x = cos(glm::radians(yaw)) * cos(glm::radians(pitch));
-	front.y = sin(glm::radians(pitch));
-	front.z = sin(glm::radians(yaw)) * cos(glm::radians(pitch));
-	camera.front = glm::normalize(front);
+	Vector3 new_front(
+		std::cos(radians(yaw)) * std::cos(radians(pitch)),
+		std::sin(radians(pitch)),
+		std::sin(radians(yaw)) * std::cos(radians(pitch))
+	);
+	camera.front = new_front.normalized();
 }
 
-void process_input(GLFWwindow* window)
+void process_input()
 {
-	if (glfwGetKey(window, GLFW_KEY_ESCAPE) == GLFW_PRESS)
-		glfwSetWindowShouldClose(window, true);
+	if (GetAsyncKeyState(VK_ESCAPE) & 0x8000)
+		PostMessage((HWND)get_window(), WM_CLOSE, 0, 0);
 
 	float speed = static_cast<float>(2.5 * deltaTime);
-	if (glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS)
+	if (GetAsyncKeyState('W') & 0x8000)
 		camera.pos += speed * camera.front;
-	if (glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS)
+	if (GetAsyncKeyState('S') & 0x8000)
 		camera.pos -= speed * camera.front;
-	if (glfwGetKey(window, GLFW_KEY_A) == GLFW_PRESS)
-		camera.pos -= glm::normalize(glm::cross(camera.front, camera.up)) * speed;
-	if (glfwGetKey(window, GLFW_KEY_D) == GLFW_PRESS)
-		camera.pos += glm::normalize(glm::cross(camera.front, camera.up)) * speed;
-	if (glfwGetKey(window, GLFW_KEY_E) == GLFW_PRESS)
+	if (GetAsyncKeyState('A') & 0x8000)
+		camera.pos -= camera.front.cross(camera.up).normalized() * speed;
+	if (GetAsyncKeyState('D') & 0x8000)
+		camera.pos += camera.front.cross(camera.up).normalized() * speed;
+	if (GetAsyncKeyState('E') & 0x8000)
 		camera.pos += camera.up * speed;
-	if (glfwGetKey(window, GLFW_KEY_Q) == GLFW_PRESS)
+	if (GetAsyncKeyState('Q') & 0x8000)
 		camera.pos -= camera.up * speed;
 }
 
-
-void scroll_callback(GLFWwindow* window, double xoffset, double yoffset)
+void scroll_callback(double xoffset, double yoffset)
 {
 }
-

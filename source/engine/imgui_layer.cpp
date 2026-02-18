@@ -1,7 +1,6 @@
 #include <imgui.h>
-#include <backends/imgui_impl_glfw.h>
+#include <backends/imgui_impl_win32.h>
 #include <backends/imgui_impl_opengl3.h>
-#include <GLFW/glfw3.h>
 
 #include <functional>
 #include <Windows.h>
@@ -54,7 +53,7 @@ void get_fps_and_ms(float& fps, float& ms)
 
 void imgui_init(void* window, const std::function<void()>& layer)
 {
-	GLFWwindow* wnd = static_cast<GLFWwindow*>(window);
+	HWND hwnd = static_cast<HWND>(window);
 	if (layer)
 		app_layer = layer;
 
@@ -62,17 +61,12 @@ void imgui_init(void* window, const std::function<void()>& layer)
 	ImGuiIO& io = ImGui::GetIO();
 	ImGui::StyleColorsDark();
 
-	ImGui_ImplGlfw_InitForOpenGL(wnd, false);
-
-	glfwSetMouseButtonCallback(wnd, ImGui_ImplGlfw_MouseButtonCallback);
-	glfwSetScrollCallback(wnd, ImGui_ImplGlfw_ScrollCallback);
-	glfwSetKeyCallback(wnd, ImGui_ImplGlfw_KeyCallback);
-	glfwSetCharCallback(wnd, ImGui_ImplGlfw_CharCallback);
+	ImGui_ImplWin32_InitForOpenGL(hwnd);
 }
 
 ImDrawData* imgui_get_new_frame_data()
 {
-	ImGui_ImplGlfw_NewFrame();
+	ImGui_ImplWin32_NewFrame();
 	ImGui::NewFrame();
 
 	default_layer();
@@ -85,6 +79,6 @@ ImDrawData* imgui_get_new_frame_data()
 
 void imgui_terminate()
 {
-	ImGui_ImplGlfw_Shutdown();
+	ImGui_ImplWin32_Shutdown();
 	ImGui::DestroyContext();
 }

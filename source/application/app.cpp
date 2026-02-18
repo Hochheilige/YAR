@@ -8,8 +8,7 @@
 #include <material.h>
 #include <model_loader.h>
 
-#include <glad/glad.h>
-#include <GLFW/glfw3.h>
+#include <Windows.h>
 
 #include "../shaders/common.h"
 
@@ -18,6 +17,16 @@
 
 #include <cstddef>
 #include <cmath>
+
+static LARGE_INTEGER g_perf_frequency;
+static LARGE_INTEGER g_perf_start;
+
+static double get_time()
+{
+	LARGE_INTEGER now;
+	QueryPerformanceCounter(&now);
+	return (double)(now.QuadPart - g_perf_start.QuadPart) / (double)g_perf_frequency.QuadPart;
+}
 
 yar_texture* get_imgui_fonts()
 {
@@ -79,10 +88,9 @@ float lastFrame = 0.0f;
 
 Vector4* light_pos = nullptr;
 
-void framebuffer_size_callback(GLFWwindow* window, int width, int height);
-void mouse_callback(GLFWwindow* window, double xpos, double ypos);
-void scroll_callback(GLFWwindow* window, double xoffset, double yoffset);
-void process_input(GLFWwindow* window);
+void mouse_callback(double xpos, double ypos);
+void scroll_callback(double xoffset, double yoffset);
+void process_input();
 
 static float dir_light_distance = 15.0f; // base good value for current scene
 
@@ -116,14 +124,19 @@ static std::function<void()> app_layer = []()
 	};
 
 auto main() -> int {
+	QueryPerformanceFrequency(&g_perf_frequency);
+	QueryPerformanceCounter(&g_perf_start);
 	init_window(app_layer);
+	register_mouse_callback(mouse_callback);
+	register_scroll_callback(scroll_callback);
 	
 	init_asset_manager();
 	init_render();
 
-	int32_t w, h;
-	glfwGetFramebufferSize((GLFWwindow*)get_window(), &w, &h);
-
+	const auto& win_dims = get_window_dims();
+	uint32_t w = win_dims.width;
+	uint32_t h = win_dims.height;
+	
 	yar_swapchain_desc swapchain_desc{};
 	swapchain_desc.buffer_count = 2;
 	swapchain_desc.format = yar_texture_format_srgba8;
@@ -647,11 +660,11 @@ auto main() -> int {
 	
 	while(update_window())
 	{
-		float currentFrame = static_cast<float>(glfwGetTime());
+		float currentFrame = static_cast<float>(get_time());
 		deltaTime = currentFrame - lastFrame;
 		lastFrame = currentFrame;
 
-		process_input((GLFWwindow*)get_window());
+		process_input();
 
 		auto* draw_data = imgui_get_new_frame_data();
 		int32_t fb_width = static_cast<int32_t>(draw_data->DisplaySize.x * draw_data->FramebufferScale.x);
@@ -685,7 +698,7 @@ auto main() -> int {
 				float angle = 20.0f;
 				// v*M order: scale, then rotate, then translate
 				model = Matrix4x4::scaling(cube_scales[i - 1])
-					* Matrix4x4::rotation_axis(Vector3(1.0f, 0.3f, 0.5f), (float)glfwGetTime() * radians(angle))
+					* Matrix4x4::rotation_axis(Vector3(1.0f, 0.3f, 0.5f), (float)get_time() * radians(angle))
 					* Matrix4x4::translation(cube_positions[i].xyz());
 			}
 			else
@@ -804,8 +817,6 @@ auto main() -> int {
 		yar_queue_present_desc present_desc{};
 		present_desc.swapchain = swapchain;
 		queue_present(queue, &present_desc);
-
-        glfwPollEvents();
 		
 		frame_index = (frame_index + 1) % image_count;
 	}
@@ -813,60 +824,53 @@ auto main() -> int {
 	terminate_window();
 }
 
-void process_input(GLFWwindow* window)
+void process_input()
 {
-	if (glfwGetKey(window, GLFW_KEY_ESCAPE) == GLFW_PRESS)
-		glfwSetWindowShouldClose(window, true);
+	if (GetAsyncKeyState(VK_ESCAPE) & 0x8000)
+		PostMessage((HWND)get_window(), WM_CLOSE, 0, 0);
 
 	float speed = static_cast<float>(2.5 * deltaTime);
-	if (glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS)
+	if (GetAsyncKeyState('W') & 0x8000)
 		camera.pos += speed * camera.front;
-	if (glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS)
+	if (GetAsyncKeyState('S') & 0x8000)
 		camera.pos -= speed * camera.front;
-	if (glfwGetKey(window, GLFW_KEY_A) == GLFW_PRESS)
+	if (GetAsyncKeyState('A') & 0x8000)
 		camera.pos -= camera.front.cross(camera.up).normalized() * speed;
-	if (glfwGetKey(window, GLFW_KEY_D) == GLFW_PRESS)
+	if (GetAsyncKeyState('D') & 0x8000)
 		camera.pos += camera.front.cross(camera.up).normalized() * speed;
-	if (glfwGetKey(window, GLFW_KEY_E) == GLFW_PRESS)
+	if (GetAsyncKeyState('E') & 0x8000)
 		camera.pos += camera.up * speed;
-	if (glfwGetKey(window, GLFW_KEY_Q) == GLFW_PRESS)
+	if (GetAsyncKeyState('Q') & 0x8000)
 		camera.pos -= camera.up * speed;
 
 
 	// Thing to move light source
-	if (glfwGetKey(window, GLFW_KEY_LEFT_ALT) != GLFW_PRESS)
+	if (!(GetAsyncKeyState(VK_LMENU) & 0x8000))
 	{
-		if (glfwGetKey(window, GLFW_KEY_UP) == GLFW_PRESS)
+		if (GetAsyncKeyState(VK_UP) & 0x8000)
 			light_pos->y() += speed;
-		if (glfwGetKey(window, GLFW_KEY_DOWN) == GLFW_PRESS)
+		if (GetAsyncKeyState(VK_DOWN) & 0x8000)
 			light_pos->y() -= speed;
 	}
 	else
 	{
-		if (glfwGetKey(window, GLFW_KEY_UP) == GLFW_PRESS)
+		if (GetAsyncKeyState(VK_UP) & 0x8000)
 			light_pos->z() -= speed;
-		if (glfwGetKey(window, GLFW_KEY_DOWN) == GLFW_PRESS)
+		if (GetAsyncKeyState(VK_DOWN) & 0x8000)
 			light_pos->z() += speed;
 	}
 
-	if (glfwGetKey(window, GLFW_KEY_LEFT) == GLFW_PRESS)
+	if (GetAsyncKeyState(VK_LEFT) & 0x8000)
 		light_pos->x() -= speed;
-	if (glfwGetKey(window, GLFW_KEY_RIGHT) == GLFW_PRESS)
+	if (GetAsyncKeyState(VK_RIGHT) & 0x8000)
 		light_pos->x() += speed;
-}
-
-void framebuffer_size_callback(GLFWwindow* window, int width, int height)
-{
-	// make sure the viewport matches the new window dimensions; note that width and 
-	// height will be significantly larger than specified on retina displays.
-	glViewport(0, 0, width, height);
 }
 
 bool isRightMouseButtonPressed = false;
 
-void mouse_callback(GLFWwindow* window, double xposIn, double yposIn)
+void mouse_callback(double xposIn, double yposIn)
 {
-	if (ImGui::GetIO().WantCaptureMouse || glfwGetMouseButton(window, GLFW_MOUSE_BUTTON_RIGHT) != GLFW_PRESS)
+	if (ImGui::GetIO().WantCaptureMouse || !(GetAsyncKeyState(VK_RBUTTON) & 0x8000))
 	{
 		isRightMouseButtonPressed = false;
 		return;
@@ -907,7 +911,7 @@ void mouse_callback(GLFWwindow* window, double xposIn, double yposIn)
 	camera.front = new_front.normalized();
 }
 
-void scroll_callback(GLFWwindow* window, double xoffset, double yoffset)
+void scroll_callback(double xoffset, double yoffset)
 {
 	fov -= (float)yoffset;
 	if (fov < 1.0f)

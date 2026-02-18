@@ -32,7 +32,7 @@ project "Engine"
         "external/imgui/imgui_demo.cpp",
         "external/imgui/imgui_tables.cpp",
         "external/imgui/imgui_widgets.cpp",
-        "external/imgui/backends/imgui_impl_glfw.cpp",
+        "external/imgui/backends/imgui_impl_win32.cpp",
         "external/imgui/backends/imgui_impl_opengl3.cpp",
         "external/spirv-reflect/spirv_reflect.cpp",
         "external/spirv-cross/spirv_parser.cpp",
@@ -47,7 +47,6 @@ project "Engine"
 
     includedirs {
         "external/glad/include",
-        "external/glfw/include",
         "external/imgui",
         "external/spirv-reflect",
         "external/spirv-cross",
@@ -63,7 +62,7 @@ project "Engine"
         }
         links {
             "opengl32",
-            "glfw3",
+            "dwmapi",
             "dxcompiler",
             "zlibstaticd",
             "assimp-vc143-mt",
@@ -78,7 +77,7 @@ project "Engine"
         }
         links {
             "opengl32",
-            "glfw3",
+            "dwmapi",
             "dxcompiler",
             "zlibstatic",
             "assimp-vc143-mt"
@@ -105,7 +104,6 @@ project "Application"
     includedirs {
         "source/engine/",
         "external/glad/include",
-        "external/glfw/include",
         "external/imgui",
         "external/directx-math/Inc",
         "external/stb",

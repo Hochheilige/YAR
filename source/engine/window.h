@@ -20,3 +20,8 @@ swap_interval get_swap_interval_func();
 
 void* get_window();
 const WindowDimensions& get_window_dims();
+
+using mouse_move_callback = void(*)(double xpos, double ypos);
+using scroll_wheel_callback = void(*)(double xoffset, double yoffset);
+void register_mouse_callback(mouse_move_callback cb);
+void register_scroll_callback(scroll_wheel_callback cb);

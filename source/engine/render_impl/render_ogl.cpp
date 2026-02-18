@@ -3,7 +3,6 @@
 #include "../render_internal.h"
 
 #include <glad/glad.h>
-#include <GLFW/glfw3.h>
 
 #include <memory>
 #include <string_view>
@@ -1805,10 +1804,21 @@ void gl_queuePresent(yar_cmd_queue* queue, yar_queue_present_desc* desc)
     swapchain->buffer_index++;
 }
 
+static void* win32_gl_get_proc(const char* name)
+{
+    void* proc = (void*)wglGetProcAddress(name);
+    if (!proc || proc == (void*)0x1 || proc == (void*)0x2 || proc == (void*)0x3 || proc == (void*)-1)
+    {
+        static HMODULE opengl32 = LoadLibraryA("opengl32.dll");
+        proc = (void*)GetProcAddress(opengl32, name);
+    }
+    return proc;
+}
+
 // Maybe need to add some params to this function in future
 bool gl_init_render(yar_device* device)
 {
-    if (!gladLoadGLLoader((GLADloadproc)glfwGetProcAddress))
+    if (!gladLoadGLLoader((GLADloadproc)win32_gl_get_proc))
         return false;
 
     device->load_shader             = gl_loadShader;
