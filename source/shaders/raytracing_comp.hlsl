@@ -198,7 +198,7 @@ bool scatter(inout uint state, Ray r_in, inout HitRecord rec, out float3 attenua
     return true;
 }
 
-void set_face_normal(const Ray r, float3 outward_normal, out HitRecord rec)
+void set_face_normal(const Ray r, float3 outward_normal, inout HitRecord rec)
 {
     rec.front_face = dot(r.direction, outward_normal) < 0;
     rec.normal = rec.front_face ? outward_normal : -outward_normal;
@@ -292,7 +292,7 @@ float3 ray_color(inout uint state, Ray r)
 
     float3 unit_direction = normalize(r.direction);
     float a = 0.5*(unit_direction.y + 1.0);
-    return lerp(a, float3(1.0f, 1.0f, 1.0f), float3(0.5f, 0.7f, 1.0f)) * color;
+    return lerp(float3(1.0f, 1.0f, 1.0f), float3(0.5f, 0.7f, 1.0f), a) * color;
 }
 
 float2 sample_square(inout uint state)
