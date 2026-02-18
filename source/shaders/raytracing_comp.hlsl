@@ -324,7 +324,7 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID, uint3 groupThreadID : SV
 
     const float2 ndc = (float2(dispatchThreadID.xy) / float2(width, height)) * 2.0f - 1.0f; 
     float3 final_color = float3(0.0f, 0.0f, 0.0f);
-    uint state = SeedThread(seed);
+    uint state = SeedThread(dispatchThreadID.x + dispatchThreadID.y * width + seed);
     for (uint s = 0; s < samples_per_pixel; ++s)    
     {
         float2 offset = sample_square(state);

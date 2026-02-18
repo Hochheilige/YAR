@@ -506,7 +506,6 @@ auto main() -> int
 		ubo.seed = 42u;// random_uint();
 		ubo.ui_ortho = ortho;
 
-
 		yar_buffer_update_desc update;
 		update.buffer = ubo_buf[frame_index];
 		update.size = sizeof(ubo);
