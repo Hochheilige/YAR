@@ -85,6 +85,8 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lPara
 
 bool init_window(const std::function<void()>& imgui_layer)
 {
+    SetProcessDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2);
+
     HINSTANCE hInstance = GetModuleHandle(nullptr);
 
     // Register window class
