@@ -111,6 +111,7 @@ submodules_urls = [
     "https://github.com/assimp/assimp",
     "https://github.com/zeux/meshoptimizer.git",
     "https://github.com/microsoft/DirectXMath.git",
+    "https://github.com/microsoft/DirectXTex.git",
 ]
 
 submodules_paths = [
@@ -122,6 +123,7 @@ submodules_paths = [
     "external/assimp",
     "external/meshoptimizer",
     "external/directx-math",
+    "external/directx-tex",
 ]
 
 for url, path in zip(submodules_urls, submodules_paths):
@@ -135,7 +137,7 @@ build_project(submodules_paths[0], "glfw",
         "-DGLFW_BUILD_DOCS=0"
         ]
 )
-build_project(submodules_paths[6], "assimp", 
+build_project(submodules_paths[5], "assimp", 
         ["-DBUILD_SHARED_LIBS=OFF",
          "-DASSIMP_BUILD_TESTS=OFF",
          "-DASSIMP_INSTALL=ON",
@@ -144,11 +146,16 @@ build_project(submodules_paths[6], "assimp",
         ]
 )
 
-build_project(submodules_paths[7], "meshoptimizer", 
+build_project(submodules_paths[6], "meshoptimizer", 
         ["-DMESHOPT_BUILD_DEMO=OFF",
          "-DMESHOPT_BUILD_GLTFPACK=OFF",
          "-DMESHOPT_BUILD_SHARED_LIBS=OFF",
          "-DMESHOPT_WERROR=OFF",
          "-DMESHOPT_INSTALL=ON"
+        ]
+)     
+
+build_project(submodules_paths[8], "directx-tex", 
+        ["-DBUILD_SAMPLE=OFF"
         ]     
 )

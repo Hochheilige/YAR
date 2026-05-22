@@ -54,6 +54,7 @@ project "Engine"
         "external/assimp/include",
         "external/meshoptimizer/src",
         "external/directx-math/Inc",
+        "external/directx-tex/DirectXTex"
     }
 
     filter { "configurations:Debug" }
@@ -67,6 +68,7 @@ project "Engine"
             "zlibstaticd",
             "assimp-vc143-mt",
             "meshoptimizer",
+            "DirectXTex"
         }
         symbols "On"
         runtime "Debug"
@@ -80,7 +82,8 @@ project "Engine"
             "dwmapi",
             "dxcompiler",
             "zlibstatic",
-            "assimp-vc143-mt"
+            "assimp-vc143-mt",
+            "DirectXTex"
         }
         optimize "On"
         runtime "Release"
