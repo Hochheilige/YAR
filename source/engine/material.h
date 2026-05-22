@@ -25,6 +25,8 @@ struct Material
 	float roughness_value = 0.5f;
 	float metalness_value = 0.0f;
 
+	bool is_transparent = false;
+
 	yar_descriptor_set* descriptor_set = nullptr;
 
 	bool is_ready() const;

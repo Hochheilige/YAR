@@ -165,6 +165,9 @@ void ModelData::draw(yar_cmd_buffer* cmd, bool bind_descriptor)
 {
 	for (auto& mesh : meshes)
 	{
+		if (mesh.material && mesh.material->is_transparent)
+			continue;
+
 		if (bind_descriptor && mesh.material && mesh.material->descriptor_set)
 			cmd_bind_descriptor_set(cmd, mesh.material->descriptor_set, 0);
 
@@ -200,6 +203,10 @@ ModelData load_model(const std::string_view& path)
 		material->roughness = load_material_texture(ai_mat, aiTextureType_DIFFUSE_ROUGHNESS, directory);
 		material->metalness = load_material_texture(ai_mat, aiTextureType_METALNESS, directory);
 		material->normal = load_material_texture(ai_mat, aiTextureType_NORMALS, directory);
+
+		float opacity = 1.0f;
+		ai_mat->Get(AI_MATKEY_OPACITY, opacity);
+		material->is_transparent = (opacity < 0.99f);
 
 		model_data.materials.push_back(std::move(material));
 	}
