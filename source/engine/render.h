@@ -31,6 +31,7 @@ struct yar_texture_update_desc
     yar_texture* texture;
     uint64_t size;
     uint8_t* data;
+    uint32_t mip_level;
     void* mapped_data;
 };
 
@@ -135,6 +136,26 @@ enum yar_texture_format : uint8_t
     yar_texture_format_depth24,
     yar_texture_format_depth32f,
     yar_texture_format_depth24_stencil8,
+
+    // compressed
+    yar_texture_format_bc1,
+    yar_texture_format_bc1_srgb,
+
+    yar_texture_format_bc2,
+    yar_texture_format_bc3,
+    yar_texture_format_bc3_srgb,
+
+    yar_texture_format_bc4,
+    yar_texture_format_bc4_snorm,
+
+    yar_texture_format_bc5,
+    yar_texture_format_bc5_snorm,
+
+    yar_texture_format_bc6h,
+    yar_texture_format_bc6h_sfloat,
+
+    yar_texture_format_bc7,
+    yar_texture_format_bc7_srgb,
 };
 
 enum yar_texture_usage : uint8_t

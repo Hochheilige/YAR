@@ -2,6 +2,9 @@
 #include "../window.h"
 #include "../render_internal.h"
 
+#define NOMINMAX
+#include <Windows.h>
+
 #include <glad/glad.h>
 
 #include <memory>
@@ -10,7 +13,6 @@
 #include <iostream>
 #include <fstream>
 
-#include <Windows.h>
 #include <vector>
 #include <string>
 #include <codecvt>
@@ -405,6 +407,33 @@ static GLenum util_get_gl_internal_format(yar_texture_format format)
         return GL_DEPTH_COMPONENT32F;
     case yar_texture_format_depth24_stencil8:
         return GL_DEPTH24_STENCIL8;
+    case yar_texture_format_bc1:
+        return GL_COMPRESSED_RGBA_S3TC_DXT1_EXT;
+    //case yar_texture_format_bc1_srgb:
+    //    return GL_COMPRESSED_SRGB_ALPHA_S3TC_DXT1_EXT;
+    case yar_texture_format_bc2:
+        return GL_COMPRESSED_RGBA_S3TC_DXT3_EXT;
+    case yar_texture_format_bc3:
+        return GL_COMPRESSED_RGBA_S3TC_DXT5_EXT;
+    //case yar_texture_format_bc3_srgb:
+    //    return GL_COMPRESSED_SRGB_ALPHA_S3TC_DXT5_EXT; 
+    case yar_texture_format_bc4:
+        return GL_COMPRESSED_RED_RGTC1;
+    case yar_texture_format_bc4_snorm:
+        return GL_COMPRESSED_SIGNED_RED_RGTC1;
+    case yar_texture_format_bc5:
+        return GL_COMPRESSED_RG_RGTC2;
+    case yar_texture_format_bc5_snorm:
+        return GL_COMPRESSED_SIGNED_RG_RGTC2;
+    case yar_texture_format_bc6h:
+        return GL_COMPRESSED_RGB_BPTC_UNSIGNED_FLOAT;
+
+    case yar_texture_format_bc6h_sfloat:
+        return GL_COMPRESSED_RGB_BPTC_SIGNED_FLOAT;
+    case yar_texture_format_bc7:
+        return GL_COMPRESSED_RGBA_BPTC_UNORM;
+    case yar_texture_format_bc7_srgb:
+        return GL_COMPRESSED_SRGB_ALPHA_BPTC_UNORM;
     default:
         return GL_NONE;
     }
@@ -776,47 +805,88 @@ void gl_endUpdateTexture(yar_texture_update_desc* desc)
     
     yar_gl_texture* texture = reinterpret_cast<yar_gl_texture*>(desc->texture);
 
-    GLsizei width = texture->common.width;
-    GLsizei height = texture->common.height;
+    bool is_compressed = (texture->gl_format == GL_NONE);
+
+    uint32_t mip_level = desc->mip_level;
+
+    GLsizei width = std::max(1u, texture->common.width >> mip_level);
+    GLsizei height = std::max(1u, texture->common.height >> mip_level);
     GLsizei depth = texture->common.depth;
     GLenum format = texture->gl_format;
     GLenum type = texture->gl_type;
+    GLuint internal_format = texture->internal_format;
     uint32_t mip_count = texture->common.mip_levels;
 
     glBindBuffer(GL_PIXEL_UNPACK_BUFFER, pixel_buffer->id); 
-    switch (desc->texture->type)
+    if (is_compressed)
     {
-    case yar_texture_type_1d:
-        glTextureSubImage1D(texture->id, 0, 0, width, format, type, nullptr);
-        break;
-    case yar_texture_type_2d:
-        glTextureSubImage2D(texture->id, 0, 0, 0, width, height, 
-            format, type, nullptr);
-        break;
-    case yar_texture_type_3d:
-        glTextureSubImage3D(texture->id, 0, 0, 0, 0, width, height, depth,
-            format, type, nullptr);
-        break;
-    case yar_texture_type_1d_array:
-        glTextureSubImage2D(texture->id, 0, 0, 0, width, height,
-            format, type, nullptr);
-        break;
-    case yar_texture_type_2d_array:
-        glTextureSubImage3D(texture->id, 0, 0, 0, 0, width, height, 
-            depth, format, type, nullptr);
-        break;
-    case yar_texture_type_cube_map:
-        glTextureSubImage3D(texture->id, 0, 0, 0, 0, width, height,
-            6, format, type, nullptr);
-        break;
-    case yar_texture_type_none:
-    default:
-        break;
+        GLsizei image_size = (GLsizei)desc->size;
+        switch (desc->texture->type)
+        {
+        case yar_texture_type_1d:
+            glCompressedTextureSubImage1D(texture->id, mip_level, 0, width, internal_format, image_size, nullptr);
+            break;
+        case yar_texture_type_2d:
+            glCompressedTextureSubImage2D(texture->id, mip_level, 0, 0, width, height,
+                internal_format, image_size, nullptr);
+            break;
+        case yar_texture_type_3d:
+            glCompressedTextureSubImage3D(texture->id, mip_level, 0, 0, 0, width, height, depth,
+                internal_format, image_size, nullptr);
+            break;
+        case yar_texture_type_1d_array:
+            glCompressedTextureSubImage2D(texture->id, mip_level, 0, 0, width, height,
+                internal_format, image_size, nullptr);
+            break;
+        case yar_texture_type_2d_array:
+            glCompressedTextureSubImage3D(texture->id, mip_level, 0, 0, 0, width, height,
+                depth, internal_format, image_size, nullptr);
+            break;
+        case yar_texture_type_cube_map:
+            glCompressedTextureSubImage3D(texture->id, mip_level, 0, 0, 0, width, height,
+                6, internal_format, image_size, nullptr);
+            break;
+        case yar_texture_type_none:
+        default:
+            break;
+        }
+    }
+    else
+    {
+        switch (desc->texture->type)
+        {
+        case yar_texture_type_1d:
+            glTextureSubImage1D(texture->id, 0, 0, width, format, type, nullptr);
+            break;
+        case yar_texture_type_2d:
+            glTextureSubImage2D(texture->id, 0, 0, 0, width, height,
+                format, type, nullptr);
+            break;
+        case yar_texture_type_3d:
+            glTextureSubImage3D(texture->id, 0, 0, 0, 0, width, height, depth,
+                format, type, nullptr);
+            break;
+        case yar_texture_type_1d_array:
+            glTextureSubImage2D(texture->id, 0, 0, 0, width, height,
+                format, type, nullptr);
+            break;
+        case yar_texture_type_2d_array:
+            glTextureSubImage3D(texture->id, 0, 0, 0, 0, width, height,
+                depth, format, type, nullptr);
+            break;
+        case yar_texture_type_cube_map:
+            glTextureSubImage3D(texture->id, 0, 0, 0, 0, width, height,
+                6, format, type, nullptr);
+            break;
+        case yar_texture_type_none:
+        default:
+            break;
+        }
+
+        if (mip_count > 1)
+            glGenerateTextureMipmap(texture->id);
     }
     
-    if (mip_count > 1)
-        glGenerateTextureMipmap(texture->id);
-
     glBindBuffer(GL_PIXEL_UNPACK_BUFFER, 0); 
 }
 
