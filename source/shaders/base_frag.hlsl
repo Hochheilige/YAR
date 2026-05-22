@@ -12,8 +12,8 @@ struct PSInput {
 };
 
 Texture2D<float4> diffuse_map : register(t0, space0);
-Texture2D<float> roughness_map : register(t1, space0);
-Texture2D<float> metalness_map : register(t2, space0);
+Texture2D<float4> roughness_map : register(t1, space0);
+Texture2D<float4> metalness_map : register(t2, space0);
 Texture2D<float4> normal_map : register(t3, space0);
 SamplerState samplerState : register(s0, space0);
 
@@ -151,9 +151,10 @@ float4 main(PSInput input) : SV_TARGET {
     lcp.diffuse_map_color  = diffuse_map.Sample(samplerState, input.tex_coord);
     if (lcp.diffuse_map_color.a < 0.1f)
         discard;
-    lcp.specular_map_color = lerp(0.04f, 1.0f, metalness_map.Sample(samplerState, input.tex_coord1).r)
-     * (1.0f - roughness_map.Sample(samplerState, input.tex_coord1).r);
-    lcp.norm = normal_map.Sample(samplerState, input.tex_coord).rgb;
+    lcp.specular_map_color = lerp(0.04f, 1.0f, metalness_map.Sample(samplerState, input.tex_coord1).b)
+     * (1.0f - roughness_map.Sample(samplerState, input.tex_coord1).g);
+    float2 rg = normal_map.Sample(samplerState, input.tex_coord).rg * 2.0 - 1.0;
+    lcp.norm = float3(rg, sqrt(saturate(1.0 - dot(rg, rg))));
     float3x3 tbn = float3x3(input.tangent, input.bitangent, input.normal);
     lcp.norm = normalize(mul(lcp.norm, tbn));
     lcp.frag_pos           = input.frag_pos;
