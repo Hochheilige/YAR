@@ -4,3 +4,4 @@ assets/**/*.gltf filter=lfs diff=lfs merge=lfs -text
 assets/**/*.glb  filter=lfs diff=lfs merge=lfs -text
 assets/**/*.bin  filter=lfs diff=lfs merge=lfs -text
 assets/**/*.txt  filter=lfs diff=lfs merge=lfs -text
+assets/**/*.dds filter=lfs diff=lfs merge=lfs -text
