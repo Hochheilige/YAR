@@ -52,6 +52,7 @@ project "Engine"
         "external/spirv-cross",
         "external/stb",
         "external/assimp/include",
+        "external/assimp/build/include",
         "external/meshoptimizer/src",
         "external/directx-math/Inc",
         "external/directx-tex/DirectXTex"
@@ -66,7 +67,7 @@ project "Engine"
             "dwmapi",
             "dxcompiler",
             "zlibstaticd",
-            "assimp-vc143-mt",
+            "assimp-vc143-mtd",
             "meshoptimizer",
             "DirectXTex"
         }
@@ -83,6 +84,7 @@ project "Engine"
             "dxcompiler",
             "zlibstatic",
             "assimp-vc143-mt",
+            "meshoptimizer",
             "DirectXTex"
         }
         optimize "On"
