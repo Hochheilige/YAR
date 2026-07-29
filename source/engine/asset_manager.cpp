@@ -6,6 +6,7 @@
 #include <memory>
 #include <future>
 #include <iostream>
+#include <cstdlib>
 
 #define STB_IMAGE_IMPLEMENTATION
 #include <stb_image.h>
@@ -118,6 +119,17 @@ inline yar_texture_format dxgi_to_yar_format(DXGI_FORMAT format)
 	}
 }
 
+inline yar_texture_format channels_to_yar_format(int32_t channels)
+{
+	switch (channels)
+	{
+	case 1: return yar_texture_format_r8;
+	case 3: return yar_texture_format_rgb8;
+	case 4: return yar_texture_format_rgba8;
+	default: return yar_texture_format_none;
+	}
+}
+
 void init_asset_manager()
 {
 	if (asset_manager == nullptr)
@@ -142,7 +154,8 @@ static auto load_debug_white_texture() -> std::shared_ptr<TextureAsset>
 	texture->width = 1;
 	texture->height = 1;
 	texture->channels = 4;
-	uint8_t* pixels = new uint8_t[4]{ 255, 0, 255, 255 };
+	uint8_t* pixels = static_cast<uint8_t*>(std::malloc(4));
+	pixels[0] = 255; pixels[1] = 0; pixels[2] = 255; pixels[3] = 255;
 	texture->pixels = pixels;
 	texture->format = yar_texture_format_rgba8;
 	texture->source_format = TEX_SRC_PNG;
@@ -196,17 +209,16 @@ static auto load_texture_async(std::string_view path) -> std::shared_ptr<Texture
 		int32_t width, height, channels;
 		stbi_set_flip_vertically_on_load(false);
 		uint8_t* pixels = stbi_load(path.data(), &width, &height, &channels, 0);
-		
-		yar_texture_format format = yar_texture_format_none;
-		if (channels == 1)
-			format = yar_texture_format_r8;
-		if (channels == 3)
-			format = yar_texture_format_rgb8;
-		if (channels == 4)
-			format = yar_texture_format_rgba8;
-
-		if (!pixels || format == yar_texture_format_none)
+		if (!pixels)
 			return load_debug_white_texture();
+
+		yar_texture_format format = channels_to_yar_format(channels);
+		if (format == yar_texture_format_none)
+		{
+			std::cerr << "Unsupported channel count " << channels << ": " << path << "\n";
+			stbi_image_free(pixels);
+			return load_debug_white_texture();
+		}
 
 		texture->source_format = TEX_SRC_PNG;
 		texture->width = width;
@@ -219,7 +231,7 @@ static auto load_texture_async(std::string_view path) -> std::shared_ptr<Texture
 	return texture;
 }
 
-yar_texture* get_gpu_texture(AssetHandle<TextureAsset>& texture_asset, yar_texture_type type, uint32_t channels)
+yar_texture* get_gpu_texture(AssetHandle<TextureAsset>& texture_asset, yar_texture_type type)
 {
 	if (!texture_asset.wait())
 		return nullptr;
@@ -238,9 +250,7 @@ yar_texture* get_gpu_texture(AssetHandle<TextureAsset>& texture_asset, yar_textu
 
 	if (asset->source_format == TEX_SRC_PNG)
 	{
-		uint32_t cur_channels = channels;
-		if (channels == 0)
-			cur_channels = asset->channels;
+		const uint32_t cur_channels = asset->channels;
 		uint8_t* pixels = asset->pixels;
 		yar_texture_format format = asset->format;
 
@@ -387,7 +397,8 @@ static auto load_cubemap_async(const std::array<std::string_view, 6>& paths) -> 
 		else {
 			if (w != width || h != height || c != channels) {
 				std::cerr << "Cubemap face size mismatch: " << paths[i] << "\n";
-				for (int j = 0; j <= i; ++j) stbi_image_free(faces_pixels[j]);
+				stbi_image_free(pixels);
+				for (int j = 0; j < i; ++j) stbi_image_free(faces_pixels[j]);
 				return nullptr;
 			}
 		}
@@ -395,20 +406,19 @@ static auto load_cubemap_async(const std::array<std::string_view, 6>& paths) -> 
 		faces_pixels[i] = pixels;
 	}
 
+	yar_texture_format format = channels_to_yar_format(channels);
+	if (format == yar_texture_format_none) {
+		std::cerr << "Unsupported cubemap channel count " << channels << ": " << paths[0] << "\n";
+		for (int j = 0; j < 6; ++j) stbi_image_free(faces_pixels[j]);
+		return nullptr;
+	}
+
 	size_t face_size = width * height * channels;
-	texture->pixels = new uint8_t[face_size * 6];
+	texture->pixels = static_cast<uint8_t*>(std::malloc(face_size * 6));
 	texture->width = width;
 	texture->height = height;
 	texture->channels = channels;
 	texture->source_format = TEX_SRC_PNG;
-
-	yar_texture_format format = yar_texture_format_none;
-	if (channels == 1)
-		format = yar_texture_format_r8;
-	if (channels == 3)
-		format = yar_texture_format_rgb8;
-	if (channels == 4)
-		format = yar_texture_format_rgba8;
 	texture->format = format;
 
 	for (int i = 0; i < 6; ++i) {

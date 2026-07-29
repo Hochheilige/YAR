@@ -57,21 +57,21 @@ void Material::create_descriptor_set(yar_shader* shader, yar_sampler* sampler)
 			{
 				.name = "roughness_map",
 				.descriptor = yar_descriptor_info::yar_combined_texture_sample{
-					get_gpu_texture(roughness, yar_texture_type_2d, 1),
+					get_gpu_texture(roughness, yar_texture_type_2d),
 					"samplerState",
 				}
 			},
 			{
 				.name = "metalness_map",
 				.descriptor = yar_descriptor_info::yar_combined_texture_sample{
-					get_gpu_texture(metalness, yar_texture_type_2d, 1),
+					get_gpu_texture(metalness, yar_texture_type_2d),
 					"samplerState",
 				}
 			},
 			{
 				.name = "normal_map",
 				.descriptor = yar_descriptor_info::yar_combined_texture_sample{
-					get_gpu_texture(normal, yar_texture_type_2d, 3),
+					get_gpu_texture(normal, yar_texture_type_2d),
 					"samplerState",
 				}
 			},
