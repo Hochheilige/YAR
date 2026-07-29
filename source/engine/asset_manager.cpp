@@ -144,6 +144,8 @@ static auto load_debug_white_texture() -> std::shared_ptr<TextureAsset>
 	texture->channels = 4;
 	uint8_t* pixels = new uint8_t[4]{ 255, 0, 255, 255 };
 	texture->pixels = pixels;
+	texture->format = yar_texture_format_rgba8;
+	texture->source_format = TEX_SRC_PNG;
 
 	return texture;
 }
@@ -194,16 +196,17 @@ static auto load_texture_async(std::string_view path) -> std::shared_ptr<Texture
 		int32_t width, height, channels;
 		stbi_set_flip_vertically_on_load(false);
 		uint8_t* pixels = stbi_load(path.data(), &width, &height, &channels, 0);
-		if (!pixels)
-			return load_debug_white_texture();
-
-		yar_texture_format format;
+		
+		yar_texture_format format = yar_texture_format_none;
 		if (channels == 1)
 			format = yar_texture_format_r8;
 		if (channels == 3)
 			format = yar_texture_format_rgb8;
 		if (channels == 4)
 			format = yar_texture_format_rgba8;
+
+		if (!pixels || format == yar_texture_format_none)
+			return load_debug_white_texture();
 
 		texture->source_format = TEX_SRC_PNG;
 		texture->width = width;
@@ -397,6 +400,16 @@ static auto load_cubemap_async(const std::array<std::string_view, 6>& paths) -> 
 	texture->width = width;
 	texture->height = height;
 	texture->channels = channels;
+	texture->source_format = TEX_SRC_PNG;
+
+	yar_texture_format format = yar_texture_format_none;
+	if (channels == 1)
+		format = yar_texture_format_r8;
+	if (channels == 3)
+		format = yar_texture_format_rgb8;
+	if (channels == 4)
+		format = yar_texture_format_rgba8;
+	texture->format = format;
 
 	for (int i = 0; i < 6; ++i) {
 		std::memcpy(texture->pixels + i * face_size, faces_pixels[i], face_size);
