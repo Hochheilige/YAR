@@ -42,7 +42,6 @@ I still think that it is a good place to refresh basics in my head
 - Assimp
 - dxc
 - glad
-- glfw
 - glm
 - imgui
 - spirv-cross

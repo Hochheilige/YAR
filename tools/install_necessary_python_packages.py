@@ -1,16 +1,24 @@
 import subprocess
 import sys
 
+import console_colors as color
+
 def install_package(package_name):
     try:
         # Check that package installed
         __import__(package_name)
-        print(f"{package_name} is already installed.")
+        color.detail(f"{package_name} is already installed")
     except ImportError:
-        print(f"{package_name} not found. Installing...")
+        color.step(f"{package_name} not found, installing")
         # Install package using pip
-        subprocess.check_call([sys.executable, "-m", "pip", "install", package_name])
-        print(f"{package_name} has been installed.")
+        try:
+            subprocess.check_call([sys.executable, "-m", "pip", "install", package_name])
+        except subprocess.CalledProcessError as exception:
+            color.error(f"failed to install {package_name} (exit code {exception.returncode})")
+            return False
+        color.success(f"{package_name} has been installed")
+
+    return True
 
 
 # Necessary packages:
@@ -18,5 +26,5 @@ def install_package(package_name):
 # -- glad - to generate glad files for project
 packages = ["tqdm", "glad"]
 
-for package in packages:
-    install_package(package)
+if not all([install_package(package) for package in packages]):
+    sys.exit(1)

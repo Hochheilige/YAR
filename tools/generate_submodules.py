@@ -1,53 +1,72 @@
 import subprocess
+import threading
 import time
 import sys
 import os
 from tqdm import tqdm
 
+import console_colors as color
+
 def run_command_with_progress(command, estimated_time=30, description="Running command"):
-    print(f"starting: {description}")
+    color.step(description)
 
-    process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+    # stderr is merged into stdout so a single reader drains both: leaving either
+    # pipe unread deadlocks the child once it fills the ~4-8KB pipe buffer.
+    process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
 
-    with tqdm(total=100, desc=description, unit="%", ncols=100, ascii=True, file=sys.stdout) as progress_bar:
+    output_lines = []
+
+    def drain_output():
+        for line in process.stdout:
+            output_lines.append(line)
+
+    reader = threading.Thread(target=drain_output, daemon=True)
+    reader.start()
+
+    # The bar is an elapsed-time estimate, not real progress: it is capped at 99%
+    # while the command runs so that a full bar always means "actually finished".
+    with tqdm(total=100, desc=description, unit="%", ncols=100, ascii=True, file=sys.stdout,
+              colour=color.BAR_COLOR) as progress_bar:
         start_time = time.time()
 
         while process.poll() is None:
-            output = process.stdout.readline()
             elapsed_time = time.time() - start_time
-            progress = min((elapsed_time / estimated_time) * 100, 100)
+            progress = min((elapsed_time / estimated_time) * 100, 99)
             progress_bar.update(progress - progress_bar.n)
-            time.sleep(0.001)
+            time.sleep(0.1)
 
-        stdout, stderr = process.communicate()
+        reader.join(timeout=5)
         progress_bar.update(100 - progress_bar.n)
 
     if process.returncode == 0:
-        print(f"command completed successfully: {description}")
+        color.success(description)
     else:
-        print(f"command failed with return code {process.returncode}: {description}")
-        print(stderr.strip())
+        color.error(f"{description} (exit code {process.returncode})")
+        color.detail("".join(output_lines[-20:]).strip())
+
+    return process.returncode
 
 def add_git_submodule(repo_url, submodule_path):
     if not os.path.isdir('.git'):
         raise RuntimeError("this directory is not a git repository")
     
     estimated_time_update = 60
-    update_command = ['git', 'submodule', 'update', '--init', '--recursive', '--remote']
+    update_command = ['git', 'submodule', 'update', '--init', '--recursive', '--remote', '--', submodule_path]
 
     if os.path.isdir(submodule_path):
-        print(f"path '{submodule_path}' are already exists")
-        print(f"Try to update {submodule_path} submodule")
-        run_command_with_progress(update_command, estimated_time=estimated_time_update, description="updating submodule")
-        return 
-    
-    print(f"adding submodule '{repo_url}' to '{submodule_path}'...")
+        color.detail(f"path '{submodule_path}' already exists, updating it")
+        return run_command_with_progress(update_command, estimated_time=estimated_time_update, description=f"updating {submodule_path}")
+
+    color.detail(f"adding submodule '{repo_url}' to '{submodule_path}'")
 
     estimated_time_add = 15
     add_command = ['git', 'submodule', 'add', repo_url, submodule_path]
 
-    run_command_with_progress(add_command, estimated_time=estimated_time_add, description="adding submodule")
-    run_command_with_progress(update_command, estimated_time=estimated_time_update, description="updating submodule")
+    returncode = run_command_with_progress(add_command, estimated_time=estimated_time_add, description=f"adding {submodule_path}")
+    if returncode != 0:
+        return returncode
+
+    return run_command_with_progress(update_command, estimated_time=estimated_time_update, description=f"updating {submodule_path}")
 
 def build_project(project_path, project_name, cmake_additional_commands):
     configurations = ["Debug", "Release"]
@@ -64,7 +83,10 @@ def build_project(project_path, project_name, cmake_additional_commands):
         f"-DCMAKE_ARCHIVE_OUTPUT_DIRECTORY_RELEASE={root_dir}/external/lib/Release",
     ]
     cmake_command += cmake_additional_commands
-    run_command_with_progress(cmake_command, estimated_time=15, description=f"Configuring {project_name} project")
+    if run_command_with_progress(cmake_command, estimated_time=15, description=f"Configuring {project_name} project") != 0:
+        # Building against a failed configure only produces confusing follow-up errors.
+        color.warn(f"skipping build of {project_name}: configure failed")
+        return False
 
     for config in configurations:
         # Create the build command for each configuration
@@ -76,11 +98,14 @@ def build_project(project_path, project_name, cmake_additional_commands):
         description = f"Building {project_name} ({config} configuration)"
 
         # Run the build command with progress
-        run_command_with_progress(build_command, estimated_time=120, description=description)
+        if run_command_with_progress(build_command, estimated_time=120, description=description) != 0:
+            return False
+
+    return True
 
 output_path = 'external/glad'
 if os.path.isdir(output_path):
-    print(f"path '{output_path}' are already exists")
+    color.detail(f"path '{output_path}' already exists, skipping glad generation")
 else:
     command = [
         'python', '-m', 'glad', '--generator=c', '--spec=gl',
@@ -98,64 +123,60 @@ else:
         'GL_ARB_bindless_texture,'
         'GL_ARB_indirect_parameters,'
         'GL_ARB_gl_spirv,'
-        'GL_ARB_shading_language_420pack'
+        'GL_ARB_shading_language_420pack,'
+        # BC1/BC2/BC3 internal formats: S3TC is not core GL at any version.
+        'GL_EXT_texture_compression_s3tc,'
+        # sRGB variants of the S3TC formats live in a separate extension.
+        'GL_EXT_texture_sRGB'
     ]
     run_command_with_progress(command, estimated_time=2, description="generate glad")
 
-submodules_urls = [
-    "https://github.com/glfw/glfw.git",
-    "https://github.com/nothings/stb.git",
-    "https://github.com/ocornut/imgui.git",
-    "https://github.com/KhronosGroup/SPIRV-Reflect.git",
-    "https://github.com/KhronosGroup/SPIRV-Cross.git",
-    "https://github.com/assimp/assimp",
-    "https://github.com/zeux/meshoptimizer.git",
-    "https://github.com/microsoft/DirectXMath.git",
-    "https://github.com/microsoft/DirectXTex.git",
-]
+submodules = {
+    "external/stb": "https://github.com/nothings/stb.git",
+    "external/imgui": "https://github.com/ocornut/imgui.git",
+    "external/spirv-reflect": "https://github.com/KhronosGroup/SPIRV-Reflect.git",
+    "external/spirv-cross": "https://github.com/KhronosGroup/SPIRV-Cross.git",
+    "external/assimp": "https://github.com/assimp/assimp",
+    "external/meshoptimizer": "https://github.com/zeux/meshoptimizer.git",
+    "external/directx-math": "https://github.com/microsoft/DirectXMath.git",
+    "external/directx-tex": "https://github.com/microsoft/DirectXTex.git",
+}
 
-submodules_paths = [
-    "external/glfw" ,
-    "external/stb",
-    "external/imgui",
-    "external/spirv-reflect",
-    "external/spirv-cross",
-    "external/assimp",
-    "external/meshoptimizer",
-    "external/directx-math",
-    "external/directx-tex",
-]
+failed = []
 
-for url, path in zip(submodules_urls, submodules_paths):
-    add_git_submodule(url, path)
+for path, url in submodules.items():
+    if add_git_submodule(url, path) != 0:
+        failed.append(path)
 
-build_project(submodules_paths[0], "glfw", 
-        ["-DBUILD_SHARED_LIBS=OFF",
-        "-DGLFW_LIBRARY_TYPE=STATIC",
-        "-DGLFW_BUILD_EXAMPLES=0",
-        "-DGLFW_BUILD_TESTS=0", 
-        "-DGLFW_BUILD_DOCS=0"
-        ]
-)
-build_project(submodules_paths[5], "assimp", 
+if not build_project("external/assimp", "assimp",
         ["-DBUILD_SHARED_LIBS=OFF",
          "-DASSIMP_BUILD_TESTS=OFF",
          "-DASSIMP_INSTALL=ON",
          "-DASSIMP_INJECT_DEBUG_POSTFIX=ON",
          "-DASSIMP_BUILD_ASSIMP_VIEW=OFF"
         ]
-)
+):
+    failed.append("assimp")
 
-build_project(submodules_paths[6], "meshoptimizer", 
+if not build_project("external/meshoptimizer", "meshoptimizer",
         ["-DMESHOPT_BUILD_DEMO=OFF",
          "-DMESHOPT_BUILD_GLTFPACK=OFF",
          "-DMESHOPT_BUILD_SHARED_LIBS=OFF",
          "-DMESHOPT_WERROR=OFF",
          "-DMESHOPT_INSTALL=ON"
         ]
-)     
+):
+    failed.append("meshoptimizer")
 
-build_project(submodules_paths[8], "directx-tex", 
+if not build_project("external/directx-tex", "directx-tex",
         ["-DBUILD_SAMPLE=OFF"
-        ]     
-)
+        ]
+):
+    failed.append("directx-tex")
+
+print()
+if failed:
+    color.error(f"setup finished with errors in: {', '.join(failed)}")
+    sys.exit(1)
+
+color.success("setup finished successfully")

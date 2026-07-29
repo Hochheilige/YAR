@@ -1,7 +1,7 @@
 @echo off
 
-echo checking necessary python packages...
 python tools/install_necessary_python_packages.py
+if errorlevel 1 exit /b 1
 
-echo generating glad for this project...
 python tools/generate_submodules.py
+if errorlevel 1 exit /b 1

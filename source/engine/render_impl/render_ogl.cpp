@@ -409,14 +409,14 @@ static GLenum util_get_gl_internal_format(yar_texture_format format)
         return GL_DEPTH24_STENCIL8;
     case yar_texture_format_bc1:
         return GL_COMPRESSED_RGBA_S3TC_DXT1_EXT;
-    //case yar_texture_format_bc1_srgb:
-    //    return GL_COMPRESSED_SRGB_ALPHA_S3TC_DXT1_EXT;
+    case yar_texture_format_bc1_srgb:
+        return GL_COMPRESSED_SRGB_ALPHA_S3TC_DXT1_EXT;
     case yar_texture_format_bc2:
         return GL_COMPRESSED_RGBA_S3TC_DXT3_EXT;
     case yar_texture_format_bc3:
         return GL_COMPRESSED_RGBA_S3TC_DXT5_EXT;
-    //case yar_texture_format_bc3_srgb:
-    //    return GL_COMPRESSED_SRGB_ALPHA_S3TC_DXT5_EXT; 
+    case yar_texture_format_bc3_srgb:
+        return GL_COMPRESSED_SRGB_ALPHA_S3TC_DXT5_EXT; 
     case yar_texture_format_bc4:
         return GL_COMPRESSED_RED_RGTC1;
     case yar_texture_format_bc4_snorm:
