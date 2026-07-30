@@ -228,13 +228,13 @@ auto main() -> int
 
 	yar_texture* imgui_fonts = get_imgui_fonts();
 
-	constexpr uint32_t image_count = 2;
+	constexpr uint32_t frames_in_flight = 2;
 	uint32_t frame_index = 0;
 
 	buffer_desc.size = sizeof(ubo);
 	buffer_desc.flags = yar_buffer_flag_map_write;
 	buffer_desc.name = "UBO";
-	yar_buffer* ubo_buf[image_count] = { nullptr, nullptr };
+	yar_buffer* ubo_buf[frames_in_flight] = {};
 	for (auto& buf : ubo_buf)
 		add_buffer(&buffer_desc, &buf);
 
@@ -319,14 +319,14 @@ auto main() -> int
 	update_set_desc.infos = std::move(infos);
 	update_descriptor_set(&update_set_desc, srv_set);
 
-	set_desc.max_sets = image_count;
+	set_desc.max_sets = frames_in_flight;
 	set_desc.shader = compute_shader;
 	set_desc.update_freq = yar_update_freq_per_frame;
 	yar_descriptor_set* ubo_desc;
 	add_descriptor_set(&set_desc, &ubo_desc);
 
 	update_set_desc = {};
-	for (uint32_t i = 0; i < image_count; ++i)
+	for (uint32_t i = 0; i < frames_in_flight; ++i)
 	{
 		std::vector<yar_descriptor_info> infos{
 			{
@@ -567,7 +567,7 @@ auto main() -> int
 		present_desc.swapchain = swapchain;
 		queue_present(queue, &present_desc);
 
-		frame_index = (frame_index + 1) % image_count;
+		frame_index = (frame_index + 1) % frames_in_flight;
 	}
 
 	terminate_window();

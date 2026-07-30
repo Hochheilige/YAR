@@ -403,14 +403,14 @@ auto main() -> int {
 	sampler_desc.mip_map_filter = yar_filter_type_linear;
 	add_sampler(&sampler_desc, &skybox_sampler);
 
-	constexpr uint32_t image_count = 2;
+	constexpr uint32_t frames_in_flight = 3;
 	uint32_t frame_index = 0; 
 
 	yar_buffer_desc buffer_desc;
 	buffer_desc.size = sizeof(ubo);
 	buffer_desc.flags = yar_buffer_flag_map_write;
 	buffer_desc.name = "UBO";
-	yar_buffer* ubo_buf[image_count] = { nullptr, nullptr };
+	yar_buffer* ubo_buf[frames_in_flight] = {};
 	for (auto& buf : ubo_buf)
 		add_buffer(&buffer_desc, &buf);
 
@@ -464,7 +464,7 @@ auto main() -> int {
 	raster.front_counter_clockwise = true;
 
 	yar_descriptor_set_desc set_desc;
-	set_desc.max_sets = image_count;
+	set_desc.max_sets = frames_in_flight;
 	set_desc.shader = shader;
 	set_desc.update_freq = yar_update_freq_per_frame;
 	yar_descriptor_set* ubo_desc;
@@ -475,7 +475,7 @@ auto main() -> int {
 	add_descriptor_set(&set_desc, &shadow_map_ds_desc);
 
 	yar_update_descriptor_set_desc update_set_desc{};
-	for (uint32_t i = 0; i < image_count; ++i)
+	for (uint32_t i = 0; i < frames_in_flight; ++i)
 	{
 		std::vector<yar_descriptor_info> infos{
 			{
@@ -875,7 +875,7 @@ auto main() -> int {
 			queue_present(queue, &present_desc);
 		}
 
-		frame_index = (frame_index + 1) % image_count;
+		frame_index = (frame_index + 1) % frames_in_flight;
 	}
 
 	terminate_window();
