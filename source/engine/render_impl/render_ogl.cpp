@@ -1371,6 +1371,7 @@ void gl_addPipeline(yar_pipeline_desc* desc, yar_pipeline** pipeline)
             GLboolean normalize = format == GL_UNSIGNED_BYTE; // Stupid temp hack to normalize imgui colors
             glVertexArrayAttribFormat(vao, i, size, format, normalize, offset);
             glVertexArrayAttribBinding(vao, i, binding);
+            glEnableVertexArrayAttrib(vao, i);
         }
 
         new_pipeline->topology = util_get_gl_topology(desc->topology);
@@ -1643,9 +1644,7 @@ void gl_cmdBindVertexBuffer(yar_cmd_buffer* cmd, yar_buffer* buffer, uint32_t co
         auto gl_cmd = reinterpret_cast<yar_gl_cmd_buffer*>(cmd);
         GLuint vao = gl_cmd->vao;
 
-        glVertexArrayVertexBuffer(vao, 0, buffer->id, offset, stride); // maybe need to store binding?
-        for (int i = 0; i < count; ++i)
-            glEnableVertexArrayAttrib(vao, i); // probably need to store somewhere
+        glVertexArrayVertexBuffer(vao, 0, buffer->id, offset, stride);
     });
 }
 
