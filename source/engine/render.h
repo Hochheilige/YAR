@@ -619,6 +619,16 @@ struct yar_render_pass_desc
     yar_attachment_desc depth_stencil_attachment;
 };
 
+// Recorded into the command stream, so they measure where the work lands.
+constexpr uint32_t kMaxGpuScopes = 32u;
+
+struct yar_gpu_scope_result
+{
+    const char* name;
+    double ms;
+    uint32_t depth;
+};
+
 // ======================================= //
 //            Load Functions               //
 // ======================================= //
@@ -670,5 +680,9 @@ DECLARE_YAR_RENDER_FUNC(void, cmd_set_viewport, yar_cmd_buffer* cmd, uint32_t wi
 DECLARE_YAR_RENDER_FUNC(void, cmd_set_scissor, yar_cmd_buffer* cmd, uint32_t x, uint32_t y, uint32_t width, uint32_t height);
 DECLARE_YAR_RENDER_FUNC(void, queue_submit, yar_cmd_queue* queue);
 DECLARE_YAR_RENDER_FUNC(void, queue_present, yar_cmd_queue* queue, yar_queue_present_desc* desc);
+
+DECLARE_YAR_RENDER_FUNC(void, cmd_begin_gpu_scope, yar_cmd_buffer* cmd, const char* name);
+DECLARE_YAR_RENDER_FUNC(void, cmd_end_gpu_scope, yar_cmd_buffer* cmd);
+DECLARE_YAR_RENDER_FUNC(uint32_t, get_gpu_scope_results, yar_gpu_scope_result* out, uint32_t max_count);
 
 void init_render();

@@ -23,6 +23,14 @@
 #define YAR_CONTAINER_OF(ptr, type, member) \
     ((type *)((char *)(ptr) - offsetof(type, member)))
 
+#if defined(YAR_PROFILE_ENABLED)
+static void gpu_profiler_init();
+static void gpu_profiler_advance();
+void gl_cmdBeginGpuScope(yar_cmd_buffer* cmd, const char* name);
+void gl_cmdEndGpuScope(yar_cmd_buffer* cmd);
+uint32_t gl_getGpuScopeResults(yar_gpu_scope_result* out, uint32_t max_count);
+#endif
+
 // ======================================= //
 //            Load Variables               //
 // ======================================= //
@@ -1872,6 +1880,10 @@ void gl_queuePresent(yar_cmd_queue* queue, yar_queue_present_desc* desc)
     glBindFramebuffer(GL_FRAMEBUFFER, 0);
     swap(gl_swapchain->window_handle);
     swapchain->buffer_index++;
+
+#if defined(YAR_PROFILE_ENABLED)
+    gpu_profiler_advance();
+#endif
 }
 
 static void* win32_gl_get_proc(const char* name)
@@ -1926,14 +1938,171 @@ bool gl_init_render(yar_device* device)
     device->queue_submit            = gl_queueSubmit;
     device->queue_present           = gl_queuePresent;
 
+#if defined(YAR_PROFILE_ENABLED)
+    device->cmd_begin_gpu_scope     = gl_cmdBeginGpuScope;
+    device->cmd_end_gpu_scope       = gl_cmdEndGpuScope;
+    device->get_gpu_scope_results   = gl_getGpuScopeResults;
+#endif
+
 #if _DEBUG
     glEnable(GL_DEBUG_OUTPUT);
     glEnable(GL_DEBUG_OUTPUT_SYNCHRONOUS);
     glDebugMessageCallback(util_debug_message_callback, nullptr);
 #endif
 
+#if defined(YAR_PROFILE_ENABLED)
+    gpu_profiler_init();
+#endif
+
     return true;
 }
+
+// ======================================= //
+//            GPU Profiler                 //
+// ======================================= //
+
+#if defined(YAR_PROFILE_ENABLED)
+
+// Timestamps, not GL_TIME_ELAPSED: only one TIME_ELAPSED query can be active
+// at a time, so it cannot nest.
+constexpr uint32_t kGpuFrameLatency = 4u;
+constexpr double kSmoothAlpha = 0.03;
+
+struct yar_gl_gpu_scope
+{
+    const char* name;
+    uint32_t depth;
+    GLuint begin_query;
+    GLuint end_query;
+};
+
+struct yar_gl_gpu_frame
+{
+    yar_gl_gpu_scope scopes[kMaxGpuScopes];
+    uint32_t count;
+    bool submitted;
+};
+
+static yar_gl_gpu_frame gpu_frames[kGpuFrameLatency]{};
+static uint32_t gpu_record_slot = 0;
+static uint32_t gpu_scope_stack[kMaxGpuScopes]{};
+static uint32_t gpu_scope_depth = 0;
+
+static yar_gpu_scope_result gpu_results[kMaxGpuScopes]{};
+static uint32_t gpu_result_count = 0;
+static bool gpu_profiler_ready = false;
+
+static void gpu_profiler_init()
+{
+    for (auto& frame : gpu_frames)
+    {
+        for (auto& scope : frame.scopes)
+        {
+            glCreateQueries(GL_TIMESTAMP, 1, &scope.begin_query);
+            glCreateQueries(GL_TIMESTAMP, 1, &scope.end_query);
+        }
+    }
+
+    gpu_profiler_ready = true;
+}
+
+static void gpu_profiler_resolve(const yar_gl_gpu_frame& frame)
+{
+    if (frame.count == 0)
+        return;
+
+    // Never block: if the oldest frame is not done, keep the previous numbers.
+    GLuint available = 0;
+    glGetQueryObjectuiv(frame.scopes[frame.count - 1].end_query,
+        GL_QUERY_RESULT_AVAILABLE, &available);
+    if (!available)
+        return;
+
+    for (uint32_t i = 0; i < frame.count; ++i)
+    {
+        GLuint64 begin_ns = 0;
+        GLuint64 end_ns = 0;
+        glGetQueryObjectui64v(frame.scopes[i].begin_query, GL_QUERY_RESULT, &begin_ns);
+        glGetQueryObjectui64v(frame.scopes[i].end_query, GL_QUERY_RESULT, &end_ns);
+
+        const double ms = end_ns >= begin_ns
+            ? double(end_ns - begin_ns) / 1000000.0
+            : 0.0;
+
+        yar_gpu_scope_result& result = gpu_results[i];
+        const bool changed = result.name != frame.scopes[i].name;
+        result.name = frame.scopes[i].name;
+        result.depth = frame.scopes[i].depth;
+        result.ms = (changed || result.ms <= 0.0)
+            ? ms
+            : result.ms + (ms - result.ms) * kSmoothAlpha;
+    }
+
+    gpu_result_count = frame.count;
+}
+
+// Runs once per frame from gl_queuePresent, after the swap.
+static void gpu_profiler_advance()
+{
+    if (!gpu_profiler_ready)
+        return;
+
+    yar_gl_gpu_frame& current = gpu_frames[gpu_record_slot];
+    current.submitted = current.count > 0;
+
+    gpu_record_slot = (gpu_record_slot + 1) % kGpuFrameLatency;
+
+    yar_gl_gpu_frame& next = gpu_frames[gpu_record_slot];
+    if (next.submitted)
+        gpu_profiler_resolve(next);
+
+    next.count = 0;
+    next.submitted = false;
+    gpu_scope_depth = 0;
+}
+
+void gl_cmdBeginGpuScope(yar_cmd_buffer* cmd, const char* name)
+{
+    if (!gpu_profiler_ready)
+        return;
+
+    yar_gl_gpu_frame& frame = gpu_frames[gpu_record_slot];
+    if (frame.count >= kMaxGpuScopes || gpu_scope_depth >= kMaxGpuScopes)
+        return;
+
+    const uint32_t index = frame.count++;
+    frame.scopes[index].name = name;
+    frame.scopes[index].depth = gpu_scope_depth;
+    gpu_scope_stack[gpu_scope_depth++] = index;
+
+    const GLuint query = frame.scopes[index].begin_query;
+    cmd->commands.push_back([=]() {
+        glQueryCounter(query, GL_TIMESTAMP);
+    });
+}
+
+void gl_cmdEndGpuScope(yar_cmd_buffer* cmd)
+{
+    if (!gpu_profiler_ready || gpu_scope_depth == 0)
+        return;
+
+    const uint32_t index = gpu_scope_stack[--gpu_scope_depth];
+    const GLuint query = gpu_frames[gpu_record_slot].scopes[index].end_query;
+    cmd->commands.push_back([=]() {
+        glQueryCounter(query, GL_TIMESTAMP);
+    });
+}
+
+uint32_t gl_getGpuScopeResults(yar_gpu_scope_result* out, uint32_t max_count)
+{
+    const uint32_t count = gpu_result_count < max_count ? gpu_result_count : max_count;
+    for (uint32_t i = 0; i < count; ++i)
+        out[i] = gpu_results[i];
+
+    return count;
+}
+
+#endif
 
 
 

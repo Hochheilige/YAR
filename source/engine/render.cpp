@@ -214,13 +214,32 @@ void queue_present(yar_cmd_queue* queue, yar_queue_present_desc* desc)
         device->queue_present(queue, desc);
 }
 
+void cmd_begin_gpu_scope(yar_cmd_buffer* cmd, const char* name)
+{
+    if (device && device->cmd_begin_gpu_scope)
+        device->cmd_begin_gpu_scope(cmd, name);
+}
+
+void cmd_end_gpu_scope(yar_cmd_buffer* cmd)
+{
+    if (device && device->cmd_end_gpu_scope)
+        device->cmd_end_gpu_scope(cmd);
+}
+
+uint32_t get_gpu_scope_results(yar_gpu_scope_result* out, uint32_t max_count)
+{
+    if (device && device->get_gpu_scope_results)
+        return device->get_gpu_scope_results(out, max_count);
+    return 0;
+}
+
 extern bool gl_init_render(yar_device* device);
 
 void init_render()
 {
     if (device == nullptr)
     {
-        device = static_cast<yar_device*>(std::malloc(sizeof(yar_device)));
+        device = static_cast<yar_device*>(std::calloc(1, sizeof(yar_device)));
     }
 
     gl_init_render(device);

@@ -5,7 +5,7 @@ filter { "system:windows", "kind:StaticLib" }
 
 workspace "Yet_Another_Renderer"
     architecture "x64"
-    configurations { "Debug", "Release" }
+    configurations { "Debug", "Release", "Profile" }
     startproject "Application"
 
     outputdir = "build/%{cfg.architecture}/%{cfg.buildcfg}/output"
@@ -90,6 +90,25 @@ project "Engine"
         optimize "On"
         runtime "Release"
 
+    -- Optimized build with the CPU/GPU profiler compiled in.
+    filter { "configurations:Profile" }
+        libdirs {
+            "external/lib/Release"
+        }
+        links {
+            "opengl32",
+            "dwmapi",
+            "dxcompiler",
+            "zlibstatic",
+            "assimp-vc143-mt",
+            "meshoptimizer",
+            "DirectXTex"
+        }
+        defines { "YAR_PROFILE_ENABLED" }
+        optimize "On"
+        symbols "On"
+        runtime "Release"
+
 project "Application"
     location "makefiles"
     kind "ConsoleApp"
@@ -134,6 +153,16 @@ project "Application"
 
     filter { "configurations:Release" }
         optimize "On"
+        runtime "Release"
+        postbuildcommands {
+            "py \"%{prj.location}/scripts/compile_hlsl_to_spirv.py\" \"%{wks.location}/source/shaders\" \"%{cfg.targetdir}/shaders\"",
+            "{COPY} \"%{wks.location}/assets\" \"%{cfg.targetdir}/assets\""
+        }
+
+    filter { "configurations:Profile" }
+        defines { "YAR_PROFILE_ENABLED" }
+        optimize "On"
+        symbols "On"
         runtime "Release"
         postbuildcommands {
             "py \"%{prj.location}/scripts/compile_hlsl_to_spirv.py\" \"%{wks.location}/source/shaders\" \"%{cfg.targetdir}/shaders\"",

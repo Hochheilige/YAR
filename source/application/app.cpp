@@ -7,6 +7,7 @@
 #include <mesh_asset.h>
 #include <material.h>
 #include <model_loader.h>
+#include <profiler.h>
 
 #include <Windows.h>
 
@@ -660,13 +661,22 @@ auto main() -> int {
 	
 	while(update_window())
 	{
+		profiler_begin_frame();
+		YAR_CPU_SCOPE("Frame");
+
 		float currentFrame = static_cast<float>(get_time());
 		deltaTime = currentFrame - lastFrame;
 		lastFrame = currentFrame;
 
-		process_input();
+		{ YAR_CPU_SCOPE("Input");
+			process_input();
+		}
 
-		auto* draw_data = imgui_get_new_frame_data();
+		ImDrawData* draw_data = nullptr;
+		{ YAR_CPU_SCOPE("ImGui New Frame");
+			draw_data = imgui_get_new_frame_data();
+		}
+
 		int32_t fb_width = static_cast<int32_t>(draw_data->DisplaySize.x * draw_data->FramebufferScale.x);
 		int32_t fb_height = static_cast<int32_t>(draw_data->DisplaySize.y * draw_data->FramebufferScale.y);
 		ImVec2 clip_off = draw_data->DisplayPos;         // (0,0) unless using multi-viewports
@@ -681,143 +691,190 @@ auto main() -> int {
 			1.0f
 		);
 
-		Vector3 light_dir = ubo.dir_light.direction[0].xyz();
-		Matrix4x4 dir_light_view = Matrix4x4::look_at_rh(
-			-light_dir * dir_light_distance,
-			Vector3(0.0f, 0.0f, 0.0f),
-			Vector3(0.0f, 1.0f, 0.0f)
-		);
-		// v*M order: view first, then projection
-		Matrix4x4 light_space_mat = dir_light_view * light_projection;
-		ubo.mvp.light_space = light_space_mat;
+		{ YAR_CPU_SCOPE("Update");
 
-		for (uint32_t i = 0; i < 10; ++i)
-		{
-			if (i != 0) // i == 0 light position
-			{
-				float angle = 20.0f;
-				// v*M order: scale, then rotate, then translate
-				model = Matrix4x4::scaling(cube_scales[i - 1])
-					* Matrix4x4::rotation_axis(Vector3(1.0f, 0.3f, 0.5f), (float)get_time() * radians(angle))
-					* Matrix4x4::translation(cube_positions[i].xyz());
+			{ YAR_CPU_SCOPE("Matrices");
+
+				Vector3 light_dir = ubo.dir_light.direction[0].xyz();
+				Matrix4x4 dir_light_view = Matrix4x4::look_at_rh(
+					-light_dir * dir_light_distance,
+					Vector3(0.0f, 0.0f, 0.0f),
+					Vector3(0.0f, 1.0f, 0.0f)
+				);
+				// v*M order: view first, then projection
+				Matrix4x4 light_space_mat = dir_light_view * light_projection;
+				ubo.mvp.light_space = light_space_mat;
+
+				for (uint32_t i = 0; i < 10; ++i)
+				{
+					if (i != 0) // i == 0 light position
+					{
+						float angle = 20.0f;
+						// v*M order: scale, then rotate, then translate
+						model = Matrix4x4::scaling(cube_scales[i - 1])
+							* Matrix4x4::rotation_axis(Vector3(1.0f, 0.3f, 0.5f), (float)get_time() * radians(angle))
+							* Matrix4x4::translation(cube_positions[i].xyz());
+					}
+					else
+					{
+						model = Matrix4x4::scaling(Vector3(0.5f))
+							* Matrix4x4::translation(cube_positions[i].xyz());
+					}
+					ubo.mvp.model[i] = model;
+				}
+
+				model = Matrix4x4::translation(backpack_pos.xyz());
+				ubo.mvp.model[10] = model;
+
+				ubo.point_light.position[0] = *light_pos;
+				ubo.cam.pos = Vector4(camera.pos, 0.0f);
+				ubo.mvp.view = Matrix4x4::look_at_rh(camera.pos, camera.pos + camera.front, camera.up);
+				Matrix4x4 view_sb = ubo.mvp.view;
+				view_sb.data._41 = 0.0f;
+				view_sb.data._42 = 0.0f;
+				view_sb.data._43 = 0.0f;
+				ubo.mvp.view_sb = view_sb;
+				ubo.mvp.proj = Matrix4x4::perspective_fov_rh_gl(radians(fov), 1920.0f / 1080.0f, 0.1f, 100.0f);
+				ubo.spot_light.position[0] = ubo.cam.pos;
+				ubo.spot_light.direction[0] = Vector4(camera.front, 0.0f);
+				ubo.mvp.ui_ortho = ortho;
+
 			}
-			else
-			{
-				model = Matrix4x4::scaling(Vector3(0.5f))
-					* Matrix4x4::translation(cube_positions[i].xyz());
+
+			yar_resource_update_desc resource_update_desc;
+			yar_buffer_update_desc update;
+			update.buffer = ubo_buf[frame_index];
+			update.size = sizeof(ubo);
+			resource_update_desc = &update;
+
+			{ YAR_CPU_SCOPE("UBO Map");
+				begin_update_resource(resource_update_desc);
 			}
-			ubo.mvp.model[i] = model;
+
+			{ YAR_CPU_SCOPE("UBO Write");
+				std::memcpy(update.mapped_data, &ubo, sizeof(ubo));
+			}
+
+			{ YAR_CPU_SCOPE("UBO Unmap");
+				end_update_resource(resource_update_desc);
+			}
+
 		}
 
-		model = Matrix4x4::translation(backpack_pos.xyz());
-		ubo.mvp.model[10] = model;
+		{ YAR_CPU_SCOPE("Record");
 
-		ubo.point_light.position[0] = *light_pos;
-		ubo.cam.pos = Vector4(camera.pos, 0.0f);
-		ubo.mvp.view = Matrix4x4::look_at_rh(camera.pos, camera.pos + camera.front, camera.up);
-		Matrix4x4 view_sb = ubo.mvp.view;
-		view_sb.data._41 = 0.0f;
-		view_sb.data._42 = 0.0f;
-		view_sb.data._43 = 0.0f;
-		ubo.mvp.view_sb = view_sb;
-		ubo.mvp.proj = Matrix4x4::perspective_fov_rh_gl(radians(fov), 1920.0f / 1080.0f, 0.1f, 100.0f);
-		ubo.spot_light.position[0] = ubo.cam.pos;
-		ubo.spot_light.direction[0] = Vector4(camera.front, 0.0f);
-		ubo.mvp.ui_ortho = ortho;
+			uint32_t sc_image;
+			acquire_next_image(swapchain, sc_image);
 
-		yar_resource_update_desc resource_update_desc;
-		yar_buffer_update_desc update;
-		update.buffer = ubo_buf[frame_index];
-		update.size = sizeof(ubo);
-		resource_update_desc = &update;
-		begin_update_resource(resource_update_desc);
-		std::memcpy(update.mapped_data, &ubo, sizeof(ubo));
-		end_update_resource(resource_update_desc);
+			YAR_GPU_SCOPE_BEGIN(cmd, "GPU Frame");
 
-		uint32_t sc_image;
-		acquire_next_image(swapchain, sc_image);
+			yar_render_pass_desc shadow_map_pass_desc{};
+			shadow_map_pass_desc.color_attachment_count = 0;
+			shadow_map_pass_desc.depth_stencil_attachment.target = shadow_map_target;
+			YAR_GPU_SCOPE_BEGIN(cmd, "Shadow Pass");
+			cmd_begin_render_pass(cmd, &shadow_map_pass_desc);
+			{
+				cmd_set_viewport(cmd, shadow_map_dims, shadow_map_dims);
+				cmd_bind_descriptor_set(cmd, ubo_desc, frame_index);
+				cmd_bind_pipeline(cmd, shadow_map_pipeline);
 
-		yar_render_pass_desc shadow_map_pass_desc{};
-		shadow_map_pass_desc.color_attachment_count = 0;
-		shadow_map_pass_desc.depth_stencil_attachment.target = shadow_map_target;
-		cmd_begin_render_pass(cmd, &shadow_map_pass_desc);
-		{
-			cmd_set_viewport(cmd, shadow_map_dims, shadow_map_dims);
+				YAR_GPU_SCOPE_BEGIN(cmd, "Cubes");
+				for (uint32_t i = 0; i < 10; ++i)
+				{
+					cmd_bind_push_constant(cmd, &i);
+					test_mesh.bind_and_draw(cmd, sizeof(VertexStatic));
+				}
+				YAR_GPU_SCOPE_END(cmd);
+
+				YAR_GPU_SCOPE_BEGIN(cmd, "Sponza");
+				uint32_t index = 10;
+				cmd_bind_push_constant(cmd, &index);
+				sponza->draw(cmd, false);
+				YAR_GPU_SCOPE_END(cmd);
+			}
+			cmd_end_render_pass(cmd);
+			YAR_GPU_SCOPE_END(cmd);
+
+			yar_render_pass_desc pass_desc{};
+			pass_desc.color_attachment_count = 1;
+			pass_desc.color_attachments[0].target = swapchain->render_targets[sc_image];
+			pass_desc.depth_stencil_attachment.target = depth_buffer;
+
+			YAR_GPU_SCOPE_BEGIN(cmd, "Main Pass");
+			cmd_begin_render_pass(cmd, &pass_desc);
+
+			cmd_set_viewport(cmd, 1920, 1080);
+			cmd_bind_pipeline(cmd, graphics_pipeline);
 			cmd_bind_descriptor_set(cmd, ubo_desc, frame_index);
-			cmd_bind_pipeline(cmd, shadow_map_pipeline);
+			cmd_bind_descriptor_set(cmd, shadow_map_ds_desc, 0);
+
+			YAR_GPU_SCOPE_BEGIN(cmd, "Cubes");
 			for (uint32_t i = 0; i < 10; ++i)
 			{
+				cmd_bind_descriptor_set(cmd, cube_material.descriptor_set, 0);
 				cmd_bind_push_constant(cmd, &i);
 				test_mesh.bind_and_draw(cmd, sizeof(VertexStatic));
 			}
+			YAR_GPU_SCOPE_END(cmd);
 
+			YAR_GPU_SCOPE_BEGIN(cmd, "Sponza");
 			uint32_t index = 10;
 			cmd_bind_push_constant(cmd, &index);
-			sponza->draw(cmd, false);
-		}
-		cmd_end_render_pass(cmd);
+			sponza->draw(cmd);
+			YAR_GPU_SCOPE_END(cmd);
 
-		yar_render_pass_desc pass_desc{};
-		pass_desc.color_attachment_count = 1;
-		pass_desc.color_attachments[0].target = swapchain->render_targets[sc_image];
-		pass_desc.depth_stencil_attachment.target = depth_buffer;
+			YAR_GPU_SCOPE_BEGIN(cmd, "Skybox");
+			cmd_bind_pipeline(cmd, skybox_pipeline);
+			cmd_bind_descriptor_set(cmd, skybox_material.descriptor_set, 0);
+			skybox_mesh.bind_and_draw(cmd, sizeof(VertexSkybox));
+			YAR_GPU_SCOPE_END(cmd);
 
-		cmd_begin_render_pass(cmd, &pass_desc);
-		
-		cmd_set_viewport(cmd, 1920, 1080);
-		cmd_bind_pipeline(cmd, graphics_pipeline);
-		cmd_bind_descriptor_set(cmd, ubo_desc, frame_index);
-		cmd_bind_descriptor_set(cmd, shadow_map_ds_desc, 0);
-
-		for (uint32_t i = 0; i < 10; ++i)
-		{
-			cmd_bind_descriptor_set(cmd, cube_material.descriptor_set, 0);
-			cmd_bind_push_constant(cmd, &i);
-			test_mesh.bind_and_draw(cmd, sizeof(VertexStatic));
-		}
-
-		uint32_t index = 10;
-		cmd_bind_push_constant(cmd, &index);
-		sponza->draw(cmd);
-
-		cmd_bind_pipeline(cmd, skybox_pipeline);
-		cmd_bind_descriptor_set(cmd, skybox_material.descriptor_set, 0);
-		skybox_mesh.bind_and_draw(cmd, sizeof(VertexSkybox));
-
-		cmd_bind_pipeline(cmd, imgui_pipeline);
-		cmd_bind_descriptor_set(cmd, imgui_set, 0);
-		cmd_bind_vertex_buffer(cmd, imgui_vb, imgui_layout.attrib_count, 0, sizeof(ImDrawVert));
-		cmd_bind_index_buffer(cmd, imgui_ib);
-		cmd_set_viewport(cmd, fb_width, fb_height);
-		for (int i = 0; i < draw_data->CmdListsCount; ++i)
-		{
-			const ImDrawList* cmd_list = draw_data->CmdLists[i];
-			cmd_update_buffer(cmd, imgui_vb, 0, cmd_list->VtxBuffer.Size * sizeof(ImDrawVert), cmd_list->VtxBuffer.Data);
-			cmd_update_buffer(cmd, imgui_ib, 0, cmd_list->IdxBuffer.Size * sizeof(ImDrawIdx), cmd_list->IdxBuffer.Data);
-			for (uint32_t j = 0; j < cmd_list->CmdBuffer.Size; ++j)
+			YAR_GPU_SCOPE_BEGIN(cmd, "ImGui");
+			cmd_bind_pipeline(cmd, imgui_pipeline);
+			cmd_bind_descriptor_set(cmd, imgui_set, 0);
+			cmd_bind_vertex_buffer(cmd, imgui_vb, imgui_layout.attrib_count, 0, sizeof(ImDrawVert));
+			cmd_bind_index_buffer(cmd, imgui_ib);
+			cmd_set_viewport(cmd, fb_width, fb_height);
+			for (int i = 0; i < draw_data->CmdListsCount; ++i)
 			{
-				const ImDrawCmd* draw_cmd = &cmd_list->CmdBuffer[j];
+				const ImDrawList* cmd_list = draw_data->CmdLists[i];
+				cmd_update_buffer(cmd, imgui_vb, 0, cmd_list->VtxBuffer.Size * sizeof(ImDrawVert), cmd_list->VtxBuffer.Data);
+				cmd_update_buffer(cmd, imgui_ib, 0, cmd_list->IdxBuffer.Size * sizeof(ImDrawIdx), cmd_list->IdxBuffer.Data);
+				for (uint32_t j = 0; j < cmd_list->CmdBuffer.Size; ++j)
+				{
+					const ImDrawCmd* draw_cmd = &cmd_list->CmdBuffer[j];
 
-				// Project scissor/clipping rectangles into framebuffer space
-				ImVec2 clip_min((draw_cmd->ClipRect.x - clip_off.x)* clip_scale.x, (draw_cmd->ClipRect.y - clip_off.y)* clip_scale.y);
-				ImVec2 clip_max((draw_cmd->ClipRect.z - clip_off.x)* clip_scale.x, (draw_cmd->ClipRect.w - clip_off.y)* clip_scale.y);
-				if (clip_max.x <= clip_min.x || clip_max.y <= clip_min.y)
-					continue;
+					// Project scissor/clipping rectangles into framebuffer space
+					ImVec2 clip_min((draw_cmd->ClipRect.x - clip_off.x)* clip_scale.x, (draw_cmd->ClipRect.y - clip_off.y)* clip_scale.y);
+					ImVec2 clip_max((draw_cmd->ClipRect.z - clip_off.x)* clip_scale.x, (draw_cmd->ClipRect.w - clip_off.y)* clip_scale.y);
+					if (clip_max.x <= clip_min.x || clip_max.y <= clip_min.y)
+						continue;
 
-				cmd_set_scissor(cmd, (int)clip_min.x, (int)((float)fb_height - clip_max.y), (int)(clip_max.x - clip_min.x), (int)(clip_max.y - clip_min.y));
-				cmd_draw_indexed(cmd, draw_cmd->ElemCount, yar_index_type_ushort, draw_cmd->IdxOffset, draw_cmd->VtxOffset);
+					cmd_set_scissor(cmd, (int)clip_min.x, (int)((float)fb_height - clip_max.y), (int)(clip_max.x - clip_min.x), (int)(clip_max.y - clip_min.y));
+					cmd_draw_indexed(cmd, draw_cmd->ElemCount, yar_index_type_ushort, draw_cmd->IdxOffset, draw_cmd->VtxOffset);
+				}
 			}
+
+
+			YAR_GPU_SCOPE_END(cmd); // ImGui
+
+			cmd_end_render_pass(cmd);
+			YAR_GPU_SCOPE_END(cmd); // Main Pass
+
+			YAR_GPU_SCOPE_END(cmd); // GPU Frame
+
+		} // Record
+
+		{ YAR_CPU_SCOPE("Submit");
+			queue_submit(queue);
 		}
 
+		{ YAR_CPU_SCOPE("Present");
+			yar_queue_present_desc present_desc{};
+			present_desc.swapchain = swapchain;
+			queue_present(queue, &present_desc);
+		}
 
-		cmd_end_render_pass(cmd);
-
-		queue_submit(queue);
-
-		yar_queue_present_desc present_desc{};
-		present_desc.swapchain = swapchain;
-		queue_present(queue, &present_desc);
-		
 		frame_index = (frame_index + 1) % image_count;
 	}
 

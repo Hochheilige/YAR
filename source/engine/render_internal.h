@@ -48,4 +48,8 @@ struct yar_device
     void (*cmd_set_scissor)(yar_cmd_buffer* cmd, uint32_t x, uint32_t y, uint32_t width, uint32_t height);
     void (*queue_submit)(yar_cmd_queue* queue);
     void (*queue_present)(yar_cmd_queue* queue, yar_queue_present_desc* desc);
+
+    void (*cmd_begin_gpu_scope)(yar_cmd_buffer* cmd, const char* name);
+    void (*cmd_end_gpu_scope)(yar_cmd_buffer* cmd);
+    uint32_t (*get_gpu_scope_results)(yar_gpu_scope_result* out, uint32_t max_count);
 };

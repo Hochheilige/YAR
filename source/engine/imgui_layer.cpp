@@ -2,6 +2,8 @@
 #include <backends/imgui_impl_win32.h>
 #include <backends/imgui_impl_opengl3.h>
 
+#include "profiler.h"
+
 #include <functional>
 #include <Windows.h>
 
@@ -17,6 +19,8 @@ static std::function<void()> default_layer = []()
 		ImGui::Begin("Performance");
 		ImGui::Text("Frame time: %.2f ms (%.1f FPS)", ms, fps);
 		ImGui::End();
+
+		profiler_draw_imgui();
 	};
 
 static std::function<void()> app_layer{ nullptr };
