@@ -14,6 +14,7 @@
 #include <fstream>
 
 #include <vector>
+#include <array>
 #include <string>
 #include <codecvt>
 #include <spirv_reflect.h>
@@ -56,14 +57,22 @@ struct yar_gl_swapchain
     GLuint fbo;
 };
 
+struct yar_gl_format_info
+{
+    GLenum internal_format;
+    GLenum format;
+    GLenum type;
+    bool is_compressed;
+    GLint attrib_size;
+    bool attrib_normalized;
+};
+
 struct yar_gl_texture
 {
     yar_texture common;
     yar_gl_texture_type type;
+    yar_gl_format_info fi;
     GLuint id;
-    GLuint internal_format;
-    GLuint gl_format;
-    GLuint gl_type;
 };
 
 struct yar_gl_shader
@@ -125,6 +134,84 @@ struct yar_gl_cmd_buffer
     GLuint fbo;
     bool scissor_enabled;
 };
+
+static constexpr std::array<yar_gl_format_info, yar_format_count> build_gl_format_table()
+{
+    std::array<yar_gl_format_info, yar_format_count> t{};
+
+    t[yar_format_undefined]           = { GL_NONE,               GL_NONE,            GL_NONE,                           false, 0, false };
+    t[yar_format_r8_unorm]            = { GL_R8,                 GL_RED,             GL_UNSIGNED_BYTE,                  false, 1, true };
+    t[yar_format_r8_snorm]            = { GL_R8_SNORM,           GL_RED,             GL_BYTE,                           false, 1, true };
+    t[yar_format_r8_uint]             = { GL_R8UI,               GL_RED_INTEGER,     GL_UNSIGNED_BYTE,                  false, 1, false };
+    t[yar_format_r8_sint]             = { GL_R8I,                GL_RED_INTEGER,     GL_BYTE,                           false, 1, false };
+    t[yar_format_r5g6b5_unorm]        = { GL_RGB565,             GL_RGB,             GL_UNSIGNED_SHORT_5_6_5,           false, 0, false };
+    t[yar_format_r8g8_unorm]          = { GL_RG8,                GL_RG,              GL_UNSIGNED_BYTE,                  false, 2, true };
+    t[yar_format_r8g8_snorm]          = { GL_RG8_SNORM,          GL_RG,              GL_BYTE,                           false, 2, true };
+    t[yar_format_r8g8_uint]           = { GL_RG8UI,              GL_RG_INTEGER,      GL_UNSIGNED_BYTE,                  false, 2, false };
+    t[yar_format_r8g8_sint]           = { GL_RG8I,               GL_RG_INTEGER,      GL_BYTE,                           false, 2, false };
+    t[yar_format_r16_unorm]           = { GL_R16,                GL_RED,             GL_UNSIGNED_SHORT,                 false, 1, true };
+    t[yar_format_r16_snorm]           = { GL_R16_SNORM,          GL_RED,             GL_SHORT,                          false, 1, true };
+    t[yar_format_r16_uint]            = { GL_R16UI,              GL_RED_INTEGER,     GL_UNSIGNED_SHORT,                 false, 1, false };
+    t[yar_format_r16_sint]            = { GL_R16I,               GL_RED_INTEGER,     GL_SHORT,                          false, 1, false };
+    t[yar_format_r16_sfloat]          = { GL_R16F,               GL_RED,             GL_HALF_FLOAT,                     false, 1, false };
+    t[yar_format_r8g8b8a8_unorm]      = { GL_RGBA8,              GL_RGBA,            GL_UNSIGNED_BYTE,                  false, 4, true };
+    t[yar_format_b8g8r8a8_unorm]      = { GL_RGBA8,              GL_BGRA,            GL_UNSIGNED_BYTE,                  false, GL_BGRA, true };
+    t[yar_format_r8g8b8a8_snorm]      = { GL_RGBA8_SNORM,        GL_RGBA,            GL_BYTE,                           false, 4, true };
+    t[yar_format_r8g8b8a8_uint]       = { GL_RGBA8UI,            GL_RGBA_INTEGER,    GL_UNSIGNED_BYTE,                  false, 4, false };
+    t[yar_format_r8g8b8a8_sint]       = { GL_RGBA8I,             GL_RGBA_INTEGER,    GL_BYTE,                           false, 4, false };
+    t[yar_format_r8g8b8a8_srgb]       = { GL_SRGB8_ALPHA8,       GL_RGBA,            GL_UNSIGNED_BYTE,                  false, 0, false };
+    t[yar_format_b8g8r8a8_srgb]       = { GL_SRGB8_ALPHA8,       GL_BGRA,            GL_UNSIGNED_BYTE,                  false, 0, false };
+    t[yar_format_r16g16_unorm]        = { GL_RG16,               GL_RG,              GL_UNSIGNED_SHORT,                 false, 2, true };
+    t[yar_format_r16g16_snorm]        = { GL_RG16_SNORM,         GL_RG,              GL_SHORT,                          false, 2, true };
+    t[yar_format_r16g16_uint]         = { GL_RG16UI,             GL_RG_INTEGER,      GL_UNSIGNED_SHORT,                 false, 2, false };
+    t[yar_format_r16g16_sint]         = { GL_RG16I,              GL_RG_INTEGER,      GL_SHORT,                          false, 2, false };
+    t[yar_format_r16g16_sfloat]       = { GL_RG16F,              GL_RG,              GL_HALF_FLOAT,                     false, 2, false };
+    t[yar_format_r32_uint]            = { GL_R32UI,              GL_RED_INTEGER,     GL_UNSIGNED_INT,                   false, 1, false };
+    t[yar_format_r32_sint]            = { GL_R32I,               GL_RED_INTEGER,     GL_INT,                            false, 1, false };
+    t[yar_format_r32_sfloat]          = { GL_R32F,               GL_RED,             GL_FLOAT,                          false, 1, false };
+    t[yar_format_r10g10b10a2_unorm]   = { GL_RGB10_A2,           GL_RGBA,            GL_UNSIGNED_INT_2_10_10_10_REV,    false, 4, true };
+    t[yar_format_r10g10b10a2_uint]    = { GL_RGB10_A2UI,         GL_RGBA_INTEGER,    GL_UNSIGNED_INT_2_10_10_10_REV,    false, 4, false };
+    t[yar_format_r11g11b10_ufloat]    = { GL_R11F_G11F_B10F,     GL_RGB,             GL_UNSIGNED_INT_10F_11F_11F_REV,   false, 3, false };
+    t[yar_format_r9g9b9e5_ufloat]     = { GL_RGB9_E5,            GL_RGB,             GL_UNSIGNED_INT_5_9_9_9_REV,       false, 0, false };
+    t[yar_format_r16g16b16a16_unorm]  = { GL_RGBA16,             GL_RGBA,            GL_UNSIGNED_SHORT,                 false, 4, true };
+    t[yar_format_r16g16b16a16_snorm]  = { GL_RGBA16_SNORM,       GL_RGBA,            GL_SHORT,                          false, 4, true };
+    t[yar_format_r16g16b16a16_uint]   = { GL_RGBA16UI,           GL_RGBA_INTEGER,    GL_UNSIGNED_SHORT,                 false, 4, false };
+    t[yar_format_r16g16b16a16_sint]   = { GL_RGBA16I,            GL_RGBA_INTEGER,    GL_SHORT,                          false, 4, false };
+    t[yar_format_r16g16b16a16_sfloat] = { GL_RGBA16F,            GL_RGBA,            GL_HALF_FLOAT,                     false, 4, false };
+    t[yar_format_r32g32_uint]         = { GL_RG32UI,             GL_RG_INTEGER,      GL_UNSIGNED_INT,                   false, 2, false };
+    t[yar_format_r32g32_sint]         = { GL_RG32I,              GL_RG_INTEGER,      GL_INT,                            false, 2, false };
+    t[yar_format_r32g32_sfloat]       = { GL_RG32F,              GL_RG,              GL_FLOAT,                          false, 2, false };
+    t[yar_format_r32g32b32_uint]      = { GL_RGB32UI,            GL_RGB_INTEGER,     GL_UNSIGNED_INT,                   false, 3, false };
+    t[yar_format_r32g32b32_sint]      = { GL_RGB32I,             GL_RGB_INTEGER,     GL_INT,                            false, 3, false };
+    t[yar_format_r32g32b32_sfloat]    = { GL_RGB32F,             GL_RGB,             GL_FLOAT,                          false, 3, false };
+    t[yar_format_r32g32b32a32_uint]   = { GL_RGBA32UI,           GL_RGBA_INTEGER,    GL_UNSIGNED_INT,                   false, 4, false };
+    t[yar_format_r32g32b32a32_sint]   = { GL_RGBA32I,            GL_RGBA_INTEGER,    GL_INT,                            false, 4, false };
+    t[yar_format_r32g32b32a32_sfloat] = { GL_RGBA32F,            GL_RGBA,            GL_FLOAT,                          false, 4, false };
+    t[yar_format_d16_unorm]           = { GL_DEPTH_COMPONENT16,  GL_DEPTH_COMPONENT, GL_UNSIGNED_SHORT,                 false, 0, false };
+    t[yar_format_d32_sfloat]          = { GL_DEPTH_COMPONENT32F, GL_DEPTH_COMPONENT, GL_FLOAT,                          false, 0, false };
+    t[yar_format_d32_sfloat_s8_uint]  = { GL_DEPTH32F_STENCIL8,  GL_DEPTH_STENCIL,   GL_FLOAT_32_UNSIGNED_INT_24_8_REV, false, 0, false };
+    t[yar_format_d32_sfloat_x8_uint]  = { GL_NONE,               GL_NONE,            GL_NONE,                           false, 0, false };
+    t[yar_format_x32_sfloat_s8_uint]  = { GL_NONE,               GL_NONE,            GL_NONE,                           false, 0, false };
+
+    t[yar_format_bc1_unorm]           = { GL_COMPRESSED_RGBA_S3TC_DXT1_EXT,       GL_NONE, GL_NONE, true, 0, false };
+    t[yar_format_bc1_srgb]            = { GL_COMPRESSED_SRGB_ALPHA_S3TC_DXT1_EXT, GL_NONE, GL_NONE, true, 0, false };
+    t[yar_format_bc2_unorm]           = { GL_COMPRESSED_RGBA_S3TC_DXT3_EXT,       GL_NONE, GL_NONE, true, 0, false };
+    t[yar_format_bc2_srgb]            = { GL_COMPRESSED_SRGB_ALPHA_S3TC_DXT3_EXT, GL_NONE, GL_NONE, true, 0, false };
+    t[yar_format_bc3_unorm]           = { GL_COMPRESSED_RGBA_S3TC_DXT5_EXT,       GL_NONE, GL_NONE, true, 0, false };
+    t[yar_format_bc3_srgb]            = { GL_COMPRESSED_SRGB_ALPHA_S3TC_DXT5_EXT, GL_NONE, GL_NONE, true, 0, false };
+    t[yar_format_bc4_unorm]           = { GL_COMPRESSED_RED_RGTC1,                GL_NONE, GL_NONE, true, 0, false };
+    t[yar_format_bc4_snorm]           = { GL_COMPRESSED_SIGNED_RED_RGTC1,         GL_NONE, GL_NONE, true, 0, false };
+    t[yar_format_bc5_unorm]           = { GL_COMPRESSED_RG_RGTC2,                 GL_NONE, GL_NONE, true, 0, false };
+    t[yar_format_bc5_snorm]           = { GL_COMPRESSED_SIGNED_RG_RGTC2,          GL_NONE, GL_NONE, true, 0, false };
+    t[yar_format_bc6_ufloat]          = { GL_COMPRESSED_RGB_BPTC_UNSIGNED_FLOAT,  GL_NONE, GL_NONE, true, 0, false };
+    t[yar_format_bc6_sfloat]          = { GL_COMPRESSED_RGB_BPTC_SIGNED_FLOAT,    GL_NONE, GL_NONE, true, 0, false };
+    t[yar_format_bc7_unorm]           = { GL_COMPRESSED_RGBA_BPTC_UNORM,          GL_NONE, GL_NONE, true, 0, false };
+    t[yar_format_bc7_srgb]            = { GL_COMPRESSED_SRGB_ALPHA_BPTC_UNORM,    GL_NONE, GL_NONE, true, 0, false };
+
+    return t;
+}
+
+static constexpr auto gl_format_table = build_gl_format_table();
 
 // ======================================= //
 //            Utils Functions              //
@@ -387,118 +474,9 @@ static void util_create_shader_reflection(std::vector<uint8_t>& spirv, std::vect
     spvReflectDestroyShaderModule(&module);
 }
 
-static GLenum util_get_gl_internal_format(yar_texture_format format)
+static yar_gl_format_info util_get_gl_format_info(yar_format format)
 {
-    switch (format)
-    {
-    case yar_texture_format_r8:
-        return GL_R8;
-    case yar_texture_format_rgb8:
-        return GL_RGB8;
-    case yar_texture_format_rgba8:
-        return GL_RGBA8;
-    case yar_texture_format_srgb8:
-        return GL_SRGB8;
-    case yar_texture_format_srgba8:
-        return GL_SRGB8_ALPHA8;
-    case yar_texture_format_rgb16f:
-        return GL_RGB16F;
-    case yar_texture_format_rgba16f:
-        return GL_RGBA16F;
-    case yar_texture_format_rgba32f:
-        return GL_RGBA32F;
-    case yar_texture_format_depth16:
-        return GL_DEPTH_COMPONENT16;
-    case yar_texture_format_depth24:
-        return GL_DEPTH_COMPONENT24;
-    case yar_texture_format_depth32f:
-        return GL_DEPTH_COMPONENT32F;
-    case yar_texture_format_depth24_stencil8:
-        return GL_DEPTH24_STENCIL8;
-    case yar_texture_format_bc1:
-        return GL_COMPRESSED_RGBA_S3TC_DXT1_EXT;
-    case yar_texture_format_bc1_srgb:
-        return GL_COMPRESSED_SRGB_ALPHA_S3TC_DXT1_EXT;
-    case yar_texture_format_bc2:
-        return GL_COMPRESSED_RGBA_S3TC_DXT3_EXT;
-    case yar_texture_format_bc3:
-        return GL_COMPRESSED_RGBA_S3TC_DXT5_EXT;
-    case yar_texture_format_bc3_srgb:
-        return GL_COMPRESSED_SRGB_ALPHA_S3TC_DXT5_EXT; 
-    case yar_texture_format_bc4:
-        return GL_COMPRESSED_RED_RGTC1;
-    case yar_texture_format_bc4_snorm:
-        return GL_COMPRESSED_SIGNED_RED_RGTC1;
-    case yar_texture_format_bc5:
-        return GL_COMPRESSED_RG_RGTC2;
-    case yar_texture_format_bc5_snorm:
-        return GL_COMPRESSED_SIGNED_RG_RGTC2;
-    case yar_texture_format_bc6h:
-        return GL_COMPRESSED_RGB_BPTC_UNSIGNED_FLOAT;
-
-    case yar_texture_format_bc6h_sfloat:
-        return GL_COMPRESSED_RGB_BPTC_SIGNED_FLOAT;
-    case yar_texture_format_bc7:
-        return GL_COMPRESSED_RGBA_BPTC_UNORM;
-    case yar_texture_format_bc7_srgb:
-        return GL_COMPRESSED_SRGB_ALPHA_BPTC_UNORM;
-    default:
-        return GL_NONE;
-    }
-}
-
-static GLenum util_get_gl_format(yar_texture_format format)
-{
-    switch (format)
-    {
-    case yar_texture_format_r8:
-        return GL_RED;
-    case yar_texture_format_rgb8:
-    case yar_texture_format_srgb8:
-    case yar_texture_format_rgb16f:
-        return GL_RGB;
-    case yar_texture_format_rgba8:
-    case yar_texture_format_srgba8:
-    case yar_texture_format_rgba16f:
-    case yar_texture_format_rgba32f:
-        return GL_RGBA;
-    case yar_texture_format_depth16:
-    case yar_texture_format_depth24:
-    case yar_texture_format_depth32f:
-        return GL_DEPTH_COMPONENT;
-    case yar_texture_format_depth24_stencil8:
-        return GL_DEPTH_STENCIL;
-    default:
-        return GL_NONE;
-    }
-}
-
-static GLenum util_get_gl_texture_data_type(yar_texture_format format)
-{
-    switch (format)
-    {
-    case yar_texture_format_r8:
-    case yar_texture_format_rgb8:
-    case yar_texture_format_rgba8:
-    case yar_texture_format_srgb8:
-    case yar_texture_format_srgba8:
-        return GL_UNSIGNED_BYTE;
-    case yar_texture_format_rgb16f:
-    case yar_texture_format_rgba16f:
-        return GL_HALF_FLOAT;
-    case yar_texture_format_rgba32f:
-        return GL_FLOAT;
-    case yar_texture_format_depth16:
-        return GL_UNSIGNED_SHORT;
-    case yar_texture_format_depth24:
-        return GL_UNSIGNED_INT;
-    case yar_texture_format_depth32f:
-        return GL_FLOAT;
-    case yar_texture_format_depth24_stencil8:
-        return GL_UNSIGNED_INT_24_8;
-    default:
-        return GL_NONE;
-    }
+    return gl_format_table[format];
 }
 
 static GLenum util_get_gl_texture_target(yar_texture_type type)
@@ -549,31 +527,6 @@ static GLint util_get_gl_wrap_mode(yar_wrap_mode mode)
     case yar_wrap_mode_clamp_edge: return GL_CLAMP_TO_EDGE;
     case yar_wrap_mode_clamp_border: return GL_CLAMP_TO_BORDER;
     default: return GL_REPEAT;
-    }
-}
-
-static GLenum util_get_gl_attrib_format(yar_vertex_attrib_format format)
-{
-    switch (format)
-    {
-    case yar_attrib_format_float:
-        return GL_FLOAT;
-    case yar_attrib_format_half_float:
-        return GL_HALF_FLOAT;
-    case yar_attrib_format_byte:  
-        return GL_BYTE;
-    case yar_attrib_format_ubyte:
-        return GL_UNSIGNED_BYTE;
-    case yar_attrib_format_short:
-        return GL_SHORT;
-    case yar_attrib_format_ushort:
-        return GL_UNSIGNED_SHORT;
-    case yar_attrib_format_int:
-        return GL_INT;
-    case yar_attrib_format_uint:
-        return GL_UNSIGNED_INT;
-    default:
-        return GL_FLOAT;
     }
 }
 
@@ -812,17 +765,18 @@ void gl_endUpdateTexture(yar_texture_update_desc* desc)
     unmap_buffer(pixel_buffer);
     
     yar_gl_texture* texture = reinterpret_cast<yar_gl_texture*>(desc->texture);
+    yar_gl_format_info fi = util_get_gl_format_info(texture->common.format);
 
-    bool is_compressed = (texture->gl_format == GL_NONE);
+    bool is_compressed = fi.is_compressed;
 
     uint32_t mip_level = desc->mip_level;
 
     GLsizei width = std::max(1u, texture->common.width >> mip_level);
     GLsizei height = std::max(1u, texture->common.height >> mip_level);
     GLsizei depth = texture->common.depth;
-    GLenum format = texture->gl_format;
-    GLenum type = texture->gl_type;
-    GLuint internal_format = texture->internal_format;
+    GLenum format = fi.format;
+    GLenum type = fi.type;
+    GLuint internal_format = fi.internal_format;
     uint32_t mip_count = texture->common.mip_levels;
 
     glBindBuffer(GL_PIXEL_UNPACK_BUFFER, pixel_buffer->id); 
@@ -1006,8 +960,9 @@ void gl_addTexture(yar_texture_desc* desc, yar_texture** texture)
     );
     *texture = &new_texture->common;
     
+    yar_gl_format_info fi = util_get_gl_format_info(desc->format);
+
     GLuint gl_target = util_get_gl_texture_target(desc->type);
-    GLenum gl_internal_format = util_get_gl_internal_format(desc->format);
     GLsizei width = desc->width;
     GLsizei height = desc->height;
     GLsizei depth = desc->depth;
@@ -1025,7 +980,7 @@ void gl_addTexture(yar_texture_desc* desc, yar_texture** texture)
     {
         new_texture->type = yar_gl_texture_type::yar_type_renderbuffer;
         glCreateRenderbuffers(1, &id);
-        glNamedRenderbufferStorage(id, gl_internal_format, width, height);
+        glNamedRenderbufferStorage(id, fi.internal_format, width, height);
     }
     else
     {
@@ -1035,21 +990,21 @@ void gl_addTexture(yar_texture_desc* desc, yar_texture** texture)
         switch (desc->type)
         {
         case yar_texture_type_1d:
-            glTextureStorage1D(id, mip_levels, gl_internal_format,
+            glTextureStorage1D(id, mip_levels, fi.internal_format,
                 width);
             break;
         case yar_texture_type_2d:
         case yar_texture_type_cube_map:
-            glTextureStorage2D(id, mip_levels, gl_internal_format,
+            glTextureStorage2D(id, mip_levels, fi.internal_format,
                 width, height);
             break;
         case yar_texture_type_3d:
-            glTextureStorage3D(id, mip_levels, gl_internal_format,
+            glTextureStorage3D(id, mip_levels, fi.internal_format,
                 width, height, depth);
             break;
         case yar_texture_type_1d_array:
         case yar_texture_type_2d_array:
-            glTextureStorage3D(id, mip_levels, gl_internal_format,
+            glTextureStorage3D(id, mip_levels, fi.internal_format,
                 width, height, array_size);
             break;
         default:
@@ -1057,9 +1012,7 @@ void gl_addTexture(yar_texture_desc* desc, yar_texture** texture)
         }
     }
         
-    new_texture->internal_format = gl_internal_format;
-    new_texture->gl_format = util_get_gl_format(desc->format);
-    new_texture->gl_type = util_get_gl_texture_data_type(desc->format);
+    new_texture->fi = fi;
     new_texture->common.type = desc->type;
     new_texture->common.format = desc->format;
     new_texture->common.width = width;
@@ -1364,12 +1317,19 @@ void gl_addPipeline(yar_pipeline_desc* desc, yar_pipeline** pipeline)
         glCreateVertexArrays(1, &vao);
         for (int i = 0; i < desc->vertex_layout.attrib_count; ++i)
         {
-            GLint size = desc->vertex_layout.attribs[i].size;
-            GLenum format = util_get_gl_attrib_format(desc->vertex_layout.attribs[i].format);
+            yar_gl_format_info fi = util_get_gl_format_info(desc->vertex_layout.attribs[i].format);
+            GLint size = fi.attrib_size;
+            GLenum type = fi.type;
+            GLboolean normalize = fi.attrib_normalized;
             GLuint offset = desc->vertex_layout.attribs[i].offset;
             GLuint binding = desc->vertex_layout.attribs[i].binding;
-            GLboolean normalize = format == GL_UNSIGNED_BYTE; // Stupid temp hack to normalize imgui colors
-            glVertexArrayAttribFormat(vao, i, size, format, normalize, offset);
+
+            if (fi.format == GL_RED_INTEGER || fi.format == GL_RG_INTEGER ||
+                fi.format == GL_RGB_INTEGER || fi.format == GL_RGBA_INTEGER)
+                glVertexArrayAttribIFormat(vao, i, size, type, offset);
+            else
+                glVertexArrayAttribFormat(vao, i, size, type, normalize, offset);
+            
             glVertexArrayAttribBinding(vao, i, binding);
             glEnableVertexArrayAttrib(vao, i);
         }

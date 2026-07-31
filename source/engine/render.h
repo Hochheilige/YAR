@@ -65,7 +65,7 @@ using yar_resource_update_desc = std::variant<yar_buffer_update_desc*, yar_textu
             - as far as OpenGL render immediately 
 */
 
-// TODO: Command probably have to be a struct for other rander API
+// TODO: Command probably have to be a struct for other render API
 using yar_command = std::function<void()>;
 using yar_descriptor_index_map = std::unordered_map<std::string, uint32_t>;
 
@@ -118,44 +118,76 @@ enum yar_texture_type
     yar_texture_type_cube_map
 };
 
-enum yar_texture_format : uint8_t
+enum yar_format
 {
-    yar_texture_format_none = 0,
-    yar_texture_format_r8,
-    yar_texture_format_rgb8,
-    yar_texture_format_rgba8,
-
-    yar_texture_format_srgb8,
-    yar_texture_format_srgba8,
-
-    yar_texture_format_rgb16f,
-    yar_texture_format_rgba16f,
-    yar_texture_format_rgba32f,
-
-    yar_texture_format_depth16,
-    yar_texture_format_depth24,
-    yar_texture_format_depth32f,
-    yar_texture_format_depth24_stencil8,
-
-    // compressed
-    yar_texture_format_bc1,
-    yar_texture_format_bc1_srgb,
-
-    yar_texture_format_bc2,
-    yar_texture_format_bc3,
-    yar_texture_format_bc3_srgb,
-
-    yar_texture_format_bc4,
-    yar_texture_format_bc4_snorm,
-
-    yar_texture_format_bc5,
-    yar_texture_format_bc5_snorm,
-
-    yar_texture_format_bc6h,
-    yar_texture_format_bc6h_sfloat,
-
-    yar_texture_format_bc7,
-    yar_texture_format_bc7_srgb,
+    yar_format_undefined = 0,
+    yar_format_r8_unorm = 1,
+    yar_format_r8_snorm = 2,
+    yar_format_r8_uint = 3,
+    yar_format_r8_sint = 4,
+    yar_format_r5g6b5_unorm = 5,
+    yar_format_r8g8_unorm = 6,
+    yar_format_r8g8_snorm = 7,
+    yar_format_r8g8_uint = 8,
+    yar_format_r8g8_sint = 9,
+    yar_format_r16_unorm = 10,
+    yar_format_r16_snorm = 11,
+    yar_format_r16_uint = 12,
+    yar_format_r16_sint = 13,
+    yar_format_r16_sfloat = 14,
+    yar_format_r8g8b8a8_unorm = 15,
+    yar_format_b8g8r8a8_unorm = 16,
+    yar_format_r8g8b8a8_snorm = 17,
+    yar_format_r8g8b8a8_uint = 18,
+    yar_format_r8g8b8a8_sint = 19,
+    yar_format_r8g8b8a8_srgb = 20,
+    yar_format_b8g8r8a8_srgb = 21,
+    yar_format_r16g16_unorm = 22,
+    yar_format_r16g16_snorm = 23,
+    yar_format_r16g16_uint = 24,
+    yar_format_r16g16_sint = 25,
+    yar_format_r16g16_sfloat = 26,
+    yar_format_r32_uint = 27,
+    yar_format_r32_sint = 28,
+    yar_format_r32_sfloat = 29,
+    yar_format_r10g10b10a2_unorm = 30,
+    yar_format_r10g10b10a2_uint = 31,
+    yar_format_r11g11b10_ufloat = 32,
+    yar_format_r9g9b9e5_ufloat = 33,
+    yar_format_r16g16b16a16_unorm = 34,
+    yar_format_r16g16b16a16_snorm = 35,
+    yar_format_r16g16b16a16_uint = 36,
+    yar_format_r16g16b16a16_sint = 37,
+    yar_format_r16g16b16a16_sfloat = 38,
+    yar_format_r32g32_uint = 39,
+    yar_format_r32g32_sint = 40,
+    yar_format_r32g32_sfloat = 41,
+    yar_format_r32g32b32_uint = 42,
+    yar_format_r32g32b32_sint = 43,
+    yar_format_r32g32b32_sfloat = 44,
+    yar_format_r32g32b32a32_uint = 45,
+    yar_format_r32g32b32a32_sint = 46,
+    yar_format_r32g32b32a32_sfloat = 47,
+    yar_format_d16_unorm = 48,
+    yar_format_d32_sfloat = 49,
+    yar_format_d32_sfloat_s8_uint = 50,
+    yar_format_d32_sfloat_x8_uint = 51,
+    yar_format_x32_sfloat_s8_uint = 52,
+    yar_format_bc1_unorm = 53,
+    yar_format_bc1_srgb = 54,
+    yar_format_bc2_unorm = 55,
+    yar_format_bc2_srgb = 56,
+    yar_format_bc3_unorm = 57,
+    yar_format_bc3_srgb = 58,
+    yar_format_bc4_unorm = 59,
+    yar_format_bc4_snorm = 60,
+    yar_format_bc5_unorm = 61,
+    yar_format_bc5_snorm = 62,
+    yar_format_bc6_ufloat = 63,
+    yar_format_bc6_sfloat = 64,
+    yar_format_bc7_unorm = 65,
+    yar_format_bc7_srgb = 66,
+    yar_format_count
 };
 
 enum yar_texture_usage : uint8_t
@@ -204,18 +236,6 @@ enum yar_resource_type : uint8_t
     yar_resource_type_sampler = 0x00000008,
 };
 MAKE_ENUM_FLAG(uint8_t, yar_resource_type);
-
-enum yar_vertex_attrib_format : uint8_t
-{
-    yar_attrib_format_float = 0,
-    yar_attrib_format_half_float,
-    yar_attrib_format_byte,
-    yar_attrib_format_ubyte,
-    yar_attrib_format_short,
-    yar_attrib_format_ushort,
-    yar_attrib_format_int,
-    yar_attrib_format_uint
-};
 
 enum yar_depth_stencil_func : uint8_t
 {
@@ -309,7 +329,7 @@ enum yar_index_type : uint8_t
 struct yar_texture_desc
 {
     yar_texture_type type;
-    yar_texture_format format;
+    yar_format format;
     yar_texture_usage usage;
     uint32_t width;
     uint32_t height;
@@ -322,7 +342,7 @@ struct yar_texture_desc
 struct yar_texture
 {
     yar_texture_type type;
-    yar_texture_format format;
+    yar_format format;
     uint32_t width;
     uint32_t height;
     uint32_t depth;
@@ -334,7 +354,7 @@ struct yar_render_target_desc
 {
     // It is literally the same as texture_desc now
     yar_texture_type type;
-    yar_texture_format format;
+    yar_format format;
     yar_texture_usage usage;
     uint32_t width;
     uint32_t height;
@@ -356,7 +376,7 @@ struct yar_swapchain_desc
     uint32_t width;
     uint32_t height;
     uint32_t buffer_count;
-    yar_texture_format format;
+    yar_format format;
     bool vsync;
 };
 
@@ -447,8 +467,7 @@ struct yar_shader
 
 struct yar_vertex_attrib
 {
-    uint32_t size;
-    yar_vertex_attrib_format format;
+    yar_format format;
     uint32_t binding;
     uint32_t offset;    
 };

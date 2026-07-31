@@ -45,88 +45,144 @@ std::wstring to_wstring(std::string_view sv)
 	return result;
 }
 
-inline yar_texture_format dxgi_to_yar_format(DXGI_FORMAT format)
+inline yar_format dxgi_to_yar_format(DXGI_FORMAT format)
 {
 	switch (format)
 	{
 		// =========================
-		// UNORM / SRGB 8-bit
+		// 8-bit
 		// =========================
-	case DXGI_FORMAT_R8_UNORM: return yar_texture_format_r8;
-	case DXGI_FORMAT_R8G8B8A8_UNORM: return yar_texture_format_rgba8;
-	case DXGI_FORMAT_R8G8B8A8_UNORM_SRGB: return yar_texture_format_srgba8;
+	case DXGI_FORMAT_R8_UNORM: return yar_format_r8_unorm;
+	case DXGI_FORMAT_R8_SNORM: return yar_format_r8_snorm;
+	case DXGI_FORMAT_R8_UINT: return yar_format_r8_uint;
+	case DXGI_FORMAT_R8_SINT: return yar_format_r8_sint;
 
-	case DXGI_FORMAT_B8G8R8A8_UNORM: return yar_texture_format_rgba8;
-	case DXGI_FORMAT_B8G8R8A8_UNORM_SRGB: return yar_texture_format_srgba8;
+	case DXGI_FORMAT_R8G8_UNORM: return yar_format_r8g8_unorm;
+	case DXGI_FORMAT_R8G8_SNORM: return yar_format_r8g8_snorm;
+	case DXGI_FORMAT_R8G8_UINT: return yar_format_r8g8_uint;
+	case DXGI_FORMAT_R8G8_SINT: return yar_format_r8g8_sint;
+
+	case DXGI_FORMAT_R8G8B8A8_UNORM: return yar_format_r8g8b8a8_unorm;
+	case DXGI_FORMAT_R8G8B8A8_SNORM: return yar_format_r8g8b8a8_snorm;
+	case DXGI_FORMAT_R8G8B8A8_UINT: return yar_format_r8g8b8a8_uint;
+	case DXGI_FORMAT_R8G8B8A8_SINT: return yar_format_r8g8b8a8_sint;
+	case DXGI_FORMAT_R8G8B8A8_UNORM_SRGB: return yar_format_r8g8b8a8_srgb;
+
+	case DXGI_FORMAT_B8G8R8A8_UNORM: return yar_format_b8g8r8a8_unorm;
+	case DXGI_FORMAT_B8G8R8A8_UNORM_SRGB: return yar_format_b8g8r8a8_srgb;
 
 		// =========================
-		// FLOAT formats
+		// 16-bit
 		// =========================
-	case DXGI_FORMAT_R16G16B16A16_FLOAT: return yar_texture_format_rgba16f;
-	case DXGI_FORMAT_R32G32B32A32_FLOAT:  return yar_texture_format_rgba32f;
+	case DXGI_FORMAT_R16_UNORM: return yar_format_r16_unorm;
+	case DXGI_FORMAT_R16_SNORM: return yar_format_r16_snorm;
+	case DXGI_FORMAT_R16_UINT: return yar_format_r16_uint;
+	case DXGI_FORMAT_R16_SINT: return yar_format_r16_sint;
+	case DXGI_FORMAT_R16_FLOAT: return yar_format_r16_sfloat;
+
+	case DXGI_FORMAT_R16G16_UNORM: return yar_format_r16g16_unorm;
+	case DXGI_FORMAT_R16G16_SNORM: return yar_format_r16g16_snorm;
+	case DXGI_FORMAT_R16G16_UINT: return yar_format_r16g16_uint;
+	case DXGI_FORMAT_R16G16_SINT: return yar_format_r16g16_sint;
+	case DXGI_FORMAT_R16G16_FLOAT: return yar_format_r16g16_sfloat;
+
+	case DXGI_FORMAT_R16G16B16A16_UNORM: return yar_format_r16g16b16a16_unorm;
+	case DXGI_FORMAT_R16G16B16A16_SNORM: return yar_format_r16g16b16a16_snorm;
+	case DXGI_FORMAT_R16G16B16A16_UINT: return yar_format_r16g16b16a16_uint;
+	case DXGI_FORMAT_R16G16B16A16_SINT: return yar_format_r16g16b16a16_sint;
+	case DXGI_FORMAT_R16G16B16A16_FLOAT: return yar_format_r16g16b16a16_sfloat;
+
+		// =========================
+		// 32-bit
+		// =========================
+	case DXGI_FORMAT_R32_UINT: return yar_format_r32_uint;
+	case DXGI_FORMAT_R32_SINT: return yar_format_r32_sint;
+	case DXGI_FORMAT_R32_FLOAT: return yar_format_r32_sfloat;
+
+	case DXGI_FORMAT_R32G32_UINT: return yar_format_r32g32_uint;
+	case DXGI_FORMAT_R32G32_SINT: return yar_format_r32g32_sint;
+	case DXGI_FORMAT_R32G32_FLOAT: return yar_format_r32g32_sfloat;
+
+	case DXGI_FORMAT_R32G32B32_UINT: return yar_format_r32g32b32_uint;
+	case DXGI_FORMAT_R32G32B32_SINT: return yar_format_r32g32b32_sint;
+	case DXGI_FORMAT_R32G32B32_FLOAT: return yar_format_r32g32b32_sfloat;
+
+	case DXGI_FORMAT_R32G32B32A32_UINT: return yar_format_r32g32b32a32_uint;
+	case DXGI_FORMAT_R32G32B32A32_SINT: return yar_format_r32g32b32a32_sint;
+	case DXGI_FORMAT_R32G32B32A32_FLOAT: return yar_format_r32g32b32a32_sfloat;
+
+		// =========================
+		// Packed
+		// =========================
+	case DXGI_FORMAT_R10G10B10A2_UNORM: return yar_format_r10g10b10a2_unorm;
+	case DXGI_FORMAT_R10G10B10A2_UINT: return yar_format_r10g10b10a2_uint;
+	case DXGI_FORMAT_R11G11B10_FLOAT: return yar_format_r11g11b10_ufloat;
+	case DXGI_FORMAT_R9G9B9E5_SHAREDEXP: return yar_format_r9g9b9e5_ufloat;
 
 		// =========================
 		// Depth formats
 		// =========================
-	case DXGI_FORMAT_D16_UNORM: return yar_texture_format_depth16;
-	case DXGI_FORMAT_D24_UNORM_S8_UINT: return yar_texture_format_depth24_stencil8;
-	case DXGI_FORMAT_D32_FLOAT: return yar_texture_format_depth32f;
+	case DXGI_FORMAT_D16_UNORM: return yar_format_d16_unorm;
+	case DXGI_FORMAT_D32_FLOAT: return yar_format_d32_sfloat;
+	case DXGI_FORMAT_D32_FLOAT_S8X24_UINT: return yar_format_d32_sfloat_s8_uint;
+		// DXGI_FORMAT_D24_UNORM_S8_UINT has no yar_format equivalent yet
 
 		// =========================
 		// BC1 / DXT1
 		// =========================
-	case DXGI_FORMAT_BC1_UNORM: return yar_texture_format_bc1;
-	case DXGI_FORMAT_BC1_UNORM_SRGB: return yar_texture_format_bc1_srgb;
+	case DXGI_FORMAT_BC1_UNORM: return yar_format_bc1_unorm;
+	case DXGI_FORMAT_BC1_UNORM_SRGB: return yar_format_bc1_srgb;
 
 		// =========================
 		// BC2 / DXT3
 		// =========================
-	case DXGI_FORMAT_BC2_UNORM: return yar_texture_format_bc2;
-	case DXGI_FORMAT_BC2_UNORM_SRGB: return yar_texture_format_bc2;
+	case DXGI_FORMAT_BC2_UNORM: return yar_format_bc2_unorm;
+	case DXGI_FORMAT_BC2_UNORM_SRGB: return yar_format_bc2_srgb;
 
 		// =========================
 		// BC3 / DXT5
 		// =========================
-	case DXGI_FORMAT_BC3_UNORM: return yar_texture_format_bc3;
-	case DXGI_FORMAT_BC3_UNORM_SRGB: return yar_texture_format_bc3_srgb;
+	case DXGI_FORMAT_BC3_UNORM: return yar_format_bc3_unorm;
+	case DXGI_FORMAT_BC3_UNORM_SRGB: return yar_format_bc3_srgb;
 
 		// =========================
 		// BC4 (single channel)
 		// =========================
-	case DXGI_FORMAT_BC4_UNORM: return yar_texture_format_bc4;
-	case DXGI_FORMAT_BC4_SNORM: return yar_texture_format_bc4_snorm;
+	case DXGI_FORMAT_BC4_UNORM: return yar_format_bc4_unorm;
+	case DXGI_FORMAT_BC4_SNORM: return yar_format_bc4_snorm;
 
 		// =========================
 		// BC5 (normal maps)
 		// =========================
-	case DXGI_FORMAT_BC5_UNORM: return yar_texture_format_bc5;
-	case DXGI_FORMAT_BC5_SNORM: return yar_texture_format_bc5_snorm;
+	case DXGI_FORMAT_BC5_UNORM: return yar_format_bc5_unorm;
+	case DXGI_FORMAT_BC5_SNORM: return yar_format_bc5_snorm;
 
 		// =========================
 		// BC6H (HDR)
 		// =========================
-	case DXGI_FORMAT_BC6H_UF16: return yar_texture_format_bc6h;
-	case DXGI_FORMAT_BC6H_SF16: return yar_texture_format_bc6h_sfloat;
+	case DXGI_FORMAT_BC6H_UF16: return yar_format_bc6_ufloat;
+	case DXGI_FORMAT_BC6H_SF16: return yar_format_bc6_sfloat;
 
 		// =========================
 		// BC7 (best quality color)
 		// =========================
-	case DXGI_FORMAT_BC7_UNORM: return yar_texture_format_bc7;
-	case DXGI_FORMAT_BC7_UNORM_SRGB: return yar_texture_format_bc7_srgb;
+	case DXGI_FORMAT_BC7_UNORM: return yar_format_bc7_unorm;
+	case DXGI_FORMAT_BC7_UNORM_SRGB: return yar_format_bc7_srgb;
 
 	default:
-		return yar_texture_format_none;
+		return yar_format_undefined;
 	}
 }
 
-inline yar_texture_format channels_to_yar_format(int32_t channels)
+inline yar_format channels_to_yar_format(int32_t channels)
 {
 	switch (channels)
 	{
-	case 1: return yar_texture_format_r8;
-	case 3: return yar_texture_format_rgb8;
-	case 4: return yar_texture_format_rgba8;
-	default: return yar_texture_format_none;
+	case 1: return yar_format_r8_unorm;
+	case 2: return yar_format_r8g8_unorm;
+	case 3: return yar_format_r8g8b8a8_unorm;
+	case 4: return yar_format_r8g8b8a8_unorm;
+	default: return yar_format_undefined;
 	}
 }
 
@@ -157,7 +213,7 @@ static auto load_debug_white_texture() -> std::shared_ptr<TextureAsset>
 	uint8_t* pixels = static_cast<uint8_t*>(std::malloc(4));
 	pixels[0] = 255; pixels[1] = 0; pixels[2] = 255; pixels[3] = 255;
 	texture->pixels = pixels;
-	texture->format = yar_texture_format_rgba8;
+	texture->format = yar_format_r8g8b8a8_unorm;
 	texture->source_format = TEX_SRC_PNG;
 
 	return texture;
@@ -206,16 +262,21 @@ static auto load_texture_async(std::string_view path) -> std::shared_ptr<Texture
 	}
 	else
 	{
-		int32_t width, height, channels;
+		int32_t width, height, file_channels;
+		if (!stbi_info(path.data(), &width, &height, &file_channels))
+			return load_debug_white_texture();
+		
+		const int32_t load_channels = (file_channels == 3) ? 4 : file_channels;
+
 		stbi_set_flip_vertically_on_load(false);
-		uint8_t* pixels = stbi_load(path.data(), &width, &height, &channels, 0);
+		uint8_t* pixels = stbi_load(path.data(), &width, &height, &file_channels, load_channels);
 		if (!pixels)
 			return load_debug_white_texture();
 
-		yar_texture_format format = channels_to_yar_format(channels);
-		if (format == yar_texture_format_none)
+		yar_format format = channels_to_yar_format(load_channels);
+		if (format == yar_format_undefined)
 		{
-			std::cerr << "Unsupported channel count " << channels << ": " << path << "\n";
+			std::cerr << "Unsupported channel count " << load_channels << ": " << path << "\n";
 			stbi_image_free(pixels);
 			return load_debug_white_texture();
 		}
@@ -223,7 +284,7 @@ static auto load_texture_async(std::string_view path) -> std::shared_ptr<Texture
 		texture->source_format = TEX_SRC_PNG;
 		texture->width = width;
 		texture->height = height;
-		texture->channels = channels;
+		texture->channels = load_channels;
 		texture->pixels = pixels;
 		texture->format = format;
 	}
@@ -252,7 +313,7 @@ yar_texture* get_gpu_texture(AssetHandle<TextureAsset>& texture_asset, yar_textu
 	{
 		const uint32_t cur_channels = asset->channels;
 		uint8_t* pixels = asset->pixels;
-		yar_texture_format format = asset->format;
+		yar_format format = asset->format;
 
 		if (pixels)
 		{
@@ -380,9 +441,17 @@ static auto load_cubemap_async(const std::array<std::string_view, 6>& paths) -> 
 	std::vector<uint8_t*> faces_pixels(6);
 
 	for (int i = 0; i < 6; ++i) {
-		int w, h, c;
+		int32_t w, h, file_channels;
+		if (!stbi_info(paths[i].data(), &w, &h, &file_channels))
+			return load_debug_white_texture();
+
+		const int32_t load_channels = (file_channels == 3) ? 4 : file_channels;
+
 		stbi_set_flip_vertically_on_load(false);
-		uint8_t* pixels = stbi_load(paths[i].data(), &w, &h, &c, 0);
+		uint8_t* pixels = stbi_load(paths[i].data(), &w, &h, &file_channels, load_channels);
+		if (!pixels)
+			return load_debug_white_texture();
+
 		if (!pixels) {
 			std::cerr << "Failed to load cubemap face: " << paths[i] << "\n";
 			for (int j = 0; j < i; ++j) stbi_image_free(faces_pixels[j]);
@@ -392,10 +461,10 @@ static auto load_cubemap_async(const std::array<std::string_view, 6>& paths) -> 
 		if (i == 0) {
 			width = w;
 			height = h;
-			channels = c;
+			channels = load_channels;
 		}
 		else {
-			if (w != width || h != height || c != channels) {
+			if (w != width || h != height || load_channels != channels) {
 				std::cerr << "Cubemap face size mismatch: " << paths[i] << "\n";
 				stbi_image_free(pixels);
 				for (int j = 0; j < i; ++j) stbi_image_free(faces_pixels[j]);
@@ -406,8 +475,8 @@ static auto load_cubemap_async(const std::array<std::string_view, 6>& paths) -> 
 		faces_pixels[i] = pixels;
 	}
 
-	yar_texture_format format = channels_to_yar_format(channels);
-	if (format == yar_texture_format_none) {
+	yar_format format = channels_to_yar_format(channels);
+	if (format == yar_format_undefined) {
 		std::cerr << "Unsupported cubemap channel count " << channels << ": " << paths[0] << "\n";
 		for (int j = 0; j < 6; ++j) stbi_image_free(faces_pixels[j]);
 		return nullptr;

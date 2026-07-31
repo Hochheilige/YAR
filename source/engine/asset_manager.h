@@ -29,7 +29,7 @@ struct TextureAsset
 
 	uint32_t width;
 	uint32_t height;
-	yar_texture_format format;
+	yar_format format;
 
 	uint32_t channels;
 	uint8_t* pixels;

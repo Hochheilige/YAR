@@ -40,7 +40,7 @@ yar_texture* get_imgui_fonts()
 	desc.width = width;
 	desc.height = height;
 	desc.mip_levels = 1;
-	desc.format = yar_texture_format_rgba8;
+	desc.format = yar_format_r8g8b8a8_unorm;
 	desc.name = "ImGui Fonts";
 	desc.type = yar_texture_type_2d;
 	desc.usage = yar_texture_usage_shader_resource;
@@ -140,7 +140,7 @@ auto main() -> int {
 	
 	yar_swapchain_desc swapchain_desc{};
 	swapchain_desc.buffer_count = 2;
-	swapchain_desc.format = yar_texture_format_srgba8;
+	swapchain_desc.format = yar_format_r8g8b8a8_srgb;
 	swapchain_desc.height = h;
 	swapchain_desc.width = w;
 	swapchain_desc.vsync = false;
@@ -149,7 +149,7 @@ auto main() -> int {
 	add_swapchain(&swapchain_desc, &swapchain);
 
 	yar_render_target_desc depth_buffer_desc{};
-	depth_buffer_desc.format = yar_texture_format_depth32f;
+	depth_buffer_desc.format = yar_format_d32_sfloat;
 	depth_buffer_desc.height = h;
 	depth_buffer_desc.width = w;
 	depth_buffer_desc.type = yar_texture_type_2d;
@@ -161,14 +161,14 @@ auto main() -> int {
 	depth_buffer_desc.height = shadow_map_dims;
 	depth_buffer_desc.width = shadow_map_dims;
 	depth_buffer_desc.usage = yar_texture_usage_shader_resource;
-	depth_buffer_desc.format = yar_texture_format_depth32f;
+	depth_buffer_desc.format = yar_format_d32_sfloat;
 	depth_buffer_desc.type = yar_texture_type_2d;
 	depth_buffer_desc.mip_levels = 1;
 	yar_render_target* shadow_map_target;
 	add_render_target(&depth_buffer_desc, &shadow_map_target);
 
 	yar_render_target_desc imgui_rt_desc{};
-	imgui_rt_desc.format = yar_texture_format_srgb8;
+	imgui_rt_desc.format = yar_format_r8g8b8a8_srgb;
 	imgui_rt_desc.height = h;
 	imgui_rt_desc.width = w;
 	imgui_rt_desc.type = yar_texture_type_2d;
@@ -562,8 +562,7 @@ auto main() -> int {
 
 	yar_vertex_layout shadow_map_layout{};
 	shadow_map_layout.attrib_count = 1u;
-	shadow_map_layout.attribs[0].size = 3u;
-	shadow_map_layout.attribs[0].format = yar_attrib_format_float;
+	shadow_map_layout.attribs[0].format = yar_format_r32g32b32a32_sfloat;
 	shadow_map_layout.attribs[0].offset = offsetof(VertexStatic, position);
 	pipeline_desc.shader = shadow_map_shader;
 	pipeline_desc.vertex_layout = shadow_map_layout;
@@ -577,9 +576,9 @@ auto main() -> int {
 
 	yar_vertex_layout imgui_layout{};
 	imgui_layout.attrib_count = 3;
-	imgui_layout.attribs[0] = { .size = 2, .format = yar_attrib_format_float, .offset = offsetof(ImDrawVert, pos) };
-	imgui_layout.attribs[1] = { .size = 2, .format = yar_attrib_format_float, .offset = offsetof(ImDrawVert, uv) };
-	imgui_layout.attribs[2] = { .size = 4, .format = yar_attrib_format_ubyte, .offset = offsetof(ImDrawVert, col) };
+	imgui_layout.attribs[0] = { .format = yar_format_r32g32_sfloat, .offset = offsetof(ImDrawVert, pos) };
+	imgui_layout.attribs[1] = { .format = yar_format_r32g32_sfloat, .offset = offsetof(ImDrawVert, uv) };
+	imgui_layout.attribs[2] = { .format = yar_format_r8g8b8a8_unorm, .offset = offsetof(ImDrawVert, col) };
 
 	pipeline_desc.shader = imgui_shader;
 	pipeline_desc.vertex_layout = imgui_layout;
