@@ -1522,7 +1522,8 @@ void gl_cmdBindDescriptorSet(yar_cmd_buffer* cmd, yar_descriptor_set* set, uint3
                 const auto& info_iter = std::find_if(infos.begin(), infos.end(),
                     [&](const yar_descriptor_info& info)
                     {
-                        return std::holds_alternative<yar_buffer*>(info.descriptor);
+                        return std::holds_alternative<yar_buffer*>(info.descriptor)
+                            && info.name == descriptor.name;
                     }
                 );
 
@@ -1582,7 +1583,8 @@ void gl_cmdBindDescriptorSet(yar_cmd_buffer* cmd, yar_descriptor_set* set, uint3
                 const auto& info_iter = std::find_if(infos.begin(), infos.end(),
                     [&](const yar_descriptor_info& info)
                     {
-                        return std::holds_alternative<yar_texture*>(info.descriptor);
+                        return std::holds_alternative<yar_texture*>(info.descriptor)
+                            && info.name == descriptor.name;
                     }
                 );
 
