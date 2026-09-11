@@ -12,6 +12,8 @@
 #include <stddef.h>
 #include <cmath>
 
+#include "../shaders/rt_common.h"
+
 static LARGE_INTEGER g_perf_frequency;
 static LARGE_INTEGER g_perf_start;
 
@@ -68,13 +70,6 @@ void process_input();
 float deltaTime = 0.0f;
 float lastFrame = 0.0f;
 
-enum MaterialType : uint32_t
-{
-	kLambertian = 0,
-	kMetal,
-	kDielectric
-};
-
 struct Material
 {
 	Vector3 albedo;
@@ -87,7 +82,7 @@ struct Material
 struct Lambertian
 {
 	Lambertian(Vector3 albedo)
-		: mat({ albedo, 0.0f, 0.0f, kLambertian }) {
+		: mat({ albedo, 0.0f, 0.0f, MaterialType::Lambertian }) {
 	}
 
 	Material mat;
@@ -96,7 +91,7 @@ struct Lambertian
 struct Metal
 {
 	Metal(Vector3 albedo, float fuzz)
-		: mat({ albedo, fuzz, 0.0f, kMetal }) {
+		: mat({ albedo, fuzz, 0.0f, MaterialType::Metal }) {
 	}
 
 	Material mat;
@@ -105,33 +100,17 @@ struct Metal
 struct Dielectric
 {
 	Dielectric(float refraction_index)
-		: mat({ Vector3{}, 0.0f, refraction_index, kDielectric }) {
+		: mat({ Vector3{}, 0.0f, refraction_index, MaterialType::Dielectric }) {
 	}
 
 	Material mat;
-};
-
-struct Sphere
-{
-	Vector3 center;
-	float radius;
 };
 
 constexpr uint32_t kSpheresCount = 5u;
 
 Sphere spheres[kSpheresCount];
 Material mats[kSpheresCount];
-
-struct UBO
-{
-	Matrix4x4 invViewProj;
-	Matrix4x4 ui_ortho;
-	Vector4 cameraPos;
-	int32_t samples_per_pixel;
-	int32_t max_ray_depth;
-	uint32_t seed;
-	uint32_t pad;
-}ubo;
+UBO ubo;
 
 struct Camera
 {
@@ -336,6 +315,7 @@ auto main() -> int
 	set_desc.shader = shader;
 	add_descriptor_set(&set_desc, &srv_set);
 
+
 	// update_descriptor_set replaces the whole vector, so every set-0
 	// resource has to be listed in one call.
 	std::vector<yar_descriptor_info> infos{
@@ -534,10 +514,10 @@ auto main() -> int
 			1.0f
 		);
 
-		ubo.cameraPos = Vector4(camera.pos, 0.0f);
+		ubo.camera_pos = Vector4(camera.pos, 0.0f);
 		Matrix4x4 projectionMatrix = Matrix4x4::perspective_fov_rh_gl(radians(90.0f), dims.width / (float)dims.height, 0.1f, 100.0f);
 		Matrix4x4 viewMatrix = Matrix4x4::look_at_rh(camera.pos, camera.pos + camera.front, camera.up);
-		ubo.invViewProj = (viewMatrix * projectionMatrix).inverse();
+		ubo.inv_view_proj = (viewMatrix * projectionMatrix).inverse();
 		ubo.samples_per_pixel = samples_per_pixel;
 		ubo.max_ray_depth = max_ray_depth;
 		ubo.seed = random_uint();

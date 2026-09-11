@@ -1,3 +1,4 @@
+#include "rt_common.h"
 
 #define INF (1.0f / 0.0f)
 #define PI 3.14159265358979323846f
@@ -103,21 +104,8 @@ struct Interval
     }
 };
 
-enum MaterialType : uint
+extension MaterialData
 {
-    Lambertian = 0,
-    Metal      = 1,
-    Dielectric = 2,
-};
-
-struct MaterialData
-{
-    vector<float, 3> albedo;
-    float fuzz;             // only for Metal
-    float refraction_index; // only for Dielectric
-    MaterialType type;
-    vector<uint, 2> pad_;
-
     func scatter(inout uint state, inout HitRecord rec, in Ray ray,
                  out vector<float, 3> attenuation, out Ray scattered) -> bool
     {
@@ -140,8 +128,11 @@ struct MaterialData
         }
         default:
         {
-            attenuation = { 1.0f, 0.0f, 0.0f };
-            return false;
+            // Error MaterialType shows with magenta color
+            attenuation = vector<float, 3>(1.0f, 0.0f, 1.0f);
+            scattered.origin = rec.position;
+            scattered.direction = vector<float, 3>(0.0f, 1.0f, 0.0f);
+            return true;
         }
         }
     }
@@ -189,11 +180,8 @@ interface Hittable
     bool hit(const Ray r, Interval ray_t, out HitRecord rec);
 }
 
-struct Sphere : Hittable
+extension Sphere : Hittable
 {
-    vector<float, 3> center;
-    float radius;
-
     override bool hit(const Ray r, Interval ray_t, out HitRecord rec)
     {
         // 'out' parameters start undefined; zero it so the early returns below
@@ -324,18 +312,6 @@ struct Dielectric : IMaterial
     }
 }
 
-struct UniformBuffer
-{
-    matrix<float, 4, 4> inv_view_proj;
-    matrix<float, 4, 4> ui_ortho;
-    vector<float, 4> camera_pos;
-
-    int samples_per_pixel;
-    int max_ray_depth;
-    uint seed;
-    uint pad_;
-}
-
 func trace(World world, Ray r, inout uint state, int max_depth)->vector<float, 3>
 {
     Interval interval = { 0.001f, INF };
@@ -383,7 +359,7 @@ float3 linear_to_gamma(float3 linear_color)
 [[vk::binding(0, 0)]] RWTexture2D<vector<float, 4>> quad_tex;
 [[vk::binding(1, 0)]] StructuredBuffer<Sphere> spheres;
 [[vk::binding(2, 0)]] StructuredBuffer<MaterialData> mats;
-[[vk::binding(1, 1)]] ConstantBuffer<UniformBuffer> ubo;
+[[vk::binding(1, 1)]] ConstantBuffer<UBO> ubo;
 
 
 [shader("compute")] [numthreads(16, 16, 1)]
