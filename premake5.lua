@@ -147,7 +147,7 @@ project "Application"
         symbols "On"
         runtime "Debug"
         postbuildcommands {
-            "py \"%{prj.location}/scripts/compile_hlsl_to_spirv.py\" \"%{wks.location}/source/shaders\" \"%{cfg.targetdir}/shaders\"",
+            "py \"%{prj.location}/scripts/compile_shaders_to_spirv.py\" \"%{wks.location}/source/shaders\" \"%{cfg.targetdir}/shaders\"",
             "{COPY} \"%{wks.location}/assets\" \"%{cfg.targetdir}/assets\""
         }
 
@@ -155,7 +155,7 @@ project "Application"
         optimize "On"
         runtime "Release"
         postbuildcommands {
-            "py \"%{prj.location}/scripts/compile_hlsl_to_spirv.py\" \"%{wks.location}/source/shaders\" \"%{cfg.targetdir}/shaders\"",
+            "py \"%{prj.location}/scripts/compile_shaders_to_spirv.py\" \"%{wks.location}/source/shaders\" \"%{cfg.targetdir}/shaders\"",
             "{COPY} \"%{wks.location}/assets\" \"%{cfg.targetdir}/assets\""
         }
 
@@ -165,7 +165,7 @@ project "Application"
         symbols "On"
         runtime "Release"
         postbuildcommands {
-            "py \"%{prj.location}/scripts/compile_hlsl_to_spirv.py\" \"%{wks.location}/source/shaders\" \"%{cfg.targetdir}/shaders\"",
+            "py \"%{prj.location}/scripts/compile_shaders_to_spirv.py\" \"%{wks.location}/source/shaders\" \"%{cfg.targetdir}/shaders\"",
             "{COPY} \"%{wks.location}/assets\" \"%{cfg.targetdir}/assets\""
         }
 
@@ -208,14 +208,14 @@ project "Raytracer"
         symbols "On"
         runtime "Debug"
         postbuildcommands {
-            "py \"%{prj.location}/scripts/compile_hlsl_to_spirv.py\" \"%{wks.location}/source/shaders\" \"%{cfg.targetdir}/shaders\""
+            "py \"%{prj.location}/scripts/compile_shaders_to_spirv.py\" \"%{wks.location}/source/shaders\" \"%{cfg.targetdir}/shaders\""
         }
 
     filter { "configurations:Release" }
         optimize "On"
         runtime "Release"
         postbuildcommands {
-            "py \"%{prj.location}/scripts/compile_hlsl_to_spirv.py\" \"%{wks.location}/source/shaders\" \"%{cfg.targetdir}/shaders\""
+            "py \"%{prj.location}/scripts/compile_shaders_to_spirv.py\" \"%{wks.location}/source/shaders\" \"%{cfg.targetdir}/shaders\""
         }
 
     filter { "configurations:Profile" }
@@ -224,5 +224,5 @@ project "Raytracer"
         symbols "On"
         runtime "Release"
         postbuildcommands {
-            "py \"%{prj.location}/scripts/compile_hlsl_to_spirv.py\" \"%{wks.location}/source/shaders\" \"%{cfg.targetdir}/shaders\""
+            "py \"%{prj.location}/scripts/compile_shaders_to_spirv.py\" \"%{wks.location}/source/shaders\" \"%{cfg.targetdir}/shaders\""
         }

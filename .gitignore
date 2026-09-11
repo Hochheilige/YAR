@@ -36,6 +36,7 @@ bld/
 external/lib/
 external/dxc/
 external/glad/
+external/slang/
 
 # Visual Studio 2015/2017 cache/options directory
 .vs/

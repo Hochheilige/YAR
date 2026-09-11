@@ -5,3 +5,6 @@ if errorlevel 1 exit /b 1
 
 python tools/generate_submodules.py
 if errorlevel 1 exit /b 1
+
+python tools/download_slang.py
+if errorlevel 1 exit /b 1
