@@ -119,13 +119,14 @@ struct Sphere
 
 constexpr uint32_t kSpheresCount = 5u;
 
+Sphere spheres[kSpheresCount];
+Material mats[kSpheresCount];
+
 struct UBO
 {
 	Matrix4x4 invViewProj;
 	Matrix4x4 ui_ortho;
 	Vector4 cameraPos;
-	Sphere spheres[kSpheresCount];
-	Material mats[kSpheresCount];
 	int32_t samples_per_pixel;
 	int32_t max_ray_depth;
 	uint32_t seed;
@@ -241,6 +242,39 @@ auto main() -> int
 	for (auto& buf : ubo_buf)
 		add_buffer(&buffer_desc, &buf);
 
+	// Scene data has to be assembled before the buffers are filled below.
+	Lambertian ground(Vector3(0.8f, 0.8f, 0.0f));
+	Lambertian center(Vector3(0.1f, 0.2f, 0.5f));
+	Metal right(Vector3(0.8f, 0.6f, 0.2f), 0.7f);
+
+	float left_refraction_index = 1.5f;
+	Dielectric left(left_refraction_index);
+	Dielectric inner_bubble(1.0f / left_refraction_index);
+
+	spheres[0] = Sphere(Vector3(0.0f, 0.0f, -1.0f), 0.5f);
+	spheres[1] = Sphere(Vector3(0.0f, -100.5f, -1.0f), 100.0f);
+	spheres[2] = Sphere(Vector3(-1.0f, 0.0f, -1.0f), 0.5f);
+	spheres[3] = Sphere(Vector3(1.0f, 0.0f, -1.0f), 0.5f);
+	spheres[4] = Sphere(Vector3(-1.0f, 0.0f, -1.0f), 0.4f);
+	mats[0] = center.mat;
+	mats[1] = ground.mat;
+	mats[2] = left.mat;
+	mats[3] = right.mat;
+	mats[4] = inner_bubble.mat;
+
+	buffer_desc.usage = yar_buffer_usage_storage_buffer;
+	buffer_desc.flags = yar_buffer_flag_gpu_only;
+
+	buffer_desc.size = sizeof(spheres);
+	buffer_desc.name = "spheres";
+	yar_buffer* spheres_buf = nullptr;
+	add_buffer(&buffer_desc, &spheres_buf);
+
+	buffer_desc.size = sizeof(mats);
+	buffer_desc.name = "mats";
+	yar_buffer* mats_buf = nullptr;
+	add_buffer(&buffer_desc, &mats_buf);
+
 	yar_resource_update_desc resource_update_desc{};
 	{ // update buffers data
 		yar_buffer_update_desc update_desc{};
@@ -249,6 +283,18 @@ auto main() -> int
 		update_desc.size = sizeof(quad_vertices);
 		begin_update_resource(resource_update_desc);
 		std::memcpy(update_desc.mapped_data, quad_vertices, sizeof(quad_vertices));
+		end_update_resource(resource_update_desc);
+
+		update_desc.buffer = spheres_buf;
+		update_desc.size = sizeof(spheres);
+		begin_update_resource(resource_update_desc);
+		std::memcpy(update_desc.mapped_data, spheres, sizeof(spheres));
+		end_update_resource(resource_update_desc);
+
+		update_desc.buffer = mats_buf;
+		update_desc.size = sizeof(mats);
+		begin_update_resource(resource_update_desc);
+		std::memcpy(update_desc.mapped_data, mats, sizeof(mats));
 		end_update_resource(resource_update_desc);
 	}
 
@@ -290,10 +336,20 @@ auto main() -> int
 	set_desc.shader = shader;
 	add_descriptor_set(&set_desc, &srv_set);
 
+	// update_descriptor_set replaces the whole vector, so every set-0
+	// resource has to be listed in one call.
 	std::vector<yar_descriptor_info> infos{
 		{
 			.name = "quad_tex",
 			.descriptor = quad
+		},
+		{
+			.name = "spheres",
+			.descriptor = spheres_buf
+		},
+		{
+			.name = "mats",
+			.descriptor = mats_buf
 		},
 	};
 
@@ -448,25 +504,6 @@ auto main() -> int
 	add_cmd(&cmd_desc, &cmd);
 
 	camera.pos = Vector3(0.0f, 0.0f, 0.0f);
-
-	Lambertian ground(Vector3(0.8f, 0.8f, 0.0f));
-	Lambertian center(Vector3(0.1f, 0.2f, 0.5f));
-	Metal right(Vector3(0.8f, 0.6f, 0.2f), 0.7f);
-
-	float left_refraction_index = 1.5f;
-	Dielectric left(left_refraction_index);
-	Dielectric inner_bubble(1.0f / left_refraction_index);
-
-	ubo.spheres[0] = Sphere(Vector3(0.0f, 0.0f, -1.0f), 0.5f);
-	ubo.spheres[1] = Sphere(Vector3(0.0f, -100.5f, -1.0f), 100.0f);
-	ubo.spheres[2] = Sphere(Vector3(-1.0f, 0.0f, -1.0f), 0.5f);
-	ubo.spheres[3] = Sphere(Vector3(1.0f, 0.0f, -1.0f), 0.5f);
-	ubo.spheres[4] = Sphere(Vector3(-1.0f, 0.0f, -1.0f), 0.4f);
-	ubo.mats[0] = center.mat;
-	ubo.mats[1] = ground.mat;
-	ubo.mats[2] = left.mat;
-	ubo.mats[3] = right.mat;
-	ubo.mats[4] = inner_bubble.mat;
 
 	uint32_t group_x = (dims.width + 15) / 16;
 	uint32_t group_y = (dims.height + 15) / 16;

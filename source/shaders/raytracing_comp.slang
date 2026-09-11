@@ -2,13 +2,9 @@
 #define INF (1.0f / 0.0f)
 #define PI 3.14159265358979323846f
 
-// Must match kSpheresCount and the MaterialType enum on the C++ side.
-static const uint SPHERES_COUNT = 5;
-
 static const uint MAT_LAMBERTIAN = 0;
 static const uint MAT_METAL      = 1;
 static const uint MAT_DIELECTRIC = 2;
-
 
 // Create an initial random number for this thread
 uint SeedThread(uint seed)
@@ -224,16 +220,15 @@ struct Sphere : Hittable
 
 struct World : Hittable
 {
-    Sphere spheres[SPHERES_COUNT];
-    MaterialData mats[SPHERES_COUNT];
-
     override bool hit(const Ray r, Interval ray_t, out HitRecord rec)
     {
         HitRecord temp_rec = {};
         bool hit_anything = false;
         float closest_to_far = ray_t.max_;
 
-        for (uint i = 0; i < SPHERES_COUNT; ++i)
+        uint count, stride;
+        spheres.GetDimensions(count, stride);
+        for (uint i = 0; i < count; ++i)
         {
             Interval interval = { ray_t.min_, closest_to_far };
             if (spheres[i].hit(r, interval, temp_rec))
@@ -323,11 +318,6 @@ struct UniformBuffer
     matrix<float, 4, 4> ui_ortho;
     vector<float, 4> camera_pos;
 
-    // Nesting the two arrays inside World does not move a single byte under
-    // std140: world.spheres still starts at offset 144 and world.mats at 224,
-    // exactly where the flat arrays were. The C++ UBO struct stays as it is.
-    World world;
-
     int samples_per_pixel;
     int max_ray_depth;
     uint seed;
@@ -342,7 +332,7 @@ func trace(World world, Ray r, inout uint state, int max_depth)->vector<float, 3
     for (int i = 0; i < max_depth; ++i)
     {
         HitRecord rec = {};
-        
+
         if (!world.hit(r, interval, rec))
         {
             var unit_direction = normalize(r.direction);
@@ -379,6 +369,8 @@ float3 linear_to_gamma(float3 linear_color)
 // register(u0, space0) also works but warns on every build; the vk attribute
 // is the Vulkan-native spelling and is what the engine reflects on.
 [[vk::binding(0, 0)]] RWTexture2D<vector<float, 4>> quad_tex;
+[[vk::binding(1, 0)]] StructuredBuffer<Sphere> spheres;
+[[vk::binding(2, 0)]] StructuredBuffer<MaterialData> mats;
 [[vk::binding(1, 1)]] ConstantBuffer<UniformBuffer> ubo;
 
 
@@ -387,6 +379,8 @@ void main(uint3 dispatchThreadID: SV_DispatchThreadID)
 {
     uint width, height;
     quad_tex.GetDimensions(width, height);
+
+    World world = {};
 
     // Clip space runs [-1, 1], so the [0, 1] pixel ratio has to be remapped.
     const vector<float, 2> ndc = (float2(dispatchThreadID.xy) / float2(width, height)) * 2.0f - 1.0f;
@@ -403,7 +397,7 @@ void main(uint3 dispatchThreadID: SV_DispatchThreadID)
 
         var ray_dir = normalize(world_space.xyz - ubo.camera_pos.xyz);
         Ray r = { ubo.camera_pos.xyz, ray_dir };
-        final_color += trace(ubo.world, r, state, ubo.max_ray_depth);
+        final_color += trace(world, r, state, ubo.max_ray_depth);
     }
 
     final_color /= ubo.samples_per_pixel;
