@@ -28,7 +28,7 @@ cbuffer ubo : register(b1, space1)
     Material mats[SPHERES_COUNT];
     int samples_per_pixel;
     int max_ray_depth;
-    float seed;   
+    uint seed;   
 };
 
 #define INF 1.0f / 0.0f

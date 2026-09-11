@@ -21,12 +21,6 @@ static double get_time()
 	return (double)(now.QuadPart - g_perf_start.QuadPart) / (double)g_perf_frequency.QuadPart;
 }
 
-struct ImGuiVertex {
-	Vector2 position;
-	Vector2 uv;
-	uint32_t color;
-};
-
 inline uint32_t random_uint()
 {
 	static std::uniform_int_distribution<uint32_t> distribution(0, UINT32_MAX);
@@ -45,7 +39,7 @@ yar_texture* get_imgui_fonts()
 	desc.width = width;
 	desc.height = height;
 	desc.mip_levels = 1;
-	desc.format = yar_texture_format_rgba8;
+	desc.format = yar_format_r8g8b8a8_unorm;
 	desc.name = "ImGui Fonts";
 	desc.type = yar_texture_type_2d;
 	desc.usage = yar_texture_usage_shader_resource;
@@ -158,7 +152,10 @@ yar_texture* create_texture(const uint32_t width, const uint32_t height)
 	texture_desc.height = height;
 	texture_desc.mip_levels = 1;
 	texture_desc.type = yar_texture_type_2d;
-	texture_desc.format = yar_texture_format_rgba32f;
+	texture_desc.format = yar_format_r32g32b32a32_sfloat;
+	// Written by the compute pass as a UAV, then sampled by the fullscreen quad.
+	texture_desc.usage = yar_texture_usage_unordered_access | yar_texture_usage_shader_resource;
+	texture_desc.name = "raytracer_output";
 	add_texture(&texture_desc, &tex);
 
 	return tex;
@@ -192,7 +189,7 @@ auto main() -> int
 
 	yar_swapchain_desc swapchain_desc{};
 	swapchain_desc.buffer_count = 2;
-	swapchain_desc.format = yar_texture_format_srgba8;
+	swapchain_desc.format = yar_format_r8g8b8a8_srgb;
 	swapchain_desc.height = h;
 	swapchain_desc.width = w;
 	swapchain_desc.vsync = false;
@@ -219,8 +216,9 @@ auto main() -> int
 	sampler_desc.wrap_v = yar_wrap_mode_repeat;
 	add_sampler(&sampler_desc, &sampler);
 
-	yar_buffer_desc buffer_desc;
+	yar_buffer_desc buffer_desc{};
 	buffer_desc.size = sizeof(quad_vertices);
+	buffer_desc.usage = yar_buffer_usage_vertex_buffer;
 	buffer_desc.flags = yar_buffer_flag_gpu_only;
 	buffer_desc.name = "quad_vertex_buffer";
 	yar_buffer* vbo = nullptr;
@@ -232,13 +230,14 @@ auto main() -> int
 	uint32_t frame_index = 0;
 
 	buffer_desc.size = sizeof(ubo);
+	buffer_desc.usage = yar_buffer_usage_uniform_buffer;
 	buffer_desc.flags = yar_buffer_flag_map_write;
 	buffer_desc.name = "UBO";
 	yar_buffer* ubo_buf[frames_in_flight] = {};
 	for (auto& buf : ubo_buf)
 		add_buffer(&buffer_desc, &buf);
 
-	yar_resource_update_desc resource_update_desc;
+	yar_resource_update_desc resource_update_desc{};
 	{ // update buffers data
 		yar_buffer_update_desc update_desc{};
 		resource_update_desc = &update_desc;
@@ -260,7 +259,6 @@ auto main() -> int
 	shader_desc = nullptr;
 
 	shader_load_desc = {};
-	std::free(shader_desc); shader_desc = nullptr;
 	shader_load_desc.stages[0] = { "shaders/raytracing_comp.hlsl", "main", yar_shader_stage::yar_shader_stage_comp };
 	load_shader(&shader_load_desc, &shader_desc);
 	yar_shader* compute_shader;
@@ -277,7 +275,7 @@ auto main() -> int
 	shader_desc = nullptr;
 
 
-	yar_descriptor_set_desc set_desc;
+	yar_descriptor_set_desc set_desc{};
 	set_desc.max_sets = 1;
 	set_desc.update_freq = yar_update_freq_none;
 	set_desc.shader = compute_shader;
@@ -362,14 +360,10 @@ auto main() -> int
 	update_set_desc.index = 0;
 	update_descriptor_set(&update_set_desc, imgui_set);
 
-	yar_vertex_layout layout = { 0 };
+	yar_vertex_layout layout{};
 	layout.attrib_count = 2;
-	layout.attribs[0].size = 2;
-	layout.attribs[0].format = yar_attrib_format_float;
-	layout.attribs[0].offset = 0u;
-	layout.attribs[1].size = 2;
-	layout.attribs[1].format = yar_attrib_format_float;
-	layout.attribs[1].offset = 2 * sizeof(float);
+	layout.attribs[0] = { .format = yar_format_r32g32_sfloat, .offset = 0u };
+	layout.attribs[1] = { .format = yar_format_r32g32_sfloat, .offset = 2 * sizeof(float) };
 
 	yar_pipeline_desc pipeline_desc = { };
 	pipeline_desc.type = yar_pipeline_type_graphics;
@@ -387,9 +381,9 @@ auto main() -> int
 
 	yar_vertex_layout imgui_layout{};
 	imgui_layout.attrib_count = 3;
-	imgui_layout.attribs[0] = { .size = 2, .format = yar_attrib_format_float, .offset = offsetof(ImGuiVertex, position) };
-	imgui_layout.attribs[1] = { .size = 2, .format = yar_attrib_format_float, .offset = offsetof(ImGuiVertex, uv) };
-	imgui_layout.attribs[2] = { .size = 4, .format = yar_attrib_format_ubyte, .offset = offsetof(ImGuiVertex, color) };
+	imgui_layout.attribs[0] = { .format = yar_format_r32g32_sfloat, .offset = offsetof(ImDrawVert, pos) };
+	imgui_layout.attribs[1] = { .format = yar_format_r32g32_sfloat, .offset = offsetof(ImDrawVert, uv) };
+	imgui_layout.attribs[2] = { .format = yar_format_r8g8b8a8_unorm, .offset = offsetof(ImDrawVert, col) };
 
 	pipeline_desc.shader = imgui_shader;
 	pipeline_desc.vertex_layout = imgui_layout;
@@ -439,11 +433,11 @@ auto main() -> int
 
 	imgui_get_new_frame_data();
 
-	yar_cmd_queue_desc queue_desc;
+	yar_cmd_queue_desc queue_desc{};
 	yar_cmd_queue* queue;
 	add_queue(&queue_desc, &queue);
 
-	yar_cmd_buffer_desc cmd_desc;
+	yar_cmd_buffer_desc cmd_desc{};
 	cmd_desc.current_queue = queue;
 	cmd_desc.use_push_constant = false;
 	yar_cmd_buffer* cmd;
@@ -506,7 +500,7 @@ auto main() -> int
 		ubo.seed = 42u;// random_uint();
 		ubo.ui_ortho = ortho;
 
-		yar_buffer_update_desc update;
+		yar_buffer_update_desc update{};
 		update.buffer = ubo_buf[frame_index];
 		update.size = sizeof(ubo);
 		resource_update_desc = &update;
@@ -544,7 +538,7 @@ auto main() -> int
 			const ImDrawList* cmd_list = draw_data->CmdLists[i];
 			cmd_update_buffer(cmd, imgui_vb, 0, cmd_list->VtxBuffer.Size * sizeof(ImDrawVert), cmd_list->VtxBuffer.Data);
 			cmd_update_buffer(cmd, imgui_ib, 0, cmd_list->IdxBuffer.Size * sizeof(ImDrawIdx), cmd_list->IdxBuffer.Data);
-			for (uint32_t j = 0; j < cmd_list->CmdBuffer.Size; ++j)
+			for (int j = 0; j < cmd_list->CmdBuffer.Size; ++j)
 			{
 				const ImDrawCmd* draw_cmd = &cmd_list->CmdBuffer[j];
 

@@ -23,7 +23,7 @@ cbuffer ubo : register(b1, space1)
     Material mats[SPHERES_COUNT];
     int samples_per_pixel;
     int max_ray_depth;
-    float seed;   
+    uint seed;   
 };
 
 struct VSInput

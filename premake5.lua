@@ -170,3 +170,59 @@ project "Application"
         }
 
         
+project "Raytracer"
+    location "makefiles"
+    kind "ConsoleApp"
+    language "C++"
+    cppdialect "C++latest"
+    staticruntime "off"
+
+    targetdir (outputdir)
+    debugdir (outputdir)
+    objdir ("build/%{cfg.architecture}/%{cfg.buildcfg}/intermediate/Raytracer")
+    targetname "Raytracer"
+
+    files {
+        "source/application/raytracing_app.cpp"
+    }
+
+    includedirs {
+        "source/engine/",
+        "external/glad/include",
+        "external/imgui",
+        "external/directx-math/Inc",
+        "external/stb",
+        "external/assimp/include",
+        "external/assimp/build/include",
+        "external/meshoptimizer/src",
+    }
+
+    libdirs {
+        "build/%{cfg.architecture}/%{cfg.buildcfg}/lib"
+    }
+    links {
+        "Engine",
+    }
+
+    filter { "configurations:Debug" }
+        symbols "On"
+        runtime "Debug"
+        postbuildcommands {
+            "py \"%{prj.location}/scripts/compile_hlsl_to_spirv.py\" \"%{wks.location}/source/shaders\" \"%{cfg.targetdir}/shaders\""
+        }
+
+    filter { "configurations:Release" }
+        optimize "On"
+        runtime "Release"
+        postbuildcommands {
+            "py \"%{prj.location}/scripts/compile_hlsl_to_spirv.py\" \"%{wks.location}/source/shaders\" \"%{cfg.targetdir}/shaders\""
+        }
+
+    filter { "configurations:Profile" }
+        defines { "YAR_PROFILE_ENABLED" }
+        optimize "On"
+        symbols "On"
+        runtime "Release"
+        postbuildcommands {
+            "py \"%{prj.location}/scripts/compile_hlsl_to_spirv.py\" \"%{wks.location}/source/shaders\" \"%{cfg.targetdir}/shaders\""
+        }
