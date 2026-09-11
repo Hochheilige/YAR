@@ -428,25 +428,39 @@ static GLenum util_buffer_flags_to_map_access(yar_buffer_flag flags)
     return GL_NONE;
 }
 
-static yar_resource_type util_convert_spv_resource_type(SpvReflectResourceType type)
+static yar_resource_type util_convert_spv_resource_type(
+    SpvReflectDescriptorType descriptor_type, SpvReflectResourceType resource_type)
 {
-    switch (type)
+    switch (descriptor_type)
     {
-    case SPV_REFLECT_RESOURCE_FLAG_UNDEFINED:
-        return yar_resource_type_undefined;
-    case SPV_REFLECT_RESOURCE_FLAG_SAMPLER:
-        return yar_resource_type_sampler;
-    case SPV_REFLECT_RESOURCE_FLAG_CBV:
+    case SPV_REFLECT_DESCRIPTOR_TYPE_UNIFORM_BUFFER:
         return yar_resource_type_cbv;
-    case SPV_REFLECT_RESOURCE_FLAG_SRV:
-        return yar_resource_type_srv;
-    case SPV_REFLECT_RESOURCE_FLAG_UAV:
-        return yar_resource_type_uav;
+
+    case SPV_REFLECT_DESCRIPTOR_TYPE_SAMPLER:
+        return yar_resource_type_sampler;
+
+    case SPV_REFLECT_DESCRIPTOR_TYPE_SAMPLED_IMAGE:
+    case SPV_REFLECT_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER:
+        return yar_resource_type_texture_srv;
+
+    case SPV_REFLECT_DESCRIPTOR_TYPE_STORAGE_IMAGE:
+        return yar_resource_type_texture_uav;
+
+        // StructuredBuffer and RWStructuredBuffer 
+    case SPV_REFLECT_DESCRIPTOR_TYPE_STORAGE_BUFFER:
+        return (resource_type == SPV_REFLECT_RESOURCE_FLAG_UAV)
+            ? yar_resource_type_buffer_uav
+            : yar_resource_type_buffer_srv;
+
+    case SPV_REFLECT_DESCRIPTOR_TYPE_UNIFORM_TEXEL_BUFFER:   // Buffer<T>
+        return yar_resource_type_buffer_srv;
+    case SPV_REFLECT_DESCRIPTOR_TYPE_STORAGE_TEXEL_BUFFER:   // RWBuffer<T>
+        return yar_resource_type_buffer_uav;
+
     default:
         return yar_resource_type_undefined;
     }
 }
-
 static void util_create_shader_reflection(std::vector<uint8_t>& spirv, std::vector<yar_shader_resource>& resources)
 {
     // In case I use spirv_cross to convert sprir-v to glsl
@@ -467,7 +481,7 @@ static void util_create_shader_reflection(std::vector<uint8_t>& spirv, std::vect
         resource.name = descriptor->name;
         resource.binding = descriptor->binding;
         resource.set = descriptor->set;
-        resource.type = util_convert_spv_resource_type(descriptor->resource_type);
+        resource.type = util_convert_spv_resource_type(descriptor->descriptor_type, descriptor->resource_type);
         resources.push_back(resource);
     }
 
@@ -1534,7 +1548,7 @@ void gl_cmdBindDescriptorSet(yar_cmd_buffer* cmd, yar_descriptor_set* set, uint3
                 }
             }
 
-            if (descriptor.type & yar_resource_type_srv)
+            if (descriptor.type & yar_resource_type_texture_srv)
             {
                 using CombTextureSampler = yar_descriptor_info::yar_combined_texture_sample;
                 const auto& info_iter = std::find_if(infos.begin(), infos.end(),
@@ -1578,7 +1592,7 @@ void gl_cmdBindDescriptorSet(yar_cmd_buffer* cmd, yar_descriptor_set* set, uint3
             }
 
             // TODO: properly set up UAV
-            if (descriptor.type & yar_resource_type_uav)
+            if (descriptor.type & yar_resource_type_texture_uav)
             {
                 const auto& info_iter = std::find_if(infos.begin(), infos.end(),
                     [&](const yar_descriptor_info& info)
@@ -1594,6 +1608,23 @@ void gl_cmdBindDescriptorSet(yar_cmd_buffer* cmd, yar_descriptor_set* set, uint3
                         std::get<yar_texture*>(info_iter->descriptor)
                     );
                     glBindImageTexture(0, uav->id, 0, GL_FALSE, 0, GL_WRITE_ONLY, GL_RGBA32F);
+                }
+            }
+
+            if (descriptor.type & (yar_resource_type_buffer_srv | yar_resource_type_buffer_uav))
+            {
+                const auto& info_iter = std::find_if(infos.begin(), infos.end(),
+                    [&](const yar_descriptor_info& info)
+                    {
+                        return std::holds_alternative<yar_buffer*>(info.descriptor)
+                            && info.name == descriptor.name;
+                    }
+                );
+
+                if (info_iter != infos.end())
+                {
+                    const yar_buffer* buffer = std::get<yar_buffer*>(info_iter->descriptor);
+                    glBindBufferBase(GL_SHADER_STORAGE_BUFFER, descriptor.binding, buffer->id);
                 }
             }
         }

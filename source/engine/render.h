@@ -229,11 +229,13 @@ MAKE_ENUM_FLAG(uint8_t, yar_shader_stage);
 
 enum yar_resource_type : uint8_t
 {
-    yar_resource_type_undefined = 0x00000000,
-    yar_resource_type_cbv = 0x00000001,
-    yar_resource_type_srv = 0x00000002,
-    yar_resource_type_uav = 0x00000004,
-    yar_resource_type_sampler = 0x00000008,
+    yar_resource_type_undefined   = 0x00000000,
+    yar_resource_type_cbv         = 0x00000001,
+    yar_resource_type_sampler     = 0x00000002,
+    yar_resource_type_texture_srv = 0x00000004,
+    yar_resource_type_texture_uav = 0x00000008,
+    yar_resource_type_buffer_srv  = 0x00000010,
+    yar_resource_type_buffer_uav  = 0x00000020,
 };
 MAKE_ENUM_FLAG(uint8_t, yar_resource_type);
 
