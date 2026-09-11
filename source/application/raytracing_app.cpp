@@ -3,6 +3,7 @@
 #include <imgui_layer.h>
 #include <render.h>
 
+#include <profiler.h>
 #include <math/yar_math.h>
 #include <Windows.h>
 
@@ -175,6 +176,9 @@ auto main() -> int
 			ImGui::SliderInt("Samples Per Pixel", &samples_per_pixel, 1, 100);
 			ImGui::SliderInt("Max Ray Depth", &max_ray_depth, 1, 100);
 			ImGui::End();
+
+			// No-op unless built in the Profile configuration.
+			profiler_draw_imgui();
 		};
 
 
@@ -259,7 +263,7 @@ auto main() -> int
 	shader_desc = nullptr;
 
 	shader_load_desc = {};
-	shader_load_desc.stages[0] = { "shaders/raytracing_comp.hlsl", "main", yar_shader_stage::yar_shader_stage_comp };
+	shader_load_desc.stages[0] = { "shaders/raytracing_comp.slang", "main", yar_shader_stage::yar_shader_stage_comp };
 	load_shader(&shader_load_desc, &shader_desc);
 	yar_shader* compute_shader;
 	add_shader(shader_desc, &compute_shader);
@@ -469,6 +473,9 @@ auto main() -> int
 
 	while (update_window())
 	{
+		profiler_begin_frame();
+		YAR_CPU_SCOPE("Frame");
+
 		float currentFrame = static_cast<float>(get_time());
 		deltaTime = currentFrame - lastFrame;
 		lastFrame = currentFrame;
@@ -511,10 +518,14 @@ auto main() -> int
 		uint32_t sc_image;
 		acquire_next_image(swapchain, sc_image);
 
+		YAR_GPU_SCOPE_BEGIN(cmd, "GPU Frame");
+
+		YAR_GPU_SCOPE_BEGIN(cmd, "Raytrace Dispatch");
 		cmd_bind_pipeline(cmd, compute_pipeline);
 		cmd_bind_descriptor_set(cmd, uav_set, 0);
 		cmd_bind_descriptor_set(cmd, ubo_desc, frame_index);
 		cmd_dispatch(cmd, group_x, group_y, 1);
+		YAR_GPU_SCOPE_END(cmd);
 
 		yar_render_pass_desc fullscreen_quad_pass{};
 		fullscreen_quad_pass.color_attachment_count = 1;
@@ -522,12 +533,15 @@ auto main() -> int
 
 		cmd_begin_render_pass(cmd, &fullscreen_quad_pass);
 
+		YAR_GPU_SCOPE_BEGIN(cmd, "Fullscreen Quad");
 		cmd_bind_pipeline(cmd, graphics_pipeline);
 		cmd_bind_vertex_buffer(cmd, vbo, layout.attrib_count, 0, sizeof(float) * 4);
 		cmd_bind_descriptor_set(cmd, srv_set, 0);
 		cmd_draw(cmd, 0, 4);
+		YAR_GPU_SCOPE_END(cmd);
 
 		// render imgui to swapchain rt tmp solution
+		YAR_GPU_SCOPE_BEGIN(cmd, "ImGui");
 		cmd_bind_pipeline(cmd, imgui_pipeline);
 		cmd_bind_descriptor_set(cmd, imgui_set, 0);
 		cmd_bind_vertex_buffer(cmd, imgui_vb, imgui_layout.attrib_count, 0, sizeof(ImDrawVert));
@@ -553,13 +567,18 @@ auto main() -> int
 			}
 		}
 
+		YAR_GPU_SCOPE_END(cmd); // ImGui
+
 		cmd_end_render_pass(cmd);
+
+		YAR_GPU_SCOPE_END(cmd); // GPU Frame
 
 		queue_submit(queue);
 
 		yar_queue_present_desc present_desc{};
 		present_desc.swapchain = swapchain;
 		queue_present(queue, &present_desc);
+
 
 		frame_index = (frame_index + 1) % frames_in_flight;
 	}
