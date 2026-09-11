@@ -503,8 +503,7 @@ auto main() -> int
 		ubo.invViewProj = (viewMatrix * projectionMatrix).inverse();
 		ubo.samples_per_pixel = samples_per_pixel;
 		ubo.max_ray_depth = max_ray_depth;
-		// Not sure that I really need to pass random number every frame here
-		ubo.seed = 42u;// random_uint();
+		ubo.seed = random_uint();
 		ubo.ui_ortho = ortho;
 
 		yar_buffer_update_desc update{};
