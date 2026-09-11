@@ -337,34 +337,30 @@ struct UniformBuffer
 func trace(World world, Ray r, inout uint state, int max_depth)->vector<float, 3>
 {
     Interval interval = { 0.001f, INF };
-    HitRecord rec = {};
-
+    
     var color = float3(1.0f, 1.0f, 1.0f);
     for (int i = 0; i < max_depth; ++i)
     {
-        if (world.hit(r, interval, rec))
+        HitRecord rec = {};
+        
+        if (!world.hit(r, interval, rec))
         {
-            Ray scattered;
-            float3 attenuation = 0.0f;
-            if (rec.mat.scatter(state, rec, r, attenuation, scattered))
-            {
-                color *= attenuation;
-                r = scattered;
-            }
-            else
-            {
-                return { 0.0f, 0.0f, 0.0f };
-            }
+            var unit_direction = normalize(r.direction);
+            var a = 0.5f * (unit_direction.y + 1.0f);
+            return lerp(float3(1.0f, 1.0f, 1.0f), float3(0.5f, 0.7f, 1.0f), a) * color;
         }
-        else
-        {
-            break;
-        }
+
+        Ray scattered;
+        float3 attenuation = 0.0f;
+        if (!rec.mat.scatter(state, rec, r, attenuation, scattered))
+            return { 0.0f, 0.0f, 0.0f };
+
+        color *= attenuation;
+        r = scattered;
     }
 
-    var unit_direction = normalize(r.direction);
-    var a = 0.5f * (unit_direction.y + 1.0f);
-    return lerp(float3(1.0f, 1.0f, 1.0f), float3(0.5f, 0.7f, 1.0f), a) * color;
+    // never reached the light within the bounce budget
+    return { 0.0f, 0.0f, 0.0f };
 }
 
 float2 sample_square(inout uint state)
