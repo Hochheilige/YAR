@@ -103,12 +103,19 @@ struct Interval
     }
 };
 
+enum MaterialType : uint
+{
+    Lambertian = 0,
+    Metal      = 1,
+    Dielectric = 2,
+};
+
 struct MaterialData
 {
     vector<float, 3> albedo;
     float fuzz;             // only for Metal
     float refraction_index; // only for Dielectric
-    uint type;
+    MaterialType type;
     vector<uint, 2> pad_;
 
     func scatter(inout uint state, inout HitRecord rec, in Ray ray,
@@ -116,20 +123,25 @@ struct MaterialData
     {
         switch (type)
         {
-        case MAT_METAL:
+        case MaterialType.Lambertian:
+        {
+            Lambertian mat = { albedo };
+            return mat.scatter(state, rec, ray, attenuation, scattered);
+        }
+        case MaterialType.Metal:
         {
             Metal mat = { albedo, fuzz };
             return mat.scatter(state, rec, ray, attenuation, scattered);
         }
-        case MAT_DIELECTRIC:
+        case MaterialType.Dielectric:
         {
             Dielectric mat = { refraction_index };
             return mat.scatter(state, rec, ray, attenuation, scattered);
         }
         default:
         {
-            Lambertian mat = { albedo };
-            return mat.scatter(state, rec, ray, attenuation, scattered);
+            attenuation = { 1.0f, 0.0f, 0.0f };
+            return false;
         }
         }
     }
