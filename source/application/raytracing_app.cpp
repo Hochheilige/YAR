@@ -100,12 +100,59 @@ struct Dielectric
 	MaterialData mat;
 };
 
-constexpr uint32_t kSpheresCount = 5u;
-
-Sphere spheres[kSpheresCount];
-uint32_t spheres_indexes[kSpheresCount];
-MaterialData mats[kSpheresCount];
+std::vector<Sphere> spheres;
+std::vector<uint32_t> spheres_indexes;
+std::vector<MaterialData> mats;
 UBO ubo;
+
+// Fixed seed so the random scene is identical on every run.
+std::mt19937 scene_rng(1337u);
+
+float random_float(float min = 0.0f, float max = 1.0f)
+{
+	return std::uniform_real_distribution<float>(min, max)(scene_rng);
+}
+
+Vector3 random_color(float min = 0.0f, float max = 1.0f)
+{
+	return Vector3(random_float(min, max), random_float(min, max), random_float(min, max));
+}
+
+void add_sphere(const Vector3& center, float radius, const MaterialData& mat)
+{
+	spheres.push_back(Sphere(center, radius));
+	mats.push_back(mat);
+}
+
+// Spheres from the Next Week book
+void build_scene()
+{
+	add_sphere(Vector3(0.0f, -1000.0f, 0.0f), 1000.0f, Lambertian(Vector3(0.5f)).mat);
+
+	for (int a = -11; a < 11; ++a)
+	{
+		for (int b = -11; b < 11; ++b)
+		{
+			const float choose_mat = random_float();
+			const Vector3 center(a + 0.9f * random_float(), 0.2f, b + 0.9f * random_float());
+
+			// keep clear of the big metal sphere
+			if ((center - Vector3(4.0f, 0.2f, 0.0f)).length() <= 0.9f)
+				continue;
+
+			if (choose_mat < 0.8f)
+				add_sphere(center, 0.2f, Lambertian(random_color() * random_color()).mat);
+			else if (choose_mat < 0.95f)
+				add_sphere(center, 0.2f, Metal(random_color(0.5f, 1.0f), random_float(0.0f, 0.5f)).mat);
+			else
+				add_sphere(center, 0.2f, Dielectric(1.5f).mat);
+		}
+	}
+
+	add_sphere(Vector3(0.0f, 1.0f, 0.0f), 1.0f, Dielectric(1.5f).mat);
+	add_sphere(Vector3(-4.0f, 1.0f, 0.0f), 1.0f, Lambertian(Vector3(0.4f, 0.2f, 0.1f)).mat);
+	add_sphere(Vector3(4.0f, 1.0f, 0.0f), 1.0f, Metal(Vector3(0.7f, 0.6f, 0.5f), 0.0f).mat);
+}
 
 struct Camera
 {
@@ -118,7 +165,7 @@ float yaw = -90.0f;
 float pitch = 0.0f;
 float lastX = 1920.0f / 2.0;
 float lastY = 1080.0 / 2.0;
-float fov = 45.0f;
+float fov = 20.0f;
 
 yar_texture* create_texture(const uint32_t width, const uint32_t height)
 {
@@ -137,7 +184,7 @@ yar_texture* create_texture(const uint32_t width, const uint32_t height)
 	return tex;
 }
 
-BVHNode bvh[kSpheresCount * 2 - 1];
+std::vector<BVHNode> bvh;
 uint32_t root_node_index = 0;
 uint32_t nodes_used = 1;
 
@@ -207,15 +254,25 @@ auto subdivide(const uint32_t node_index)
 
 auto build_bvh()
 {
-	for (uint32_t i = 0; i < kSpheresCount; ++i)
+	const uint32_t spheres_count = static_cast<uint32_t>(spheres.size());
+
+	spheres_indexes.resize(spheres_count);
+	for (uint32_t i = 0; i < spheres_count; ++i)
 		spheres_indexes[i] = i;
+
+	// A binary tree over N primitives never needs more than 2N - 1 nodes.
+	bvh.assign(spheres_count * 2 - 1, BVHNode{});
+	nodes_used = 1;
 
 	BVHNode& root = bvh[root_node_index];
 	root.left_first = 0;
-	root.prim_count = kSpheresCount;
+	root.prim_count = spheres_count;
 
 	update_node_bounds(root_node_index);
 	subdivide(root_node_index);
+
+	// Drop the slots the build didn't use so only real nodes are uploaded.
+	bvh.resize(nodes_used);
 }
 
 auto main() -> int
@@ -224,7 +281,7 @@ auto main() -> int
 	QueryPerformanceCounter(&g_perf_start);
 
 	int32_t samples_per_pixel = 1u;
-	int32_t max_ray_depth = 1u;
+	int32_t max_ray_depth = 10;
 	bool use_bvh = true;
 
 	const auto imgui_layer = [&]()
@@ -299,47 +356,34 @@ auto main() -> int
 	for (auto& buf : ubo_buf)
 		add_buffer(&buffer_desc, &buf);
 
-	// Scene data has to be assembled before the buffers are filled below.
-	Lambertian ground(Vector3(0.8f, 0.8f, 0.0f));
-	Lambertian center(Vector3(0.1f, 0.2f, 0.5f));
-	Metal right(Vector3(0.8f, 0.6f, 0.2f), 0.7f);
-
-	float left_refraction_index = 1.5f;
-	Dielectric left(left_refraction_index);
-	Dielectric inner_bubble(1.0f / left_refraction_index);
-
-	spheres[0] = Sphere(Vector3(0.0f, 0.0f, -1.0f), 0.5f);
-	spheres[1] = Sphere(Vector3(0.0f, -100.5f, -1.0f), 100.0f);
-	spheres[2] = Sphere(Vector3(-1.0f, 0.0f, -1.0f), 0.5f);
-	spheres[3] = Sphere(Vector3(1.0f, 0.0f, -1.0f), 0.5f);
-	spheres[4] = Sphere(Vector3(-1.0f, 0.0f, -1.0f), 0.4f);
-	mats[0] = center.mat;
-	mats[1] = ground.mat;
-	mats[2] = left.mat;
-	mats[3] = right.mat;
-	mats[4] = inner_bubble.mat;
-
+	build_scene();
 	build_bvh();
+	std::cout << "BVH: " << nodes_used << " nodes for " << spheres.size() << " spheres" << std::endl;
 
 	buffer_desc.usage = yar_buffer_usage_storage_buffer;
 	buffer_desc.flags = yar_buffer_flag_gpu_only;
 
-	buffer_desc.size = sizeof(spheres);
+	const uint32_t spheres_bytes = static_cast<uint32_t>(spheres.size() * sizeof(Sphere));
+	const uint32_t mats_bytes = static_cast<uint32_t>(mats.size() * sizeof(MaterialData));
+	const uint32_t bvh_bytes = static_cast<uint32_t>(bvh.size() * sizeof(BVHNode));
+	const uint32_t spheres_indexes_bytes = static_cast<uint32_t>(spheres_indexes.size() * sizeof(uint32_t));
+
+	buffer_desc.size = spheres_bytes;
 	buffer_desc.name = "spheres";
 	yar_buffer* spheres_buf = nullptr;
 	add_buffer(&buffer_desc, &spheres_buf);
 
-	buffer_desc.size = sizeof(mats);
+	buffer_desc.size = mats_bytes;
 	buffer_desc.name = "mats";
 	yar_buffer* mats_buf = nullptr;
 	add_buffer(&buffer_desc, &mats_buf);
 
-	buffer_desc.size = sizeof(bvh);
+	buffer_desc.size = bvh_bytes;
 	buffer_desc.name = "bvh";
 	yar_buffer* bvh_buf = nullptr;
 	add_buffer(&buffer_desc, &bvh_buf);
 
-	buffer_desc.size = sizeof(spheres_indexes);
+	buffer_desc.size = spheres_indexes_bytes;
 	buffer_desc.name = "spheres_indexes";
 	yar_buffer* spheres_indexes_buf = nullptr;
 	add_buffer(&buffer_desc, &spheres_indexes_buf);
@@ -355,27 +399,27 @@ auto main() -> int
 		end_update_resource(resource_update_desc);
 
 		update_desc.buffer = spheres_buf;
-		update_desc.size = sizeof(spheres);
+		update_desc.size = spheres_bytes;
 		begin_update_resource(resource_update_desc);
-		std::memcpy(update_desc.mapped_data, spheres, sizeof(spheres));
+		std::memcpy(update_desc.mapped_data, spheres.data(), spheres_bytes);
 		end_update_resource(resource_update_desc);
 
 		update_desc.buffer = mats_buf;
-		update_desc.size = sizeof(mats);
+		update_desc.size = mats_bytes;
 		begin_update_resource(resource_update_desc);
-		std::memcpy(update_desc.mapped_data, mats, sizeof(mats));
+		std::memcpy(update_desc.mapped_data, mats.data(), mats_bytes);
 		end_update_resource(resource_update_desc);
 
 		update_desc.buffer = bvh_buf;
-		update_desc.size = sizeof(bvh);
+		update_desc.size = bvh_bytes;
 		begin_update_resource(resource_update_desc);
-		std::memcpy(update_desc.mapped_data, bvh, sizeof(bvh));
+		std::memcpy(update_desc.mapped_data, bvh.data(), bvh_bytes);
 		end_update_resource(resource_update_desc);
 
 		update_desc.buffer = spheres_indexes_buf;
-		update_desc.size = sizeof(spheres_indexes);
+		update_desc.size = spheres_indexes_bytes;
 		begin_update_resource(resource_update_desc);
-		std::memcpy(update_desc.mapped_data, spheres_indexes, sizeof(spheres_indexes));
+		std::memcpy(update_desc.mapped_data, spheres_indexes.data(), spheres_indexes_bytes);
 		end_update_resource(resource_update_desc);
 	}
 
@@ -594,7 +638,10 @@ auto main() -> int
 	yar_cmd_buffer* cmd;
 	add_cmd(&cmd_desc, &cmd);
 
-	camera.pos = Vector3(0.0f, 0.0f, 0.0f);
+	camera.pos = Vector3(13.0f, 2.0f, 3.0f);
+	camera.front = (Vector3(0.0f, 0.0f, 0.0f) - camera.pos).normalized();
+	yaw = degrees(std::atan2(camera.front.z(), camera.front.x()));
+	pitch = degrees(std::asin(camera.front.y()));
 
 	uint32_t group_x = (dims.width + 15) / 16;
 	uint32_t group_y = (dims.height + 15) / 16;
@@ -626,7 +673,7 @@ auto main() -> int
 		);
 
 		ubo.camera_pos = Vector4(camera.pos, 0.0f);
-		Matrix4x4 projectionMatrix = Matrix4x4::perspective_fov_rh_gl(radians(90.0f), dims.width / (float)dims.height, 0.1f, 100.0f);
+		Matrix4x4 projectionMatrix = Matrix4x4::perspective_fov_rh_gl(radians(fov), dims.width / (float)dims.height, 0.1f, 100.0f);
 		Matrix4x4 viewMatrix = Matrix4x4::look_at_rh(camera.pos, camera.pos + camera.front, camera.up);
 		ubo.inv_view_proj = (viewMatrix * projectionMatrix).inverse();
 		ubo.samples_per_pixel = samples_per_pixel;
