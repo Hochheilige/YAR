@@ -70,22 +70,13 @@ void process_input();
 float deltaTime = 0.0f;
 float lastFrame = 0.0f;
 
-struct Material
-{
-	Vector3 albedo;
-	float fuzz; // only for metals
-	float refraction_index; // for dielectircs
-	MaterialType type;
-	uint32_t pad[2] = {};
-};
-
 struct Lambertian
 {
 	Lambertian(Vector3 albedo)
 		: mat({ albedo, 0.0f, 0.0f, MaterialType::Lambertian }) {
 	}
 
-	Material mat;
+	MaterialData mat;
 };
 
 struct Metal
@@ -94,7 +85,7 @@ struct Metal
 		: mat({ albedo, fuzz, 0.0f, MaterialType::Metal }) {
 	}
 
-	Material mat;
+	MaterialData mat;
 };
 
 struct Dielectric
@@ -103,13 +94,13 @@ struct Dielectric
 		: mat({ Vector3{}, 0.0f, refraction_index, MaterialType::Dielectric }) {
 	}
 
-	Material mat;
+	MaterialData mat;
 };
 
 constexpr uint32_t kSpheresCount = 5u;
 
 Sphere spheres[kSpheresCount];
-Material mats[kSpheresCount];
+MaterialData mats[kSpheresCount];
 UBO ubo;
 
 struct Camera
