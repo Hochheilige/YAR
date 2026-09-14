@@ -240,7 +240,39 @@ struct World : Hittable
 {
     override bool hit(const Ray r, Interval ray_t, out HitRecord rec)
     {
-        HitRecord temp_rec = {};
+        // Runtime switch so both paths can be compared in the same build.
+        if (ubo.use_bvh != 0)
+            return hit_bvh(r, ray_t, rec);
+        return hit_linear(r, ray_t, rec);
+    }
+
+    // Brute force: test every sphere.
+    bool hit_linear(const Ray r, Interval ray_t, out HitRecord rec)
+    {
+        rec = (HitRecord)0;
+        bool hit_anything = false;
+        float closest_to_far = ray_t.max_;
+
+        uint count, stride;
+        spheres.GetDimensions(count, stride);
+        for (uint i = 0; i < count; ++i)
+        {
+            HitRecord temp_rec;
+            if (spheres[i].hit(r, Interval(ray_t.min_, closest_to_far), temp_rec))
+            {
+                hit_anything = true;
+                closest_to_far = temp_rec.t;
+                rec = temp_rec;
+                rec.mat = mats[i];
+            }
+        }
+
+        return hit_anything;
+    }
+
+    bool hit_bvh(const Ray r, Interval ray_t, out HitRecord rec)
+    {
+        rec = (HitRecord)0;
         bool hit_anything = false;
         float closest_to_far = ray_t.max_;
 

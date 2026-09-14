@@ -1,4 +1,4 @@
-#include <window.h>
+﻿#include <window.h>
 #include <imgui.h>
 #include <imgui_layer.h>
 #include <render.h>
@@ -225,12 +225,14 @@ auto main() -> int
 
 	int32_t samples_per_pixel = 1u;
 	int32_t max_ray_depth = 1u;
+	bool use_bvh = true;
 
 	const auto imgui_layer = [&]()
 		{
 			ImGui::Begin("Raytracer settings");
 			ImGui::SliderInt("Samples Per Pixel", &samples_per_pixel, 1, 100);
 			ImGui::SliderInt("Max Ray Depth", &max_ray_depth, 1, 100);
+			ImGui::Checkbox("Use BVH", &use_bvh);
 			ImGui::End();
 
 			// No-op unless built in the Profile configuration.
@@ -630,6 +632,7 @@ auto main() -> int
 		ubo.samples_per_pixel = samples_per_pixel;
 		ubo.max_ray_depth = max_ray_depth;
 		ubo.seed = random_uint();
+		ubo.use_bvh = use_bvh ? 1u : 0u;
 		ubo.ui_ortho = ortho;
 
 		yar_buffer_update_desc update{};

@@ -58,7 +58,7 @@ struct UBO
 	int  samples_per_pixel;
 	int max_ray_depth;
 	uint seed;
-	uint pad;
+	uint use_bvh; 
 };
 
 #ifdef __cplusplus
@@ -87,7 +87,7 @@ static_assert(offsetof(UBO, camera_pos) == 128, "UBO::camera_pos moved");
 static_assert(offsetof(UBO, samples_per_pixel) == 144, "UBO::samples_per_pixel moved");
 static_assert(offsetof(UBO, max_ray_depth) == 148, "UBO::max_ray_depth moved");
 static_assert(offsetof(UBO, seed) == 152, "UBO::seed moved");
-static_assert(offsetof(UBO, pad) == 156, "UBO::pad moved");
+static_assert(offsetof(UBO, use_bvh) == 156, "UBO::use_bvh moved");
 
 static_assert(sizeof(BVHNode) == 32, "BVHNode must stay 32 bytes");
 static_assert(offsetof(BVHNode, left_first) == 12, "BVHNode::left_first moved");
