@@ -96,6 +96,12 @@ struct Vector3 {
         return *this;
     }
 
+    bool operator<(const Vector3& other) const
+    {
+        return std::tie(data.x, data.y, data.z) 
+            < std::tie(other.data.x, other.data.y, other.data.z);
+    }
+
     float length() const {
         XMVECTOR v = load();
         return XMVectorGetX(XMVector3Length(v));

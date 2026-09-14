@@ -28,6 +28,19 @@ struct Sphere
     float  radius;
 };
 
+struct BVHNode
+{
+	float3 aabb_min;
+	float3 aabb_max;
+
+	/*
+		if prim_count == 0 then left_first -> index of the left child node
+		otherwise left_first -> index of the first primitive index
+	*/
+	uint left_first;
+	uint prim_count;
+};
+
 struct MaterialData
 {
     float3       albedo;

@@ -5,6 +5,8 @@
 
 #include <profiler.h>
 #include <math/yar_math.h>
+
+#define NOMINMAX
 #include <Windows.h>
 
 #include <random>
@@ -13,6 +15,7 @@
 #include <cmath>
 
 #include "../shaders/rt_common.h"
+
 
 static LARGE_INTEGER g_perf_frequency;
 static LARGE_INTEGER g_perf_start;
@@ -100,6 +103,7 @@ struct Dielectric
 constexpr uint32_t kSpheresCount = 5u;
 
 Sphere spheres[kSpheresCount];
+uint32_t spheres_indexes[kSpheresCount];
 MaterialData mats[kSpheresCount];
 UBO ubo;
 
@@ -131,6 +135,87 @@ yar_texture* create_texture(const uint32_t width, const uint32_t height)
 	add_texture(&texture_desc, &tex);
 
 	return tex;
+}
+
+BVHNode bvh[kSpheresCount * 2 - 1];
+uint32_t root_node_index = 0;
+uint32_t nodes_used = 1;
+
+auto update_node_bounds(const uint32_t node_index)
+{
+	BVHNode& node = bvh[node_index];
+	node.aabb_min = Vector3(std::numeric_limits<float>::max());
+	node.aabb_max = Vector3(std::numeric_limits<float>::min());
+	for (uint32_t first = node.left_first, i = 0; i < node.prim_count; ++i)
+	{
+		uint32_t leaf_sphere_index = spheres_indexes[first + i];
+		Sphere& leaf_sphere = spheres[leaf_sphere_index];
+		Vector3 radius_vec = Vector3(leaf_sphere.radius);
+		node.aabb_min = std::min(node.aabb_min, leaf_sphere.center - radius_vec);
+		node.aabb_max = std::max(node.aabb_max, leaf_sphere.center + radius_vec);
+	}
+}
+
+auto subdivide(const uint32_t node_index)
+{
+	BVHNode& node = bvh[node_index];
+	if (node.prim_count <= 2)
+		return;
+
+	// determine split axis and position
+	Vector3 extent = node.aabb_max - node.aabb_min;
+	uint32_t axis = 0;
+	if (extent.y() > extent.x()) 
+		axis = 1;
+	if (extent.z() > extent[axis]) 
+		axis = 2;
+
+	const float split_pos = node.aabb_min[axis] + extent[axis] * 0.5f;
+
+	// in-place partition
+	uint32_t i = node.left_first;
+	uint32_t j = i + node.prim_count - 1;
+	while (i <= j)
+	{
+		if (spheres[spheres_indexes[i]].center[axis] < split_pos)
+			i++;
+		else
+			std::swap(spheres_indexes[i], spheres_indexes[j--]);
+	}
+
+	// abort if one of the sides is empty
+	int left_count = i - node.left_first;
+	if (left_count == 0 || left_count == node.prim_count)
+		return;
+
+	uint32_t left_child_index = nodes_used++;
+	uint32_t right_child_index = nodes_used++;
+	bvh[left_child_index].prim_count = left_count;
+	bvh[left_child_index].left_first = node.left_first;
+	bvh[right_child_index].prim_count = node.prim_count - left_count;
+	bvh[right_child_index].left_first = i;
+
+	node.left_first = left_child_index;
+	node.prim_count = 0; // it's node - not leaf
+
+	update_node_bounds(left_child_index);
+	update_node_bounds(right_child_index);
+
+	subdivide(left_child_index);
+	subdivide(right_child_index);
+}
+
+auto build_bvh()
+{
+	for (uint32_t i = 0; i < kSpheresCount; ++i)
+		spheres_indexes[i] = i;
+
+	BVHNode& root = bvh[root_node_index];
+	root.left_first = 0;
+	root.prim_count = kSpheresCount;
+
+	update_node_bounds(root_node_index);
+	subdivide(root_node_index);
 }
 
 auto main() -> int
@@ -231,6 +316,8 @@ auto main() -> int
 	mats[2] = left.mat;
 	mats[3] = right.mat;
 	mats[4] = inner_bubble.mat;
+
+	build_bvh();
 
 	buffer_desc.usage = yar_buffer_usage_storage_buffer;
 	buffer_desc.flags = yar_buffer_flag_gpu_only;
