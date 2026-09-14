@@ -145,14 +145,14 @@ auto update_node_bounds(const uint32_t node_index)
 {
 	BVHNode& node = bvh[node_index];
 	node.aabb_min = Vector3(std::numeric_limits<float>::max());
-	node.aabb_max = Vector3(std::numeric_limits<float>::min());
+	node.aabb_max = Vector3(std::numeric_limits<float>::lowest());
 	for (uint32_t first = node.left_first, i = 0; i < node.prim_count; ++i)
 	{
 		uint32_t leaf_sphere_index = spheres_indexes[first + i];
 		Sphere& leaf_sphere = spheres[leaf_sphere_index];
 		Vector3 radius_vec = Vector3(leaf_sphere.radius);
-		node.aabb_min = std::min(node.aabb_min, leaf_sphere.center - radius_vec);
-		node.aabb_max = std::max(node.aabb_max, leaf_sphere.center + radius_vec);
+		node.aabb_min = min(node.aabb_min, leaf_sphere.center - radius_vec);
+		node.aabb_max = max(node.aabb_max, leaf_sphere.center + radius_vec);
 	}
 }
 
@@ -173,8 +173,8 @@ auto subdivide(const uint32_t node_index)
 	const float split_pos = node.aabb_min[axis] + extent[axis] * 0.5f;
 
 	// in-place partition
-	uint32_t i = node.left_first;
-	uint32_t j = i + node.prim_count - 1;
+	int32_t i = node.left_first;
+	int32_t j = i + node.prim_count - 1;
 	while (i <= j)
 	{
 		if (spheres[spheres_indexes[i]].center[axis] < split_pos)
@@ -332,6 +332,16 @@ auto main() -> int
 	yar_buffer* mats_buf = nullptr;
 	add_buffer(&buffer_desc, &mats_buf);
 
+	buffer_desc.size = sizeof(bvh);
+	buffer_desc.name = "bvh";
+	yar_buffer* bvh_buf = nullptr;
+	add_buffer(&buffer_desc, &bvh_buf);
+
+	buffer_desc.size = sizeof(spheres_indexes);
+	buffer_desc.name = "spheres_indexes";
+	yar_buffer* spheres_indexes_buf = nullptr;
+	add_buffer(&buffer_desc, &spheres_indexes_buf);
+
 	yar_resource_update_desc resource_update_desc{};
 	{ // update buffers data
 		yar_buffer_update_desc update_desc{};
@@ -352,6 +362,18 @@ auto main() -> int
 		update_desc.size = sizeof(mats);
 		begin_update_resource(resource_update_desc);
 		std::memcpy(update_desc.mapped_data, mats, sizeof(mats));
+		end_update_resource(resource_update_desc);
+
+		update_desc.buffer = bvh_buf;
+		update_desc.size = sizeof(bvh);
+		begin_update_resource(resource_update_desc);
+		std::memcpy(update_desc.mapped_data, bvh, sizeof(bvh));
+		end_update_resource(resource_update_desc);
+
+		update_desc.buffer = spheres_indexes_buf;
+		update_desc.size = sizeof(spheres_indexes);
+		begin_update_resource(resource_update_desc);
+		std::memcpy(update_desc.mapped_data, spheres_indexes, sizeof(spheres_indexes));
 		end_update_resource(resource_update_desc);
 	}
 
@@ -409,7 +431,16 @@ auto main() -> int
 			.name = "mats",
 			.descriptor = mats_buf
 		},
+		{
+			.name = "bvh",
+			.descriptor = bvh_buf
+		},
+		{
+			.name = "spheres_indexes",
+			.descriptor = spheres_indexes_buf
+		},
 	};
+
 
 	yar_update_descriptor_set_desc update_set_desc{};
 	update_set_desc = {};

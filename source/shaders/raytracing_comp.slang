@@ -218,6 +218,24 @@ extension Sphere : Hittable
     }
 };
 
+extension BVHNode
+{
+    bool hit_aabb(const Ray r, Interval ray_t)
+    {
+        float3 inv_dir = 1.0f / r.direction;
+        float3 t1 = (aabb_min - r.origin) * inv_dir;
+        float3 t2 = (aabb_max - r.origin) * inv_dir;
+        float3 t_near = min(t1, t2);
+        float3 t_far = max(t1, t2);
+
+        float tmin = max(ray_t.min_, max(t_near.x, max(t_near.y, t_near.z)));
+        float tmax = min(ray_t.max_, min(t_far.x, min(t_far.y, t_far.z)));
+        return tmin <= tmax;
+    }   
+};
+
+static const uint BVH_STACK_SIZE = 32;
+
 struct World : Hittable
 {
     override bool hit(const Ray r, Interval ray_t, out HitRecord rec)
@@ -226,17 +244,35 @@ struct World : Hittable
         bool hit_anything = false;
         float closest_to_far = ray_t.max_;
 
-        uint count, stride;
-        spheres.GetDimensions(count, stride);
-        for (uint i = 0; i < count; ++i)
+        uint stack[BVH_STACK_SIZE];
+        uint stack_ptr = 0;
+        stack[stack_ptr++] = 0; // root
+
+        while (stack_ptr > 0)
         {
-            Interval interval = { ray_t.min_, closest_to_far };
-            if (spheres[i].hit(r, interval, temp_rec))
+            BVHNode node = bvh[stack[--stack_ptr]];
+            if (!node.hit_aabb(r, Interval(ray_t.min_, closest_to_far)))
+                continue;
+
+            if (node.prim_count > 0) // leaf
             {
-                hit_anything = true;
-                closest_to_far = temp_rec.t;
-                rec = temp_rec;
-                rec.mat = mats[i];
+                for (uint j = 0; j < node.prim_count; ++j)
+                {
+                    uint sphere_index = spheres_indexes[node.left_first + j];
+                    HitRecord temp_rec;
+                    if (spheres[sphere_index].hit(r, Interval(ray_t.min_, closest_to_far), temp_rec))
+                    {
+                        hit_anything = true;
+                        closest_to_far = temp_rec.t;
+                        rec = temp_rec;
+                        rec.mat = mats[sphere_index];
+                    }
+                }
+            }
+            else
+            {
+                stack[stack_ptr++] = node.left_first;
+                stack[stack_ptr++] = node.left_first + 1;
             }
         }
 
@@ -358,7 +394,9 @@ float3 linear_to_gamma(float3 linear_color)
 // is the Vulkan-native spelling and is what the engine reflects on.
 [[vk::binding(0, 0)]] RWTexture2D<vector<float, 4>> quad_tex;
 [[vk::binding(1, 0)]] StructuredBuffer<Sphere> spheres;
-[[vk::binding(2, 0)]] StructuredBuffer<MaterialData> mats;
+[[vk::binding(2, 0)]] StructuredBuffer<BVHNode> bvh;
+[[vk::binding(3, 0)]] StructuredBuffer<uint> spheres_indexes;
+[[vk::binding(4, 0)]] StructuredBuffer<MaterialData> mats;
 [[vk::binding(1, 1)]] ConstantBuffer<UBO> ubo;
 
 

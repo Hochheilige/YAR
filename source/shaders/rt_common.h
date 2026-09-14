@@ -31,13 +31,13 @@ struct Sphere
 struct BVHNode
 {
 	float3 aabb_min;
+	uint left_first;
 	float3 aabb_max;
 
 	/*
 		if prim_count == 0 then left_first -> index of the left child node
 		otherwise left_first -> index of the first primitive index
 	*/
-	uint left_first;
 	uint prim_count;
 };
 
@@ -88,4 +88,9 @@ static_assert(offsetof(UBO, samples_per_pixel) == 144, "UBO::samples_per_pixel m
 static_assert(offsetof(UBO, max_ray_depth) == 148, "UBO::max_ray_depth moved");
 static_assert(offsetof(UBO, seed) == 152, "UBO::seed moved");
 static_assert(offsetof(UBO, pad) == 156, "UBO::pad moved");
+
+static_assert(sizeof(BVHNode) == 32, "BVHNode must stay 32 bytes");
+static_assert(offsetof(BVHNode, left_first) == 12, "BVHNode::left_first moved");
+static_assert(offsetof(BVHNode, aabb_max) == 16, "BVHNode::aabb_max moved");
+static_assert(offsetof(BVHNode, prim_count) == 28, "BVHNode::prim_count moved");
 #endif
