@@ -2,6 +2,7 @@
 #include <imgui.h>
 #include <imgui_layer.h>
 #include <render.h>
+#include <gpu_resource.h>
 
 #include <profiler.h>
 #include <math/yar_math.h>
@@ -335,13 +336,13 @@ auto main() -> int
 	sampler_desc.wrap_v = yar_wrap_mode_repeat;
 	add_sampler(&sampler_desc, &sampler);
 
-	yar_buffer_desc buffer_desc{};
-	buffer_desc.size = sizeof(quad_vertices);
-	buffer_desc.usage = yar_buffer_usage_vertex_buffer;
-	buffer_desc.flags = yar_buffer_flag_gpu_only;
-	buffer_desc.name = "quad_vertex_buffer";
-	yar_buffer* vbo = nullptr;
-	add_buffer(&buffer_desc, &vbo);
+	yar_buffer_desc buffer_desc{
+		.size = sizeof(quad_vertices),
+		.usage = yar_buffer_usage_vertex_buffer,
+		.flags = yar_buffer_flag_gpu_only,
+		.name = "quad_vertex_buffer"
+	};
+	gpu_buffer vbo(&buffer_desc);
 
 	yar_texture* imgui_fonts = get_imgui_fonts();
 
@@ -352,9 +353,7 @@ auto main() -> int
 	buffer_desc.usage = yar_buffer_usage_uniform_buffer;
 	buffer_desc.flags = yar_buffer_flag_map_write;
 	buffer_desc.name = "UBO";
-	yar_buffer* ubo_buf[frames_in_flight] = {};
-	for (auto& buf : ubo_buf)
-		add_buffer(&buffer_desc, &buf);
+	gpu_buffer ubo_buf[frames_in_flight] = {gpu_buffer(&buffer_desc), gpu_buffer(&buffer_desc)};
 
 	build_scene();
 	build_bvh();
@@ -392,7 +391,7 @@ auto main() -> int
 	{ // update buffers data
 		yar_buffer_update_desc update_desc{};
 		resource_update_desc = &update_desc;
-		update_desc.buffer = vbo;
+		update_desc.buffer = vbo.get();
 		update_desc.size = sizeof(quad_vertices);
 		begin_update_resource(resource_update_desc);
 		std::memcpy(update_desc.mapped_data, quad_vertices, sizeof(quad_vertices));
@@ -524,7 +523,7 @@ auto main() -> int
 		std::vector<yar_descriptor_info> infos{
 			{
 				.name = "ubo",
-				.descriptor = ubo_buf[i]
+				.descriptor = ubo_buf[i].get()
 			}
 		};
 		update_set_desc.index = i;
@@ -683,7 +682,7 @@ auto main() -> int
 		ubo.ui_ortho = ortho;
 
 		yar_buffer_update_desc update{};
-		update.buffer = ubo_buf[frame_index];
+		update.buffer = ubo_buf[frame_index].get();
 		update.size = sizeof(ubo);
 		resource_update_desc = &update;
 		begin_update_resource(resource_update_desc);
@@ -710,7 +709,7 @@ auto main() -> int
 
 		YAR_GPU_SCOPE_BEGIN(cmd, "Fullscreen Quad");
 		cmd_bind_pipeline(cmd, graphics_pipeline);
-		cmd_bind_vertex_buffer(cmd, vbo, layout.attrib_count, 0, sizeof(float) * 4);
+		cmd_bind_vertex_buffer(cmd, vbo.get(), layout.attrib_count, 0, sizeof(float) * 4);
 		cmd_bind_descriptor_set(cmd, srv_set, 0);
 		cmd_draw(cmd, 0, 4);
 		YAR_GPU_SCOPE_END(cmd);
