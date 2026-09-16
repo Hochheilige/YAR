@@ -9,6 +9,12 @@ void load_shader(yar_shader_load_desc* desc, yar_shader_desc** out)
         device->load_shader(desc, out);
 }
 
+void remove_shader_desc(yar_shader_desc* desc)
+{
+    if (device && device->remove_shader_desc)
+        device->remove_shader_desc(desc);
+}
+
 void begin_update_resource(yar_resource_update_desc& desc)
 {
     if (device && device->begin_update_resource)
@@ -106,10 +112,64 @@ void add_cmd(yar_cmd_buffer_desc* desc, yar_cmd_buffer** cmd)
         device->add_cmd(desc, cmd);
 }
 
+void remove_swapchain(yar_swapchain* swapchain)
+{
+    if (device && device->remove_swapchain)
+        device->remove_swapchain(swapchain);
+}
+
 void remove_buffer(yar_buffer* buffer)
 {
     if (device && device->remove_buffer)
         device->remove_buffer(buffer);
+}
+
+void remove_texture(yar_texture* texture)
+{
+    if (device && device->remove_texture)
+        device->remove_texture(texture);
+}
+
+void remove_render_target(yar_render_target* rt)
+{
+    if (device && device->remove_render_target)
+        device->remove_render_target(rt);
+}
+
+void remove_sampler(yar_sampler* sampler)
+{
+    if (device && device->remove_sampler)
+        device->remove_sampler(sampler);
+}
+
+void remove_shader(yar_shader* shader)
+{
+    if (device && device->remove_shader)
+        device->remove_shader(shader);
+}
+
+void remove_descriptor_set(yar_descriptor_set* set)
+{
+    if (device && device->remove_descriptor_set)
+        device->remove_descriptor_set(set);
+}
+
+void remove_pipeline(yar_pipeline* pipeline)
+{
+    if (device && device->remove_pipeline)
+        device->remove_pipeline(pipeline);
+}
+
+void remove_queue(yar_cmd_queue* queue)
+{
+    if (device && device->remove_queue)
+        device->remove_queue(queue);
+}
+
+void remove_cmd(yar_cmd_buffer* cmd)
+{
+    if (device && device->remove_cmd)
+        device->remove_cmd(cmd);
 }
 
 void update_descriptor_set(yar_update_descriptor_set_desc* desc, yar_descriptor_set* set)
@@ -234,6 +294,7 @@ uint32_t get_gpu_scope_results(yar_gpu_scope_result* out, uint32_t max_count)
 }
 
 extern bool gl_init_render(yar_device* device);
+extern void gl_terminate_render();
 
 void init_render()
 {
@@ -243,4 +304,15 @@ void init_render()
     }
 
     gl_init_render(device);
+}
+
+void terminate_render()
+{
+    if (device == nullptr)
+        return;
+
+    gl_terminate_render();
+
+    std::free(device);
+    device = nullptr;
 }

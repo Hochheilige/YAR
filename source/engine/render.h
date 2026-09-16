@@ -658,6 +658,7 @@ struct yar_gpu_scope_result
 ret name(__VA_ARGS__)                         \
 
 DECLARE_YAR_LOAD_FUNC(void, load_shader, yar_shader_load_desc* desc, yar_shader_desc** out);
+DECLARE_YAR_LOAD_FUNC(void, remove_shader_desc, yar_shader_desc* desc);
 DECLARE_YAR_LOAD_FUNC(void, begin_update_resource, yar_resource_update_desc& desc);
 DECLARE_YAR_LOAD_FUNC(void, end_update_resource, yar_resource_update_desc& desc);
 DECLARE_YAR_LOAD_FUNC(void, update_texture, yar_texture_update_desc* desc);
@@ -682,7 +683,22 @@ DECLARE_YAR_RENDER_FUNC(void, add_descriptor_set, yar_descriptor_set_desc* desc,
 DECLARE_YAR_RENDER_FUNC(void, add_pipeline, yar_pipeline_desc* desc, yar_pipeline** pipeline);
 DECLARE_YAR_RENDER_FUNC(void, add_queue, yar_cmd_queue_desc* desc, yar_cmd_queue** queue);
 DECLARE_YAR_RENDER_FUNC(void, add_cmd, yar_cmd_buffer_desc* desc, yar_cmd_buffer** cmd);
+
+// Every add_* above has a matching remove_* here. A resource frees only what it
+// created itself: a swapchain drops its render targets, a cmd buffer drops its
+// push constant buffer, but a pipeline does not touch the shader it was built
+// from and a queue does not touch the cmd buffers registered with it.
+DECLARE_YAR_RENDER_FUNC(void, remove_swapchain, yar_swapchain* swapchain);
 DECLARE_YAR_RENDER_FUNC(void, remove_buffer, yar_buffer* buffer);
+DECLARE_YAR_RENDER_FUNC(void, remove_texture, yar_texture* texture);
+DECLARE_YAR_RENDER_FUNC(void, remove_render_target, yar_render_target* rt);
+DECLARE_YAR_RENDER_FUNC(void, remove_sampler, yar_sampler* sampler);
+DECLARE_YAR_RENDER_FUNC(void, remove_shader, yar_shader* shader);
+DECLARE_YAR_RENDER_FUNC(void, remove_descriptor_set, yar_descriptor_set* set);
+DECLARE_YAR_RENDER_FUNC(void, remove_pipeline, yar_pipeline* pipeline);
+DECLARE_YAR_RENDER_FUNC(void, remove_queue, yar_cmd_queue* queue);
+DECLARE_YAR_RENDER_FUNC(void, remove_cmd, yar_cmd_buffer* cmd);
+
 DECLARE_YAR_RENDER_FUNC(void, update_descriptor_set, yar_update_descriptor_set_desc* desc, yar_descriptor_set* set);
 DECLARE_YAR_RENDER_FUNC(void, acquire_next_image, yar_swapchain* swapchain, uint32_t& swapchain_index);
 DECLARE_YAR_RENDER_FUNC(void, cmd_bind_pipeline, yar_cmd_buffer* cmd, yar_pipeline* pipeline);
@@ -707,3 +723,8 @@ DECLARE_YAR_RENDER_FUNC(void, cmd_end_gpu_scope, yar_cmd_buffer* cmd);
 DECLARE_YAR_RENDER_FUNC(uint32_t, get_gpu_scope_results, yar_gpu_scope_result* out, uint32_t max_count);
 
 void init_render();
+
+// Tears down backend owned state (staging buffers, gpu profiler queries) and
+// the device itself. Call it after every remove_*, while the GL context is
+// still current. init_render() can be called again afterwards.
+void terminate_render();

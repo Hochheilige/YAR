@@ -27,6 +27,7 @@
 #if defined(YAR_PROFILE_ENABLED)
 static void gpu_profiler_init();
 static void gpu_profiler_advance();
+static void gpu_profiler_terminate();
 void gl_cmdBeginGpuScope(yar_cmd_buffer* cmd, const char* name);
 void gl_cmdEndGpuScope(yar_cmd_buffer* cmd);
 uint32_t gl_getGpuScopeResults(yar_gpu_scope_result* out, uint32_t max_count);
@@ -705,6 +706,40 @@ void gl_loadShader(yar_shader_load_desc* desc, yar_shader_desc** out_shader_desc
     }
 
     *out_shader_desc = shader_desc;
+}
+
+void gl_removeShaderDesc(yar_shader_desc* desc)
+{
+    if (desc == nullptr)
+        return;
+
+    using ByteCode = std::vector<uint8_t>;
+    for (size_t i = 0; i < yar_shader_stage_max; ++i)
+    {
+        yar_shader_stage stage_mask = (yar_shader_stage)(1 << i);
+        if (stage_mask != (desc->stages & stage_mask))
+            continue;
+
+        switch (stage_mask)
+        {
+        case yar_shader_stage_vert:
+            desc->vert.byte_code.~ByteCode();
+            break;
+        case yar_shader_stage_pixel:
+            desc->pixel.byte_code.~ByteCode();
+            break;
+        case yar_shader_stage_geom:
+            desc->geom.byte_code.~ByteCode();
+            break;
+        case yar_shader_stage_comp:
+            desc->comp.byte_code.~ByteCode();
+            break;
+        default:
+            break;
+        }
+    }
+
+    std::free(desc);
 }
 
 void gl_beginUpdateBuffer(yar_buffer_update_desc* desc)
@@ -1407,14 +1442,160 @@ void gl_addCmd(yar_cmd_buffer_desc* desc, yar_cmd_buffer** cmd)
     glCreateFramebuffers(1, &new_cmd->fbo);
 }
 
+// ======================================= //
+//            Remove Functions             //
+// ======================================= //
+
+// Several of these structs are raw malloc/calloc blocks with C++ members
+// placement-new'd into them (vectors, sets, std::function). Those members have
+// to be destroyed by hand before the block goes back to the allocator,
+// otherwise their heap storage leaks even though the struct itself is freed.
+
 void gl_removeBuffer(yar_buffer* buffer)
 {
-    if (buffer)
+    if (buffer == nullptr)
+        return;
+
+    glDeleteBuffers(1, &buffer->id);
+    std::free(buffer);
+}
+
+void gl_removeTexture(yar_texture* texture)
+{
+    if (texture == nullptr)
+        return;
+
+    auto gl_texture = reinterpret_cast<yar_gl_texture*>(texture);
+
+    if (gl_texture->type == yar_gl_texture_type::yar_type_renderbuffer)
+        glDeleteRenderbuffers(1, &gl_texture->id);
+    else
+        glDeleteTextures(1, &gl_texture->id);
+
+    std::free(gl_texture);
+}
+
+void gl_removeRenderTarget(yar_render_target* rt)
+{
+    if (rt == nullptr)
+        return;
+
+    // gl_addRenderTarget created this texture, so it owns it
+    gl_removeTexture(rt->texture);
+    std::free(rt);
+}
+
+void gl_removeSwapChain(yar_swapchain* swapchain)
+{
+    if (swapchain == nullptr)
+        return;
+
+    auto gl_swapchain = reinterpret_cast<yar_gl_swapchain*>(swapchain);
+
+    for (uint32_t i = 0; i < swapchain->buffer_count; ++i)
+        gl_removeRenderTarget(swapchain->render_targets[i]);
+    std::free(swapchain->render_targets);
+
+    glDeleteFramebuffers(1, &gl_swapchain->fbo);
+    std::free(gl_swapchain);
+}
+
+void gl_removeSampler(yar_sampler* sampler)
+{
+    if (sampler == nullptr)
+        return;
+
+    glDeleteSamplers(1, &sampler->id);
+    std::free(sampler);
+}
+
+void gl_removeShader(yar_shader* shader)
+{
+    if (shader == nullptr)
+        return;
+
+    auto gl_shader = reinterpret_cast<yar_gl_shader*>(shader);
+
+    // Each stage is its own separable program from glCreateShaderProgramv.
+    // The struct is calloc'd, so stages that were never built are still zero.
+    const GLuint programs[] = { gl_shader->vs, gl_shader->ps, gl_shader->gs, gl_shader->cs };
+    for (GLuint program : programs)
     {
-        glDeleteBuffers(1, &buffer->id);
-        std::free(buffer);
-        buffer = nullptr;
+        if (program)
+            glDeleteProgram(program);
     }
+
+    using ShaderResources = std::vector<yar_shader_resource>;
+    gl_shader->resources.~ShaderResources();
+
+    std::free(gl_shader);
+}
+
+void gl_removeDescriptorSet(yar_descriptor_set* set)
+{
+    if (set == nullptr)
+        return;
+
+    // The set only points at buffers, textures and samplers it was updated
+    // with, it never created them, so nothing here is removed.
+    using Descriptors = std::set<yar_shader_resource>;
+    using Infos = std::vector<std::vector<yar_descriptor_info>>;
+    set->descriptors.~Descriptors();
+    set->infos.~Infos();
+
+    std::free(set);
+}
+
+void gl_removePipeline(yar_pipeline* pipeline)
+{
+    if (pipeline == nullptr)
+        return;
+
+    auto gl_pipeline = reinterpret_cast<yar_gl_pipeline*>(pipeline);
+
+    glDeleteProgramPipelines(1, &gl_pipeline->program_pipeline);
+
+    // Compute pipelines never build a vao, and the shader belongs to whoever
+    // called add_shader, not to the pipeline
+    if (gl_pipeline->vao)
+        glDeleteVertexArrays(1, &gl_pipeline->vao);
+
+    std::free(gl_pipeline);
+}
+
+void gl_removeQueue(yar_cmd_queue* queue)
+{
+    if (queue == nullptr)
+        return;
+
+    // The queue tracks cmd buffers but does not own them, so they are not
+    // removed here. Destroying the vector only drops the pointers, it never
+    // dereferences them, so removing the cmds first is fine too.
+    using CmdBuffers = std::vector<yar_cmd_buffer*>;
+    queue->queue.~CmdBuffers();
+
+    std::free(queue);
+}
+
+void gl_removeCmd(yar_cmd_buffer* cmd)
+{
+    if (cmd == nullptr)
+        return;
+
+    auto gl_cmd = reinterpret_cast<yar_gl_cmd_buffer*>(cmd);
+
+    if (cmd->push_constant)
+    {
+        gl_removeBuffer(cmd->push_constant->buffer);
+        std::free(cmd->push_constant);
+    }
+
+    glDeleteFramebuffers(1, &gl_cmd->fbo);
+
+    using Commands = std::vector<yar_command>;
+    cmd->commands.~Commands();
+
+    std::free(gl_cmd);
 }
 
 void* gl_mapBuffer(yar_buffer* buffer)
@@ -1896,6 +2077,7 @@ bool gl_init_render(yar_device* device)
         return false;
 
     device->load_shader             = gl_loadShader;
+    device->remove_shader_desc      = gl_removeShaderDesc;
     device->begin_update_resource   = gl_beginUpdateResource;
     device->end_update_resource     = gl_endUpdateResource;
 
@@ -1909,7 +2091,16 @@ bool gl_init_render(yar_device* device)
     device->add_pipeline            = gl_addPipeline;
     device->add_queue               = gl_addQueue;
     device->add_cmd                 = gl_addCmd;
+    device->remove_swapchain        = gl_removeSwapChain;
     device->remove_buffer           = gl_removeBuffer;
+    device->remove_texture          = gl_removeTexture;
+    device->remove_render_target    = gl_removeRenderTarget;
+    device->remove_sampler          = gl_removeSampler;
+    device->remove_shader           = gl_removeShader;
+    device->remove_descriptor_set   = gl_removeDescriptorSet;
+    device->remove_pipeline         = gl_removePipeline;
+    device->remove_queue            = gl_removeQueue;
+    device->remove_cmd              = gl_removeCmd;
     device->map_buffer              = gl_mapBuffer;
     device->unmap_buffer            = gl_unmapBuffer;
     device->update_descriptor_set   = gl_updateDescriptorSet;
@@ -1947,6 +2138,19 @@ bool gl_init_render(yar_device* device)
 #endif
 
     return true;
+}
+
+void gl_terminate_render()
+{
+#if defined(YAR_PROFILE_ENABLED)
+    gpu_profiler_terminate();
+#endif
+
+    gl_removeBuffer(staging_buffer);
+    staging_buffer = nullptr;
+
+    gl_removeBuffer(pixel_buffer);
+    pixel_buffer = nullptr;
 }
 
 // ======================================= //
@@ -1996,6 +2200,28 @@ static void gpu_profiler_init()
     }
 
     gpu_profiler_ready = true;
+}
+
+static void gpu_profiler_terminate()
+{
+    if (!gpu_profiler_ready)
+        return;
+
+    for (auto& frame : gpu_frames)
+    {
+        for (auto& scope : frame.scopes)
+        {
+            glDeleteQueries(1, &scope.begin_query);
+            glDeleteQueries(1, &scope.end_query);
+        }
+        frame.count = 0;
+        frame.submitted = false;
+    }
+
+    gpu_record_slot = 0;
+    gpu_scope_depth = 0;
+    gpu_result_count = 0;
+    gpu_profiler_ready = false;
 }
 
 static void gpu_profiler_resolve(const yar_gl_gpu_frame& frame)

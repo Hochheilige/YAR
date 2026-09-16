@@ -9,6 +9,7 @@ struct yar_device
     // ======================================= //
 
     void (*load_shader)(yar_shader_load_desc* desc, yar_shader_desc** out);
+    void (*remove_shader_desc)(yar_shader_desc* desc);
     void (*begin_update_resource)(yar_resource_update_desc& desc);
     void (*end_update_resource)(yar_resource_update_desc& desc);
     void (*update_texture)(yar_texture_update_desc* desc);
@@ -30,7 +31,17 @@ struct yar_device
     void (*add_pipeline)(yar_pipeline_desc* desc, yar_pipeline** pipeline);
     void (*add_queue)(yar_cmd_queue_desc* desc, yar_cmd_queue** queue);
     void (*add_cmd)(yar_cmd_buffer_desc* desc, yar_cmd_buffer** cmd);
+    void (*remove_swapchain)(yar_swapchain* swapchain);
     void (*remove_buffer)(yar_buffer* buffer);
+    void (*remove_texture)(yar_texture* texture);
+    void (*remove_render_target)(yar_render_target* rt);
+    void (*remove_sampler)(yar_sampler* sampler);
+    void (*remove_shader)(yar_shader* shader);
+    void (*remove_descriptor_set)(yar_descriptor_set* set);
+    void (*remove_pipeline)(yar_pipeline* pipeline);
+    void (*remove_queue)(yar_cmd_queue* queue);
+    void (*remove_cmd)(yar_cmd_buffer* cmd);
+
     void (*update_descriptor_set)(yar_update_descriptor_set_desc* desc, yar_descriptor_set* set);
     void (*acquire_next_image)(yar_swapchain* swapchain, uint32_t& swapchain_index);
     void (*cmd_bind_pipeline)(yar_cmd_buffer* cmd, yar_pipeline* pipeline);
