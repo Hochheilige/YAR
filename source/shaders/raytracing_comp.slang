@@ -267,6 +267,19 @@ extension BVHNode
 
 static const uint BVH_STACK_SIZE = 32;
 
+bool try_hit<T : Hittable>(T prim, uint mat_index, Ray r, float t_min, inout float closest, inout HitRecord rec)
+{
+    HitRecord temp_rec;
+    if (prim.hit(r, Interval(t_min, closest), temp_rec))
+    {
+        closest = temp_rec.t;
+        rec = temp_rec;
+        rec.mat_index = mat_index;
+        return true;
+    }
+    return false;
+}
+
 struct World : Hittable
 {
     override bool hit(const Ray r, Interval ray_t, out HitRecord rec)
@@ -288,27 +301,15 @@ struct World : Hittable
         spheres.GetDimensions(count, stride);
         for (uint i = 0; i < count; ++i)
         {
-            HitRecord temp_rec;
-            if (spheres[i].hit(r, Interval(ray_t.min_, closest_to_far), temp_rec))
-            {
-                hit_anything = true;
-                closest_to_far = temp_rec.t;
-                rec = temp_rec;
-                rec.mat_index = spheres_mat_indexes[i];
-            }
+            hit_anything |= try_hit(spheres[i], spheres_mat_indexes[i],
+                 r, ray_t.min_, closest_to_far, rec);
         }
 
         quads.GetDimensions(count, stride);
         for (uint i = 0; i < count; ++i)
         {
-            HitRecord temp_rec;
-            if (quads[i].hit(r, Interval(ray_t.min_, closest_to_far), temp_rec))
-            {
-                hit_anything = true;
-                closest_to_far = temp_rec.t;
-                rec = temp_rec;
-                rec.mat_index = quads_mat_indexes[i];
-            }
+            hit_anything |= try_hit(quads[i], quads_mat_indexes[i],
+                 r, ray_t.min_, closest_to_far, rec);
         }
 
         return hit_anything;
@@ -335,29 +336,18 @@ struct World : Hittable
                 for (uint j = 0; j < node.prim_count; ++j)
                 {
                     const PrimitiveRef prim = primitives[node.left_first + j];
-                    HitRecord temp_rec;
                     switch (prim.type)
                     {
                     case PrimitiveType.Sphere:
                     {
-                        if (spheres[prim.index].hit(r, Interval(ray_t.min_, closest_to_far), temp_rec))
-                        {
-                            hit_anything = true;
-                            closest_to_far = temp_rec.t;
-                            rec = temp_rec;
-                            rec.mat_index = spheres_mat_indexes[prim.index];
-                        }
+                        hit_anything |= try_hit(spheres[prim.index], spheres_mat_indexes[prim.index],
+                             r, ray_t.min_, closest_to_far, rec);
                         break;
                     }
                     case PrimitiveType.Quad:
                     {
-                        if (quads[prim.index].hit(r, Interval(ray_t.min_, closest_to_far), temp_rec))
-                        {
-                            hit_anything = true;
-                            closest_to_far = temp_rec.t;
-                            rec = temp_rec;
-                            rec.mat_index = quads_mat_indexes[prim.index];
-                        }
+                        hit_anything |= try_hit(quads[prim.index], quads_mat_indexes[prim.index],
+                             r, ray_t.min_, closest_to_far, rec);
                         break;
                     }
                     }
