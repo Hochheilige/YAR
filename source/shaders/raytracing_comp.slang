@@ -143,7 +143,7 @@ struct HitRecord
     vector<float, 3> position;
     vector<float, 3> normal;
 
-    MaterialData mat;
+    uint mat_index;
 
     float t;
     bool front_face;
@@ -218,6 +218,37 @@ extension Sphere : Hittable
     }
 };
 
+extension Quad : Hittable
+{
+    override bool hit(const Ray r, Interval ray_t, out HitRecord rec)
+    {
+        rec = (HitRecord)0;
+
+        float denom = dot(normal, r.direction);
+        if (abs(denom) < 1e-8)
+            return false;
+
+        float t = (plane_d - dot(normal, r.origin)) / denom;
+        if (!ray_t.contains(t))
+            return false;
+
+        float3 intersection = r.at(t);
+        float3 p = intersection - corner;
+        var a = dot(p, dual_u);
+        var b = dot(p, dual_v);
+
+        Interval unit_interval = { 0, 1 };
+        if (!unit_interval.contains(a) || !unit_interval.contains(b))
+            return false;
+
+        rec.t = t;
+        rec.position = intersection;
+        rec.set_face_normal(r, normal);
+
+        return true;
+    }
+};
+
 extension BVHNode
 {
     bool hit_aabb(const Ray r, Interval ray_t)
@@ -231,7 +262,7 @@ extension BVHNode
         float tmin = max(ray_t.min_, max(t_near.x, max(t_near.y, t_near.z)));
         float tmax = min(ray_t.max_, min(t_far.x, min(t_far.y, t_far.z)));
         return tmin <= tmax;
-    }   
+    }
 };
 
 static const uint BVH_STACK_SIZE = 32;
@@ -263,7 +294,20 @@ struct World : Hittable
                 hit_anything = true;
                 closest_to_far = temp_rec.t;
                 rec = temp_rec;
-                rec.mat = mats[i];
+                rec.mat_index = spheres_mat_indexes[i];
+            }
+        }
+
+        quads.GetDimensions(count, stride);
+        for (uint i = 0; i < count; ++i)
+        {
+            HitRecord temp_rec;
+            if (quads[i].hit(r, Interval(ray_t.min_, closest_to_far), temp_rec))
+            {
+                hit_anything = true;
+                closest_to_far = temp_rec.t;
+                rec = temp_rec;
+                rec.mat_index = quads_mat_indexes[i];
             }
         }
 
@@ -290,14 +334,32 @@ struct World : Hittable
             {
                 for (uint j = 0; j < node.prim_count; ++j)
                 {
-                    uint sphere_index = spheres_indexes[node.left_first + j];
+                    const PrimitiveRef prim = primitives[node.left_first + j];
                     HitRecord temp_rec;
-                    if (spheres[sphere_index].hit(r, Interval(ray_t.min_, closest_to_far), temp_rec))
+                    switch (prim.type)
                     {
-                        hit_anything = true;
-                        closest_to_far = temp_rec.t;
-                        rec = temp_rec;
-                        rec.mat = mats[sphere_index];
+                    case PrimitiveType.Sphere:
+                    {
+                        if (spheres[prim.index].hit(r, Interval(ray_t.min_, closest_to_far), temp_rec))
+                        {
+                            hit_anything = true;
+                            closest_to_far = temp_rec.t;
+                            rec = temp_rec;
+                            rec.mat_index = spheres_mat_indexes[prim.index];
+                        }
+                        break;
+                    }
+                    case PrimitiveType.Quad:
+                    {
+                        if (quads[prim.index].hit(r, Interval(ray_t.min_, closest_to_far), temp_rec))
+                        {
+                            hit_anything = true;
+                            closest_to_far = temp_rec.t;
+                            rec = temp_rec;
+                            rec.mat_index = quads_mat_indexes[prim.index];
+                        }
+                        break;
+                    }
                     }
                 }
             }
@@ -383,7 +445,7 @@ struct Dielectric : IMaterial
 func trace(World world, Ray r, inout uint state, int max_depth)->vector<float, 3>
 {
     Interval interval = { 0.001f, INF };
-    
+
     var color = float3(1.0f, 1.0f, 1.0f);
     for (int i = 0; i < max_depth; ++i)
     {
@@ -398,7 +460,8 @@ func trace(World world, Ray r, inout uint state, int max_depth)->vector<float, 3
 
         Ray scattered;
         float3 attenuation = 0.0f;
-        if (!rec.mat.scatter(state, rec, r, attenuation, scattered))
+        MaterialData mat = mats[rec.mat_index];
+        if (!mat.scatter(state, rec, r, attenuation, scattered))
             return { 0.0f, 0.0f, 0.0f };
 
         color *= attenuation;
@@ -426,9 +489,12 @@ float3 linear_to_gamma(float3 linear_color)
 // is the Vulkan-native spelling and is what the engine reflects on.
 [[vk::binding(0, 0)]] RWTexture2D<vector<float, 4>> quad_tex;
 [[vk::binding(1, 0)]] StructuredBuffer<Sphere> spheres;
-[[vk::binding(2, 0)]] StructuredBuffer<BVHNode> bvh;
-[[vk::binding(3, 0)]] StructuredBuffer<uint> spheres_indexes;
-[[vk::binding(4, 0)]] StructuredBuffer<MaterialData> mats;
+[[vk::binding(2, 0)]] StructuredBuffer<Quad> quads;
+[[vk::binding(3, 0)]] StructuredBuffer<BVHNode> bvh;
+[[vk::binding(4, 0)]] StructuredBuffer<PrimitiveRef> primitives;
+[[vk::binding(5, 0)]] StructuredBuffer<uint> spheres_mat_indexes;
+[[vk::binding(6, 0)]] StructuredBuffer<uint> quads_mat_indexes;
+[[vk::binding(7, 0)]] StructuredBuffer<MaterialData> mats;
 [[vk::binding(1, 1)]] ConstantBuffer<UBO> ubo;
 
 

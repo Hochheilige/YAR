@@ -22,10 +22,34 @@ YAR_ENUM(MaterialType)
     Dielectric = 2,
 };
 
-struct Sphere 
+YAR_ENUM(PrimitiveType)
+{
+	Sphere 	= 0,
+	Quad 	= 1,
+};
+
+struct PrimitiveRef
+{
+	PrimitiveType type;
+	uint index;
+};
+
+struct Sphere
 {
     float3 center;
     float  radius;
+};
+
+struct Quad
+{
+	float3 corner;
+	float plane_d;
+	float3 normal;
+	float pad1;
+	float3 dual_u;
+	float pad2;
+	float3 dual_v;
+	float pad3;
 };
 
 struct BVHNode
@@ -51,14 +75,14 @@ struct MaterialData
 };
 
 struct UBO
-{   
+{
 	float4x4 inv_view_proj;
 	float4x4 ui_ortho;
 	float4   camera_pos;
 	int  samples_per_pixel;
 	int max_ray_depth;
 	uint seed;
-	uint use_bvh; 
+	uint use_bvh;
 };
 
 #ifdef __cplusplus
@@ -72,6 +96,20 @@ static_assert(sizeof(MaterialType) == 4, "MaterialType must stay a 4-byte uint")
 static_assert(sizeof(Sphere) == 16, "Sphere must stay 16 bytes");
 static_assert(offsetof(Sphere, center) == 0, "Sphere::center moved");
 static_assert(offsetof(Sphere, radius) == 12, "Sphere::radius moved");
+
+static_assert(sizeof(PrimitiveRef) == 8, "PrimitiveRef must stay 8 bytes");
+static_assert(offsetof(PrimitiveRef, type) == 0, "PrimitiveRef::type moved");
+static_assert(offsetof(PrimitiveRef, index) == 4, "PrimitiveRef::index moved");
+
+static_assert(sizeof(Quad) == 64, "Quad must stay 64 bytes");
+static_assert(offsetof(Quad, corner) == 0, "Quad::corner moved");
+static_assert(offsetof(Quad, plane_d) == 12, "Quad::plane_d moved");
+static_assert(offsetof(Quad, normal) == 16, "Quad::normal moved");
+static_assert(offsetof(Quad, pad1) == 28, "Quad::pad1 moved");
+static_assert(offsetof(Quad, dual_u) == 32, "Quad::dual_u moved");
+static_assert(offsetof(Quad, pad2) == 44, "Quad::pad2 moved");
+static_assert(offsetof(Quad, dual_v) == 48, "Quad::dual_v moved");
+static_assert(offsetof(Quad, pad3) == 60, "Quad::pad3 moved");
 
 static_assert(sizeof(MaterialData) == 32, "MaterialData must stay 32 bytes");
 static_assert(offsetof(MaterialData, albedo) == 0, "MaterialData::albedo moved");

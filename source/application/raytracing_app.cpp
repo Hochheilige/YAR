@@ -14,6 +14,7 @@
 #include <iostream>
 #include <stddef.h>
 #include <cmath>
+#include <algorithm>
 
 #include "../shaders/rt_common.h"
 
@@ -101,8 +102,19 @@ struct Dielectric
 	MaterialData mat;
 };
 
+struct PrimitiveRecord
+{
+	Vector3 aabb_min;
+	Vector3 aabb_max;
+	PrimitiveRef ref;
+};
+
+std::vector<PrimitiveRecord> primitive_records;
+std::vector<PrimitiveRef> primitive_refs;
 std::vector<Sphere> spheres;
-std::vector<uint32_t> spheres_indexes;
+std::vector<uint32_t> spheres_mat_indexes;
+std::vector<Quad> quads;
+std::vector<uint32_t> quads_mat_indexes;
 std::vector<MaterialData> mats;
 UBO ubo;
 
@@ -121,13 +133,102 @@ Vector3 random_color(float min = 0.0f, float max = 1.0f)
 
 void add_sphere(const Vector3& center, float radius, const MaterialData& mat)
 {
+	PrimitiveRecord rec{};
+	Vector3 radius_vec = Vector3(radius);
+	rec.aabb_min = center - radius_vec;
+	rec.aabb_max = center + radius_vec;
+	rec.ref = {
+		.type = PrimitiveType::Sphere,
+		.index = static_cast<uint32_t>(spheres.size())
+	};
+
+	primitive_records.push_back(rec);
+
 	spheres.push_back(Sphere(center, radius));
+	spheres_mat_indexes.push_back(mats.size());
 	mats.push_back(mat);
 }
 
-// Spheres from the Next Week book
-void build_scene()
+void add_quad(Vector3 Q, Vector3 u, Vector3 v, const MaterialData& mat)
 {
+	Quad quad{};
+	Vector3 normal = u.cross(v);
+	quad.corner = Q;
+	quad.normal = normal.normalized();
+	quad.plane_d = quad.normal.dot(Q);
+
+	auto w = normal / normal.dot(normal);
+	quad.dual_u = v.cross(w);
+	quad.dual_v = w.cross(u);
+
+	PrimitiveRecord rec{};
+	rec.ref = {
+		.type = PrimitiveType::Quad,
+		.index = static_cast<uint32_t>(quads.size())
+	};
+
+	const Vector3 Qu = Q + u;
+	const Vector3 Qv = Q + v;
+	const Vector3 Quv = Q + u + v;
+	Vector3 aabb_min = min(min(Q, Qu), min(Qv, Quv));
+	Vector3 aabb_max = max(max(Q, Qu), max(Qv, Quv));
+	static constexpr float delta = 0.0001f;
+	static constexpr float half_delta = 0.5f * delta;
+	for (uint32_t i = 0; i < 3; ++i)
+	{
+		if (aabb_max[i] - aabb_min[i] < delta)
+		{
+			aabb_max[i] += half_delta;
+			aabb_min[i] -= half_delta;
+		}
+	}
+	rec.aabb_min = aabb_min;
+	rec.aabb_max = aabb_max;
+
+	primitive_records.push_back(rec);
+
+	quads.push_back(quad);
+	quads_mat_indexes.push_back(mats.size());
+	mats.push_back(mat);
+}
+
+struct Camera
+{
+	Vector3 pos = Vector3(0.0f, 0.0f, 3.0f);
+	Vector3 front = Vector3(0.0f, 0.0f, -1.0f);
+	Vector3 up = Vector3(0.0f, 1.0f, 0.0f);
+} camera;
+
+float yaw = -90.0f;
+float pitch = 0.0f;
+float lastX = 1920.0f / 2.0;
+float lastY = 1080.0 / 2.0;
+float fov = 20.0f;
+
+void set_camera(const Vector3& look_from, const Vector3& look_at, float vfov)
+{
+	camera.pos = look_from;
+	camera.front = (look_at - look_from).normalized();
+	yaw = degrees(std::atan2(camera.front.z(), camera.front.x()));
+	pitch = degrees(std::asin(camera.front.y()));
+	fov = vfov;
+}
+
+enum scene_id : int32_t
+{
+	scene_spheres,
+	scene_quads,
+	scene_count
+};
+
+const char* scene_names[scene_count] = { "Spheres", "Quads" };
+
+// Spheres from the Next Week book
+void build_spheres_scene()
+{
+	scene_rng.seed(1337u);
+	set_camera(Vector3(13.0f, 2.0f, 3.0f), Vector3(0.0f), 20.0f);
+
 	add_sphere(Vector3(0.0f, -1000.0f, 0.0f), 1000.0f, Lambertian(Vector3(0.5f)).mat);
 
 	for (int a = -11; a < 11; ++a)
@@ -155,18 +256,28 @@ void build_scene()
 	add_sphere(Vector3(4.0f, 1.0f, 0.0f), 1.0f, Metal(Vector3(0.7f, 0.6f, 0.5f), 0.0f).mat);
 }
 
-struct Camera
+// Quads from the Next Week book
+void build_quads_scene()
 {
-	Vector3 pos = Vector3(0.0f, 0.0f, 3.0f);
-	Vector3 front = Vector3(0.0f, 0.0f, -1.0f);
-	Vector3 up = Vector3(0.0f, 1.0f, 0.0f);
-} camera;
+	set_camera(Vector3(0.0f, 0.0f, 9.0f), Vector3(0.0f), 80.0f);
 
-float yaw = -90.0f;
-float pitch = 0.0f;
-float lastX = 1920.0f / 2.0;
-float lastY = 1080.0 / 2.0;
-float fov = 20.0f;
+	add_quad(Vector3(-3.0f, -2.0f, 5.0f), Vector3(0.0f, 0.0f, -4.0f), Vector3(0.0f, 4.0f, 0.0f), Lambertian(Vector3(1.0f, 0.2f, 0.2f)).mat);
+	add_quad(Vector3(-2.0f, -2.0f, 0.0f), Vector3(4.0f, 0.0f, 0.0f), Vector3(0.0f, 4.0f, 0.0f), Lambertian(Vector3(0.2f, 1.0f, 0.2f)).mat);
+	add_quad(Vector3(3.0f, -2.0f, 1.0f), Vector3(0.0f, 0.0f, 4.0f), Vector3(0.0f, 4.0f, 0.0f), Lambertian(Vector3(0.2f, 0.2f, 1.0f)).mat);
+	add_quad(Vector3(-2.0f, 3.0f, 1.0f), Vector3(4.0f, 0.0f, 0.0f), Vector3(0.0f, 0.0f, 4.0f), Lambertian(Vector3(1.0f, 0.5f, 0.0f)).mat);
+	add_quad(Vector3(-2.0f, -3.0f, 5.0f), Vector3(4.0f, 0.0f, 0.0f), Vector3(0.0f, 0.0f, -4.0f), Lambertian(Vector3(0.2f, 0.8f, 0.8f)).mat);
+}
+
+void clear_scene()
+{
+	spheres.clear();
+	spheres_mat_indexes.clear();
+	quads.clear();
+	quads_mat_indexes.clear();
+	mats.clear();
+	primitive_records.clear();
+	primitive_refs.clear();
+}
 
 yar_texture* create_texture(const uint32_t width, const uint32_t height)
 {
@@ -196,11 +307,9 @@ auto update_node_bounds(const uint32_t node_index)
 	node.aabb_max = Vector3(std::numeric_limits<float>::lowest());
 	for (uint32_t first = node.left_first, i = 0; i < node.prim_count; ++i)
 	{
-		uint32_t leaf_sphere_index = spheres_indexes[first + i];
-		Sphere& leaf_sphere = spheres[leaf_sphere_index];
-		Vector3 radius_vec = Vector3(leaf_sphere.radius);
-		node.aabb_min = min(node.aabb_min, leaf_sphere.center - radius_vec);
-		node.aabb_max = max(node.aabb_max, leaf_sphere.center + radius_vec);
+		const PrimitiveRecord& rec = primitive_records[first + i];
+		node.aabb_min = min(node.aabb_min, rec.aabb_min);
+		node.aabb_max = max(node.aabb_max, rec.aabb_max);
 	}
 }
 
@@ -213,9 +322,9 @@ auto subdivide(const uint32_t node_index)
 	// determine split axis and position
 	Vector3 extent = node.aabb_max - node.aabb_min;
 	uint32_t axis = 0;
-	if (extent.y() > extent.x()) 
+	if (extent.y() > extent.x())
 		axis = 1;
-	if (extent.z() > extent[axis]) 
+	if (extent.z() > extent[axis])
 		axis = 2;
 
 	const float split_pos = node.aabb_min[axis] + extent[axis] * 0.5f;
@@ -225,10 +334,12 @@ auto subdivide(const uint32_t node_index)
 	int32_t j = i + node.prim_count - 1;
 	while (i <= j)
 	{
-		if (spheres[spheres_indexes[i]].center[axis] < split_pos)
-			i++;
-		else
-			std::swap(spheres_indexes[i], spheres_indexes[j--]);
+		const PrimitiveRecord& rec = primitive_records[i];
+		const Vector3 centroid = (rec.aabb_min + rec.aabb_max) / 2;
+			if (centroid[axis] < split_pos)
+				i++;
+			else
+				std::swap(primitive_records[i], primitive_records[j--]);
 	}
 
 	// abort if one of the sides is empty
@@ -255,25 +366,96 @@ auto subdivide(const uint32_t node_index)
 
 auto build_bvh()
 {
-	const uint32_t spheres_count = static_cast<uint32_t>(spheres.size());
+	const uint32_t prim_count = static_cast<uint32_t>(primitive_records.size());
 
-	spheres_indexes.resize(spheres_count);
-	for (uint32_t i = 0; i < spheres_count; ++i)
-		spheres_indexes[i] = i;
+	bvh.clear();
+	nodes_used = 0;
+	if (prim_count == 0)
+		return;
 
 	// A binary tree over N primitives never needs more than 2N - 1 nodes.
-	bvh.assign(spheres_count * 2 - 1, BVHNode{});
+	bvh.assign(prim_count * 2 - 1, BVHNode{});
 	nodes_used = 1;
 
 	BVHNode& root = bvh[root_node_index];
 	root.left_first = 0;
-	root.prim_count = spheres_count;
+	root.prim_count = prim_count;
 
 	update_node_bounds(root_node_index);
 	subdivide(root_node_index);
 
 	// Drop the slots the build didn't use so only real nodes are uploaded.
 	bvh.resize(nodes_used);
+
+	for (uint32_t i = 0; i < prim_count; ++i)
+	{
+		primitive_refs.push_back(primitive_records[i].ref);
+	}
+}
+
+std::vector<gpu_buffer> scene_buffers;
+
+template <typename T>
+yar_buffer* add_scene_buffer(const char* name, const std::vector<T>& data)
+{
+	// GL rejects zero-sized storage, so an empty list is uploaded as one zeroed element.
+	const T zero{};
+	const T* src = data.empty() ? &zero : data.data();
+	const uint32_t bytes = static_cast<uint32_t>(std::max<size_t>(data.size(), 1) * sizeof(T));
+
+	yar_buffer_desc desc{
+		.size = bytes,
+		.usage = yar_buffer_usage_storage_buffer,
+		.flags = yar_buffer_flag_gpu_only,
+		.name = name
+	};
+	gpu_buffer& buffer = scene_buffers.emplace_back(&desc);
+
+	yar_buffer_update_desc update_desc{};
+	update_desc.buffer = buffer.get();
+	update_desc.size = bytes;
+	yar_resource_update_desc resource_update_desc{};
+	resource_update_desc = &update_desc;
+	begin_update_resource(resource_update_desc);
+	std::memcpy(update_desc.mapped_data, src, bytes);
+	end_update_resource(resource_update_desc);
+
+	return buffer.get();
+}
+
+void load_scene(scene_id id, yar_texture* output, yar_descriptor_set* set)
+{
+	clear_scene();
+	switch (id)
+	{
+	case scene_spheres: build_spheres_scene(); break;
+	case scene_quads:   build_quads_scene();   break;
+	default: break;
+	}
+
+	build_bvh();
+	std::cout << scene_names[id] << ": " << nodes_used << " BVH nodes for " << spheres.size()
+		<< " spheres, " << quads.size() << " quads" << std::endl;
+
+	scene_buffers.clear();
+
+	// update_descriptor_set replaces the whole vector, so every set-0
+	// resource has to be listed in one call.
+	std::vector<yar_descriptor_info> infos{
+		{ .name = "quad_tex",            .descriptor = output },
+		{ .name = "spheres",             .descriptor = add_scene_buffer("spheres", spheres) },
+		{ .name = "quads",               .descriptor = add_scene_buffer("quads", quads) },
+		{ .name = "mats",                .descriptor = add_scene_buffer("mats", mats) },
+		{ .name = "bvh",                 .descriptor = add_scene_buffer("bvh", bvh) },
+		{ .name = "primitives",          .descriptor = add_scene_buffer("primitives", primitive_refs) },
+		{ .name = "spheres_mat_indexes", .descriptor = add_scene_buffer("spheres_mat_indexes", spheres_mat_indexes) },
+		{ .name = "quads_mat_indexes",   .descriptor = add_scene_buffer("quads_mat_indexes", quads_mat_indexes) },
+	};
+
+	yar_update_descriptor_set_desc update_set_desc{};
+	update_set_desc.index = 0;
+	update_set_desc.infos = std::move(infos);
+	update_descriptor_set(&update_set_desc, set);
 }
 
 auto main() -> int
@@ -284,10 +466,12 @@ auto main() -> int
 	int32_t samples_per_pixel = 1u;
 	int32_t max_ray_depth = 10;
 	bool use_bvh = true;
+	int32_t selected_scene = scene_spheres;
 
 	const auto imgui_layer = [&]()
 		{
 			ImGui::Begin("Raytracer settings");
+			ImGui::Combo("Scene", &selected_scene, scene_names, scene_count);
 			ImGui::SliderInt("Samples Per Pixel", &samples_per_pixel, 1, 100);
 			ImGui::SliderInt("Max Ray Depth", &max_ray_depth, 1, 100);
 			ImGui::Checkbox("Use BVH", &use_bvh);
@@ -355,38 +539,6 @@ auto main() -> int
 	buffer_desc.name = "UBO";
 	gpu_buffer ubo_buf[frames_in_flight] = {gpu_buffer(&buffer_desc), gpu_buffer(&buffer_desc)};
 
-	build_scene();
-	build_bvh();
-	std::cout << "BVH: " << nodes_used << " nodes for " << spheres.size() << " spheres" << std::endl;
-
-	buffer_desc.usage = yar_buffer_usage_storage_buffer;
-	buffer_desc.flags = yar_buffer_flag_gpu_only;
-
-	const uint32_t spheres_bytes = static_cast<uint32_t>(spheres.size() * sizeof(Sphere));
-	const uint32_t mats_bytes = static_cast<uint32_t>(mats.size() * sizeof(MaterialData));
-	const uint32_t bvh_bytes = static_cast<uint32_t>(bvh.size() * sizeof(BVHNode));
-	const uint32_t spheres_indexes_bytes = static_cast<uint32_t>(spheres_indexes.size() * sizeof(uint32_t));
-
-	buffer_desc.size = spheres_bytes;
-	buffer_desc.name = "spheres";
-	yar_buffer* spheres_buf = nullptr;
-	add_buffer(&buffer_desc, &spheres_buf);
-
-	buffer_desc.size = mats_bytes;
-	buffer_desc.name = "mats";
-	yar_buffer* mats_buf = nullptr;
-	add_buffer(&buffer_desc, &mats_buf);
-
-	buffer_desc.size = bvh_bytes;
-	buffer_desc.name = "bvh";
-	yar_buffer* bvh_buf = nullptr;
-	add_buffer(&buffer_desc, &bvh_buf);
-
-	buffer_desc.size = spheres_indexes_bytes;
-	buffer_desc.name = "spheres_indexes";
-	yar_buffer* spheres_indexes_buf = nullptr;
-	add_buffer(&buffer_desc, &spheres_indexes_buf);
-
 	yar_resource_update_desc resource_update_desc{};
 	{ // update buffers data
 		yar_buffer_update_desc update_desc{};
@@ -395,30 +547,6 @@ auto main() -> int
 		update_desc.size = sizeof(quad_vertices);
 		begin_update_resource(resource_update_desc);
 		std::memcpy(update_desc.mapped_data, quad_vertices, sizeof(quad_vertices));
-		end_update_resource(resource_update_desc);
-
-		update_desc.buffer = spheres_buf;
-		update_desc.size = spheres_bytes;
-		begin_update_resource(resource_update_desc);
-		std::memcpy(update_desc.mapped_data, spheres.data(), spheres_bytes);
-		end_update_resource(resource_update_desc);
-
-		update_desc.buffer = mats_buf;
-		update_desc.size = mats_bytes;
-		begin_update_resource(resource_update_desc);
-		std::memcpy(update_desc.mapped_data, mats.data(), mats_bytes);
-		end_update_resource(resource_update_desc);
-
-		update_desc.buffer = bvh_buf;
-		update_desc.size = bvh_bytes;
-		begin_update_resource(resource_update_desc);
-		std::memcpy(update_desc.mapped_data, bvh.data(), bvh_bytes);
-		end_update_resource(resource_update_desc);
-
-		update_desc.buffer = spheres_indexes_buf;
-		update_desc.size = spheres_indexes_bytes;
-		begin_update_resource(resource_update_desc);
-		std::memcpy(update_desc.mapped_data, spheres_indexes.data(), spheres_indexes_bytes);
 		end_update_resource(resource_update_desc);
 	}
 
@@ -460,40 +588,12 @@ auto main() -> int
 	set_desc.shader = shader;
 	add_descriptor_set(&set_desc, &srv_set);
 
-
-	// update_descriptor_set replaces the whole vector, so every set-0
-	// resource has to be listed in one call.
-	std::vector<yar_descriptor_info> infos{
-		{
-			.name = "quad_tex",
-			.descriptor = quad
-		},
-		{
-			.name = "spheres",
-			.descriptor = spheres_buf
-		},
-		{
-			.name = "mats",
-			.descriptor = mats_buf
-		},
-		{
-			.name = "bvh",
-			.descriptor = bvh_buf
-		},
-		{
-			.name = "spheres_indexes",
-			.descriptor = spheres_indexes_buf
-		},
-	};
-
+	int32_t loaded_scene = selected_scene;
+	load_scene(static_cast<scene_id>(loaded_scene), quad, uav_set);
 
 	yar_update_descriptor_set_desc update_set_desc{};
-	update_set_desc = {};
 	update_set_desc.index = 0;
-	update_set_desc.infos = std::move(infos);
-	update_descriptor_set(&update_set_desc, uav_set);
-
-	infos = std::vector<yar_descriptor_info>{
+	std::vector<yar_descriptor_info> infos{
 		{
 			.name = "quad_tex",
 			.descriptor =
@@ -637,11 +737,6 @@ auto main() -> int
 	yar_cmd_buffer* cmd;
 	add_cmd(&cmd_desc, &cmd);
 
-	camera.pos = Vector3(13.0f, 2.0f, 3.0f);
-	camera.front = (Vector3(0.0f, 0.0f, 0.0f) - camera.pos).normalized();
-	yaw = degrees(std::atan2(camera.front.z(), camera.front.x()));
-	pitch = degrees(std::asin(camera.front.y()));
-
 	uint32_t group_x = (dims.width + 15) / 16;
 	uint32_t group_y = (dims.height + 15) / 16;
 
@@ -657,6 +752,13 @@ auto main() -> int
 		process_input();
 
 		auto* draw_data = imgui_get_new_frame_data();
+
+		// The previous frame's commands already ran in queue_submit, so the old buffers are free to go.
+		if (selected_scene != loaded_scene)
+		{
+			loaded_scene = selected_scene;
+			load_scene(static_cast<scene_id>(loaded_scene), quad, uav_set);
+		}
 		int32_t fb_width = static_cast<int32_t>(draw_data->DisplaySize.x * draw_data->FramebufferScale.x);
 		int32_t fb_height = static_cast<int32_t>(draw_data->DisplaySize.y * draw_data->FramebufferScale.y);
 		ImVec2 clip_off = draw_data->DisplayPos;         // (0,0) unless using multi-viewports
@@ -757,6 +859,8 @@ auto main() -> int
 		frame_index = (frame_index + 1) % frames_in_flight;
 	}
 
+	// Scene buffers are globals; release them while the GL context is still alive.
+	scene_buffers.clear();
 	terminate_window();
 }
 
