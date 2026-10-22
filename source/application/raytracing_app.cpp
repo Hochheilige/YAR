@@ -131,7 +131,7 @@ Vector3 random_color(float min = 0.0f, float max = 1.0f)
 	return Vector3(random_float(min, max), random_float(min, max), random_float(min, max));
 }
 
-void add_sphere(const Vector3& center, float radius, const MaterialData& mat)
+void add_sphere(const Vector3& center, const float radius, const uint32_t mat_ind)
 {
 	PrimitiveRecord rec{};
 	Vector3 radius_vec = Vector3(radius);
@@ -145,11 +145,10 @@ void add_sphere(const Vector3& center, float radius, const MaterialData& mat)
 	primitive_records.push_back(rec);
 
 	spheres.push_back(Sphere(center, radius));
-	spheres_mat_indexes.push_back(mats.size());
-	mats.push_back(mat);
+	spheres_mat_indexes.push_back(mat_ind);
 }
 
-void add_quad(Vector3 Q, Vector3 u, Vector3 v, const MaterialData& mat)
+void add_quad(const Vector3& Q, const Vector3& u, const Vector3& v, const uint32_t mat_ind)
 {
 	Quad quad{};
 	Vector3 normal = u.cross(v);
@@ -188,8 +187,14 @@ void add_quad(Vector3 Q, Vector3 u, Vector3 v, const MaterialData& mat)
 	primitive_records.push_back(rec);
 
 	quads.push_back(quad);
-	quads_mat_indexes.push_back(mats.size());
+	quads_mat_indexes.push_back(mat_ind);
+}
+
+uint32_t add_material(const MaterialData& mat)
+{
+	uint32_t index = static_cast<uint32_t>(mats.size());
 	mats.push_back(mat);
+	return index;
 }
 
 struct Camera
@@ -229,7 +234,10 @@ void build_spheres_scene()
 	scene_rng.seed(1337u);
 	set_camera(Vector3(13.0f, 2.0f, 3.0f), Vector3(0.0f), 20.0f);
 
-	add_sphere(Vector3(0.0f, -1000.0f, 0.0f), 1000.0f, Lambertian(Vector3(0.5f)).mat);
+	const uint32_t ground = add_material(Lambertian(Vector3(0.5f)).mat);
+	const uint32_t glass = add_material(Dielectric(1.5f).mat);
+
+	add_sphere(Vector3(0.0f, -1000.0f, 0.0f), 1000.0f, ground);
 
 	for (int a = -11; a < 11; ++a)
 	{
@@ -243,17 +251,17 @@ void build_spheres_scene()
 				continue;
 
 			if (choose_mat < 0.8f)
-				add_sphere(center, 0.2f, Lambertian(random_color() * random_color()).mat);
+				add_sphere(center, 0.2f, add_material(Lambertian(random_color() * random_color()).mat));
 			else if (choose_mat < 0.95f)
-				add_sphere(center, 0.2f, Metal(random_color(0.5f, 1.0f), random_float(0.0f, 0.5f)).mat);
+				add_sphere(center, 0.2f, add_material(Metal(random_color(0.5f, 1.0f), random_float(0.0f, 0.5f)).mat));
 			else
-				add_sphere(center, 0.2f, Dielectric(1.5f).mat);
+				add_sphere(center, 0.2f, glass);
 		}
 	}
 
-	add_sphere(Vector3(0.0f, 1.0f, 0.0f), 1.0f, Dielectric(1.5f).mat);
-	add_sphere(Vector3(-4.0f, 1.0f, 0.0f), 1.0f, Lambertian(Vector3(0.4f, 0.2f, 0.1f)).mat);
-	add_sphere(Vector3(4.0f, 1.0f, 0.0f), 1.0f, Metal(Vector3(0.7f, 0.6f, 0.5f), 0.0f).mat);
+	add_sphere(Vector3(0.0f, 1.0f, 0.0f), 1.0f, glass);
+	add_sphere(Vector3(-4.0f, 1.0f, 0.0f), 1.0f, add_material(Lambertian(Vector3(0.4f, 0.2f, 0.1f)).mat));
+	add_sphere(Vector3(4.0f, 1.0f, 0.0f), 1.0f, add_material(Metal(Vector3(0.7f, 0.6f, 0.5f), 0.0f).mat));
 }
 
 // Quads from the Next Week book
@@ -261,11 +269,17 @@ void build_quads_scene()
 {
 	set_camera(Vector3(0.0f, 0.0f, 9.0f), Vector3(0.0f), 80.0f);
 
-	add_quad(Vector3(-3.0f, -2.0f, 5.0f), Vector3(0.0f, 0.0f, -4.0f), Vector3(0.0f, 4.0f, 0.0f), Lambertian(Vector3(1.0f, 0.2f, 0.2f)).mat);
-	add_quad(Vector3(-2.0f, -2.0f, 0.0f), Vector3(4.0f, 0.0f, 0.0f), Vector3(0.0f, 4.0f, 0.0f), Lambertian(Vector3(0.2f, 1.0f, 0.2f)).mat);
-	add_quad(Vector3(3.0f, -2.0f, 1.0f), Vector3(0.0f, 0.0f, 4.0f), Vector3(0.0f, 4.0f, 0.0f), Lambertian(Vector3(0.2f, 0.2f, 1.0f)).mat);
-	add_quad(Vector3(-2.0f, 3.0f, 1.0f), Vector3(4.0f, 0.0f, 0.0f), Vector3(0.0f, 0.0f, 4.0f), Lambertian(Vector3(1.0f, 0.5f, 0.0f)).mat);
-	add_quad(Vector3(-2.0f, -3.0f, 5.0f), Vector3(4.0f, 0.0f, 0.0f), Vector3(0.0f, 0.0f, -4.0f), Lambertian(Vector3(0.2f, 0.8f, 0.8f)).mat);
+	const uint32_t left_red = add_material(Lambertian(Vector3(1.0f, 0.2f, 0.2f)).mat);
+	const uint32_t back_green = add_material(Lambertian(Vector3(0.2f, 1.0f, 0.2f)).mat);
+	const uint32_t right_blue = add_material(Lambertian(Vector3(0.2f, 0.2f, 1.0f)).mat);
+	const uint32_t upper_orange = add_material(Lambertian(Vector3(1.0f, 0.5f, 0.0f)).mat);
+	const uint32_t lower_teal = add_material(Lambertian(Vector3(0.2f, 0.8f, 0.8f)).mat);
+
+	add_quad(Vector3(-3.0f, -2.0f, 5.0f), Vector3(0.0f, 0.0f, -4.0f), Vector3(0.0f, 4.0f, 0.0f), left_red);
+	add_quad(Vector3(-2.0f, -2.0f, 0.0f), Vector3(4.0f, 0.0f, 0.0f), Vector3(0.0f, 4.0f, 0.0f), back_green);
+	add_quad(Vector3(3.0f, -2.0f, 1.0f), Vector3(0.0f, 0.0f, 4.0f), Vector3(0.0f, 4.0f, 0.0f), right_blue);
+	add_quad(Vector3(-2.0f, 3.0f, 1.0f), Vector3(4.0f, 0.0f, 0.0f), Vector3(0.0f, 0.0f, 4.0f), upper_orange);
+	add_quad(Vector3(-2.0f, -3.0f, 5.0f), Vector3(4.0f, 0.0f, 0.0f), Vector3(0.0f, 0.0f, -4.0f), lower_teal);
 }
 
 void clear_scene()
