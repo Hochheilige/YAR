@@ -75,6 +75,8 @@ def build_project(project_path, project_name, cmake_additional_commands):
     build_dir = os.path.join(project_path, "build")
     cmake_command = [
         "cmake",
+        # A stale cache can point at a removed MSVC toolset after a VS update.
+        "--fresh",
         "-S", project_path,
         "-B", build_dir, 
         "-DCMAKE_C_COMPILER=clang-cl",
@@ -153,6 +155,8 @@ if not build_project("external/assimp", "assimp",
          "-DASSIMP_BUILD_TESTS=OFF",
          "-DASSIMP_INSTALL=ON",
          "-DASSIMP_INJECT_DEBUG_POSTFIX=ON",
+         # assimp only sets this if not cached yet, so a stale empty value drops the 'd' suffix.
+         "-DCMAKE_DEBUG_POSTFIX=d",
          "-DASSIMP_BUILD_ASSIMP_VIEW=OFF"
         ]
 ):
